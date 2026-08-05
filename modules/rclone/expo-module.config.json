@@ -1,0 +1,4 @@
+{
+  "name": "rclone",
+  "platforms": ["ios", "android"]
+}

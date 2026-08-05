@@ -1,73 +1,111 @@
-import { CloudRemote } from '../types';
+/**
+ * RcloneModule.ts — App-facing facade over the rclone Expo local module.
+ *
+ * Phase 4 (Sync Engine) imports from this file exclusively and must not reach
+ * into `modules/rclone/src` directly. This keeps the public API stable even
+ * if the underlying module is refactored.
+ */
 
-export interface RemoteSpec {
-  name: string;
-  provider: CloudRemote['provider'];
-  options?: Record<string, string>;
-}
+import { RcloneService } from '../../modules/rclone/src/RcloneService';
 
-export interface SyncOptions {
-  transfers?: number;
-  checkers?: number;
-  bwlimit?: string;
-  retries?: number;
-}
+// Re-export all types so callers only need one import path.
+export type {
+  ProviderType,
+  RemoteSpec,
+  SyncOptions,
+  QuotaInfo,
+  RcloneConfig,
+  AuthorizeResult,
+  RcloneProgressEvent,
+  RcloneJobEvent,
+} from '../../modules/rclone/src/RcloneTypes';
 
-export interface QuotaInfo {
-  totalBytes: number;
-  usedBytes: number;
-  freeBytes: number;
-}
+export type { EventSubscription } from '../../modules/rclone/src/RcloneService';
+
+export type {
+  NativeRcloneModule,
+  RcloneEventMap,
+} from '../../modules/rclone/src/RcloneNativeModule';
+
+// Singleton service instance used throughout the app.
+const service = new RcloneService();
 
 /**
- * Typed bridge for librclone RPC calls via Expo Native Modules.
- * Throwing NotImplemented until Phase 3b native bindings land.
+ * `RcloneModule` is the singleton bridge the app interacts with.
+ *
+ * Public surface mirrors the original `RcloneBridge` class and is extended
+ * with event helpers and the OAuth exchange step.
  */
-export class RcloneBridge {
-  /** Map to rc/config/dump */
-  async getConfig(): Promise<string> {
-    throw new Error('NotImplemented: RcloneBridge.getConfig');
-  }
+export const RcloneModule = {
+  // -------------------------------------------------------------------------
+  // Config
+  // -------------------------------------------------------------------------
+  getConfig: (): ReturnType<RcloneService['getConfig']> => service.getConfig(),
 
-  /** Map to config/create */
-  async addRemote(_spec: RemoteSpec): Promise<void> {
-    throw new Error('NotImplemented: RcloneBridge.addRemote');
-  }
+  addRemote: (
+    ...args: Parameters<RcloneService['addRemote']>
+  ): ReturnType<RcloneService['addRemote']> => service.addRemote(...args),
 
-  /** Map to config/delete */
-  async deleteRemote(_name: string): Promise<void> {
-    throw new Error('NotImplemented: RcloneBridge.deleteRemote');
-  }
+  deleteRemote: (
+    ...args: Parameters<RcloneService['deleteRemote']>
+  ): ReturnType<RcloneService['deleteRemote']> => service.deleteRemote(...args),
 
-  /** Map to config/create (union remote) */
-  async createUnionRemote(_remoteIds: string[]): Promise<string> {
-    throw new Error('NotImplemented: RcloneBridge.createUnionRemote');
-  }
+  createUnionRemote: (
+    ...args: Parameters<RcloneService['createUnionRemote']>
+  ): ReturnType<RcloneService['createUnionRemote']> => service.createUnionRemote(...args),
 
-  /** Map to config/create (crypt remote) */
-  async createCryptRemote(_baseRemoteId: string, _password: string): Promise<string> {
-    throw new Error('NotImplemented: RcloneBridge.createCryptRemote');
-  }
+  createCryptRemote: (
+    ...args: Parameters<RcloneService['createCryptRemote']>
+  ): ReturnType<RcloneService['createCryptRemote']> => service.createCryptRemote(...args),
 
-  /** Map to sync/sync */
-  async sync(_sourceDir: string, _targetRemote: string, _options?: SyncOptions): Promise<void> {
-    throw new Error('NotImplemented: RcloneBridge.sync');
-  }
+  // -------------------------------------------------------------------------
+  // Sync
+  // -------------------------------------------------------------------------
+  sync: (
+    ...args: Parameters<RcloneService['sync']>
+  ): ReturnType<RcloneService['sync']> => service.sync(...args),
 
-  /** Map to operations/about */
-  async about(_remoteName: string): Promise<QuotaInfo> {
-    throw new Error('NotImplemented: RcloneBridge.about');
-  }
+  // -------------------------------------------------------------------------
+  // Storage
+  // -------------------------------------------------------------------------
+  about: (
+    ...args: Parameters<RcloneService['about']>
+  ): ReturnType<RcloneService['about']> => service.about(...args),
 
-  /** Map to operations/purge or operations/deletefile */
-  async deleteRemotePath(_remoteName: string, _path: string): Promise<void> {
-    throw new Error('NotImplemented: RcloneBridge.deleteRemotePath');
-  }
+  deleteRemotePath: (
+    ...args: Parameters<RcloneService['deleteRemotePath']>
+  ): ReturnType<RcloneService['deleteRemotePath']> => service.deleteRemotePath(...args),
 
-  /** Map to config/authorize */
-  async authorize(_provider: CloudRemote['provider']): Promise<void> {
-    throw new Error('NotImplemented: RcloneBridge.authorize');
-  }
-}
+  // -------------------------------------------------------------------------
+  // OAuth — `authorize` is the Phase-4-facing name; maps to startOAuthFlow.
+  // -------------------------------------------------------------------------
+  authorize: (
+    provider: string,
+  ): ReturnType<RcloneService['startOAuthFlow']> => service.startOAuthFlow(provider),
 
-export const RcloneModule = new RcloneBridge();
+  startOAuthFlow: (
+    ...args: Parameters<RcloneService['startOAuthFlow']>
+  ): ReturnType<RcloneService['startOAuthFlow']> => service.startOAuthFlow(...args),
+
+  exchangeOAuthCode: (
+    ...args: Parameters<RcloneService['exchangeOAuthCode']>
+  ): ReturnType<RcloneService['exchangeOAuthCode']> => service.exchangeOAuthCode(...args),
+
+  // -------------------------------------------------------------------------
+  // Event subscriptions
+  // -------------------------------------------------------------------------
+  subscribeToProgress: (
+    ...args: Parameters<RcloneService['subscribeToProgress']>
+  ): ReturnType<RcloneService['subscribeToProgress']> =>
+    service.subscribeToProgress(...args),
+
+  subscribeToJobStatus: (
+    ...args: Parameters<RcloneService['subscribeToJobStatus']>
+  ): ReturnType<RcloneService['subscribeToJobStatus']> =>
+    service.subscribeToJobStatus(...args),
+
+  subscribeToAuthCallback: (
+    ...args: Parameters<RcloneService['subscribeToAuthCallback']>
+  ): ReturnType<RcloneService['subscribeToAuthCallback']> =>
+    service.subscribeToAuthCallback(...args),
+} as const;

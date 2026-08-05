@@ -16,10 +16,10 @@
 ---
 
 ## Spätere Phasen
-- [ ] Phase 1: Design System (🔵 Gemini Pro 3.1) — *bereit für Start*
-- [ ] Phase 2: Data Layer (🟢 Gemini Flash 3.6) — *bereit für Start (parallel zu Phase 1)*
-- [ ] Review Checkpoint 1 (🔴 Claude Opus 4.6)
-- [ ] Phase 3: Native Bridge (🟡 Claude Sonnet 4.6)
+- [x] Phase 1: Design System (🔵 Gemini Pro 3.1) — *ABGESCHLOSSEN*
+- [x] Phase 2: Data Layer (🟢 Gemini Flash 3.6) — *ABGESCHLOSSEN*
+- [x] Review Checkpoint 1 (🔴 Claude Opus 4.6) — *ABGESCHLOSSEN — Findings F1–F4 erfolgreich gefixt*
+- [ ] Phase 3: Native Bridge (🟡 Claude Sonnet 4.6) — *bereit für Start*
 - [ ] Phase 4: Sync Engine (🔵 Gemini Pro 3.1)
 - [ ] Phase 5: Screens (🔵 Gemini Pro 3.1)
 - [ ] Phase 6: Hardening (🟡 Claude Sonnet 4.6)

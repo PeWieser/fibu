@@ -1,2 +1,3 @@
-// Typed repositories export (Phase 2)
-export {};
+export * from './CloudRemoteRepo';
+export * from './SyncRuleRepo';
+export * from './FileStateRepo';

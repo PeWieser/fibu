@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Text, Surface, EmptyState, ListRow, IconButton } from '../components';
 import { useCloudRemotes } from '../hooks/useCloudRemotes';
 import { Cloud, AlertCircle, Plus, HardDrive, Trash2 } from 'lucide-react-native';
@@ -8,6 +8,27 @@ import { useTheme } from '../theme/theme';
 export function CloudDrivesScreen() {
   const { remotes, loading, error, refresh, deleteRemote } = useCloudRemotes();
   const { colors, spacing } = useTheme();
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert(
+      'Disconnect Remote',
+      'Bereits hochgeladene Dateien bleiben in der Cloud erhalten. Möchten Sie wirklich fortfahren?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRemote(id);
+            } catch {
+              Alert.alert('Error', `Failed to disconnect remote "${name}".`);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -62,7 +83,7 @@ export function CloudDrivesScreen() {
                 rightIcon={
                   <IconButton 
                     icon={<Trash2 size={20} color={colors.status.error} />}
-                    onPress={() => deleteRemote(remote.id)}
+                    onPress={() => handleDelete(remote.id, remote.name)}
                     accessibilityLabel="Delete Remote"
                   />
                 }

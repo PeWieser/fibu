@@ -1,0 +1,11 @@
+appId: com.echovault.app # Update this later if app ID changes
+---
+- launchApp:
+    clearState: true
+- tapOn: "Skip for now"
+- assertVisible: "Dashboard"
+- tapOn: "Cloud Drives"
+- assertVisible: "No Cloud Drives"
+- assertVisible: "Connect a cloud drive to start syncing your files."
+- tapOn: "Add Drive"
+# Add drive flow would continue here...

@@ -4,7 +4,7 @@ import type { CompositeNavigationProp, RouteProp } from '@react-navigation/nativ
 
 export type RootStackParamList = {
   Onboarding: undefined;
-  Main: undefined;
+  Main: { screen?: keyof MainTabParamList } | undefined;
   Settings: undefined;
   RemoteDetail: { remoteId: string };
 };

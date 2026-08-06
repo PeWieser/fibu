@@ -3,9 +3,11 @@ import { View, FlatList, StyleSheet } from 'react-native';
 import { Surface, ListRow, Toggle, EmptyState, ProgressRing } from '../components';
 import { useSyncRules } from '../hooks/useSyncRules';
 import { Server, Settings } from 'lucide-react-native';
+import { useTheme } from '../theme/theme';
 
 export function SyncRulesScreen() {
   const { rules, loading, error, toggleRule } = useSyncRules();
+  const { colors } = useTheme();
 
   if (loading && rules.length === 0) {
     return (
@@ -19,7 +21,7 @@ export function SyncRulesScreen() {
     return (
       <View style={styles.center}>
         <EmptyState 
-          icon={<Settings color="#EF4444" size={48} />}
+          icon={<Settings color={colors.status.error} size={48} />}
           title="Error loading rules"
           description={error.message}
         />
@@ -31,7 +33,7 @@ export function SyncRulesScreen() {
     return (
       <View style={styles.center}>
         <EmptyState 
-          icon={<Settings color="#9CA3AF" size={48} />}
+          icon={<Settings color={colors.text.muted} size={48} />}
           title="No Sync Rules"
           description="You haven't configured any sync rules yet."
         />
@@ -49,7 +51,7 @@ export function SyncRulesScreen() {
           <ListRow
             title={`Album: ${item.source_album_id} ➔ ${item.target_remote_id}`}
             subtitle={`${item.sync_mode} - ${item.media_type}`}
-            leftIcon={<Server size={24} color="#6B7280" />}
+            leftIcon={<Server size={24} color={colors.text.secondary} />}
             rightIcon={
               <Toggle
                 value={item.is_enabled}

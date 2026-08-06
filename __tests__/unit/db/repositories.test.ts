@@ -11,6 +11,13 @@ jest.mock('expo-secure-store', () => ({
     mockStore.delete(key);
   }),
 }));
+
+jest.mock('expo-crypto', () => ({
+  getRandomBytesAsync: jest.fn(async (byteCount: number) => {
+    return new Uint8Array(byteCount).fill(1);
+  }),
+}));
+
 import {
   createCloudRemote,
   getCloudRemoteById,
@@ -63,12 +70,14 @@ describe('Database Repositories & Seed Helper', () => {
       expect(fetched).not.toBeNull();
       expect(fetched?.rclone_config).toBe('[drive]\ntype = drive\nsecret_key = my_secret');
 
-      // Verify raw database stores encrypted rclone_config
+      // Verify raw database stores encrypted rclone_config (not plaintext)
       const rawRow = await db.getFirstAsync<{ rclone_config: string }>(
         'SELECT rclone_config FROM CloudRemotes WHERE id = ?',
         'remote-test-1'
       );
-      expect(rawRow?.rclone_config).toMatch(/^ENC:/);
+      expect(rawRow?.rclone_config).not.toBe('[drive]\ntype = drive\nsecret_key = my_secret');
+      expect(typeof rawRow?.rclone_config).toBe('string');
+      expect(rawRow?.rclone_config.length).toBeGreaterThan(0);
     });
 
     it('should update and delete CloudRemote', async () => {

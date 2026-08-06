@@ -9,27 +9,21 @@
 // Mock expo-modules-core BEFORE any module under test is imported.
 // ---------------------------------------------------------------------------
 
-/** Minimal mock subscription returned by the mock EventEmitter. */
-const mockSubscription = { remove: jest.fn() };
-
-/** Captured listeners so we can assert they are registered. */
-const mockAddListener = jest.fn(() => mockSubscription);
-
-class MockEventEmitter {
-  addListener = mockAddListener;
-}
-
-const mockNativeModule = {
-  initialize: jest.fn(),
-  rpcCall: jest.fn(),
-  startOAuthFlow: jest.fn(),
-  exchangeOAuthCode: jest.fn(),
-};
-
-jest.mock('expo-modules-core', () => ({
-  requireNativeModule: jest.fn(() => mockNativeModule),
-  EventEmitter: MockEventEmitter,
-}));
+jest.mock('expo-modules-core', () => {
+  class MockEventEmitter {
+    addListener = jest.fn(() => ({ remove: jest.fn() }));
+  }
+  return {
+    __esModule: true,
+    requireNativeModule: jest.fn(() => ({
+      initialize: jest.fn(),
+      rpcCall: jest.fn(),
+      startOAuthFlow: jest.fn(),
+      exchangeOAuthCode: jest.fn(),
+    })),
+    EventEmitter: MockEventEmitter,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Import AFTER mocks are in place.
@@ -189,21 +183,27 @@ describe('RcloneService', () => {
     });
 
     it('subscribeToProgress registers listener via addListener("onProgress")', () => {
+      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
+      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
       const cb = jest.fn();
       svc.subscribeToProgress(cb);
-      expect(mockAddListener).toHaveBeenCalledWith('onProgress', cb);
+      expect(addListenerSpy).toHaveBeenCalledWith('onProgress', cb);
     });
 
     it('subscribeToJobStatus registers listener via addListener("onJobStatusChange")', () => {
+      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
+      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
       const cb = jest.fn();
       svc.subscribeToJobStatus(cb);
-      expect(mockAddListener).toHaveBeenCalledWith('onJobStatusChange', cb);
+      expect(addListenerSpy).toHaveBeenCalledWith('onJobStatusChange', cb);
     });
 
     it('subscribeToAuthCallback registers listener via addListener("onAuthCallback")', () => {
+      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
+      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
       const cb = jest.fn();
       svc.subscribeToAuthCallback(cb);
-      expect(mockAddListener).toHaveBeenCalledWith('onAuthCallback', cb);
+      expect(addListenerSpy).toHaveBeenCalledWith('onAuthCallback', cb);
     });
   });
 });

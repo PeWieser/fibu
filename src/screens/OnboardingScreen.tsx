@@ -13,7 +13,7 @@ export function OnboardingScreen({ navigation }: RootStackScreenProps<'Onboardin
   };
 
   const handleConnect = () => {
-    navigation.replace('Main');
+    navigation.replace('Main', { screen: 'CloudDrives' });
   };
 
   return (

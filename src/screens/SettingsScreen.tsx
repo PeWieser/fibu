@@ -5,7 +5,7 @@ import { Settings as SettingsIcon, Info, Database, AlertTriangle } from 'lucide-
 import { useTheme } from '../theme/theme';
 
 export function SettingsScreen() {
-  const { colors, borderRadius } = useTheme();
+  const { colors, borderRadius, spacing } = useTheme();
 
   const handleResetIndex = () => {
     Alert.alert(
@@ -26,10 +26,10 @@ export function SettingsScreen() {
 
   return (
     <Surface style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg }}>
         
-        <View style={styles.section}>
-          <Text variant="lg" weight="bold" style={styles.sectionTitle}>About</Text>
+        <View style={{ marginBottom: spacing['2xl'] }}>
+          <Text variant="lg" weight="bold" style={{ marginBottom: spacing.lg }}>About</Text>
           <ListRow
             title="App Version"
             value="1.0.0"
@@ -42,13 +42,13 @@ export function SettingsScreen() {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text variant="lg" weight="bold" style={styles.sectionTitle}>Danger Zone</Text>
+        <View style={{ marginBottom: spacing['2xl'] }}>
+          <Text variant="lg" weight="bold" style={{ marginBottom: spacing.lg }}>Danger Zone</Text>
           
-          <View style={[styles.dangerZone, { borderColor: colors.status.error, borderRadius: borderRadius.lg }]}>
-            <View style={styles.dangerRow}>
+          <View style={[styles.dangerZone, { borderColor: colors.status.error, borderRadius: borderRadius.lg, padding: spacing.lg }]}>
+            <View style={[styles.dangerRow, { marginBottom: spacing.lg }]}>
               <Database size={24} color={colors.status.error} />
-              <View style={styles.dangerText}>
+              <View style={{ marginLeft: spacing.md, flex: 1 }}>
                 <Text variant="base" weight="semibold" color="primary">Reset Local Index</Text>
                 <Text variant="sm" color="muted">Clear local sync states. Files will be re-checked.</Text>
               </View>
@@ -72,26 +72,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    padding: 16,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    marginBottom: 16,
-  },
   dangerZone: {
     borderWidth: 1,
-    padding: 16,
   },
   dangerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  dangerText: {
-    marginLeft: 12,
-    flex: 1,
   },
 });

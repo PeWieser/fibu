@@ -3,9 +3,11 @@ import { View, FlatList, StyleSheet } from 'react-native';
 import { Surface, ListRow, EmptyState, ProgressRing } from '../components';
 import { useSyncJobs } from '../hooks/useSyncJobs';
 import { History, CheckCircle, XCircle, Clock } from 'lucide-react-native';
+import { useTheme } from '../theme/theme';
 
 export function JobHistoryScreen() {
   const { history, loading, error } = useSyncJobs();
+  const { colors } = useTheme();
 
   if (loading && history.length === 0) {
     return (
@@ -19,7 +21,7 @@ export function JobHistoryScreen() {
     return (
       <View style={styles.center}>
         <EmptyState 
-          icon={<History color="#EF4444" size={48} />}
+          icon={<History color={colors.status.error} size={48} />}
           title="Error loading history"
           description={error.message}
         />
@@ -31,7 +33,7 @@ export function JobHistoryScreen() {
     return (
       <View style={styles.center}>
         <EmptyState 
-          icon={<History color="#9CA3AF" size={48} />}
+          icon={<History color={colors.text.muted} size={48} />}
           title="No Job History"
           description="There are no recent sync jobs to display."
         />
@@ -42,14 +44,14 @@ export function JobHistoryScreen() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'SYNCED':
-        return <CheckCircle size={24} color="#10B981" />;
+        return <CheckCircle size={24} color={colors.status.ok} />;
       case 'FAILED':
-        return <XCircle size={24} color="#EF4444" />;
+        return <XCircle size={24} color={colors.status.error} />;
       case 'PENDING':
       case 'UPLOADING':
-        return <Clock size={24} color="#3B82F6" />;
+        return <Clock size={24} color={colors.accent.default} />;
       default:
-        return <Clock size={24} color="#6B7280" />;
+        return <Clock size={24} color={colors.text.secondary} />;
     }
   };
 

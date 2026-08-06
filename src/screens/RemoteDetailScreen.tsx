@@ -37,7 +37,7 @@ export function RemoteDetailScreen({ navigation, route }: RootStackScreenProps<'
 
   if (loading && !remote) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.bg.canvas }]}>
+      <View style={[styles.center, { backgroundColor: colors.bg.canvas, padding: spacing.xl }]}>
         <Text>Loading...</Text>
       </View>
     );
@@ -45,7 +45,7 @@ export function RemoteDetailScreen({ navigation, route }: RootStackScreenProps<'
 
   if (!remote) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.bg.canvas }]}>
+      <View style={[styles.center, { backgroundColor: colors.bg.canvas, padding: spacing.xl }]}>
         <EmptyState
           icon={<HardDrive size={48} color={colors.text.muted} />}
           title="Remote Not Found"
@@ -107,6 +107,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
 });

@@ -5,6 +5,8 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "expo": "~57.0.10",
+    "expo-battery": "^57.0.1",
+    "expo-network": "^57.0.1",
     "expo-secure-store": "^57.0.1",
     "expo-sqlite": "^57.0.1",
     "expo-status-bar": "~57.0.1",

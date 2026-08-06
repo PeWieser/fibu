@@ -81,7 +81,7 @@
 
 ## Ausstehend
 
-- [ ] Phase 4: Sync Engine (🔵 Gemini Pro 3.1)
+- [/] Phase 4: Sync Engine (🔵 Gemini Pro 3.1)
   - `src/services/RcloneService.ts` — `JobController` + Preflight Gates (WiFi, Battery)
   - Retry mit Backoff, Cancellation, Crash-Resume
   - Echo Reconciliation + Archive-Logik

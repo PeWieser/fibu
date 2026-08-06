@@ -1,2 +1,4 @@
-// Core services export (RcloneService, JobController - Phase 4)
-export {};
+export * from './PreflightGates';
+export * from './SyncReconciler';
+export * from './JobController';
+export * from './SyncEngine';

@@ -1,2 +1,3 @@
-// Navigation configuration (Phase 5)
-export {};
+export * from './types';
+export * from './MainTabs';
+export * from './AppNavigator';

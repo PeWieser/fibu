@@ -86,7 +86,7 @@
   - Retry mit Backoff, Cancellation, Crash-Resume
   - Echo Reconciliation + Archive-Logik
   - Unit Tests: WiFi-Gate, Battery-Gate, Retry, Idempotenz, Cancel, Progress Events
-- [ ] Phase 5: Screens (🔵 Gemini Pro 3.1)
+- [x] Phase 5: Screens (🔵 Gemini Pro 3.1)
   - 7 Screens: Dashboard, Cloud Drives, Sync Rules, Settings, Remote Detail, Job History, Onboarding
   - Alle Screens: Empty / Loading / Error / Offline States
   - Destructive Actions confirm-gated (Echo Deletion, Remote Disconnect, Reset)

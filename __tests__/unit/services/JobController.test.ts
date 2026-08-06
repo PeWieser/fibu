@@ -65,9 +65,9 @@ describe('JobController', () => {
     });
 
     // Mock setTimeout so backoff doesn't actually wait
-    jest.spyOn(global, 'setTimeout').mockImplementation((fn: any) => {
-      fn();
-      return 0 as any;
+    jest.spyOn(global, 'setTimeout').mockImplementation((fn: unknown) => {
+      (fn as () => void)();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
     });
 
     const controller = new JobController(fileState, 'remote-1');

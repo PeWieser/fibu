@@ -58,8 +58,9 @@ describe('JobController', () => {
   it('retries on failure and eventually fails', async () => {
     mockRclone.sync.mockResolvedValue('job-1');
     mockRclone.subscribeToJobStatus.mockImplementation((cb) => {
-      // synchronously invoke cb to avoid unhandled rejection in background
-      cb({ jobId: 'job-1', status: 'error', error: 'Upload failed' });
+      Promise.resolve().then(() => {
+        cb({ jobId: 'job-1', status: 'error', error: 'Upload failed' });
+      });
       return { remove: jest.fn() };
     });
 

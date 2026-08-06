@@ -81,7 +81,7 @@
 
 ## Ausstehend
 
-- [/] Phase 4: Sync Engine (🔵 Gemini Pro 3.1)
+- [x] Phase 4: Sync Engine (🔵 Gemini Pro 3.1) — *ABGESCHLOSSEN — 41/41 Tests, 0 TypeErrors, 0 Lint-Warnings*
   - `src/services/RcloneService.ts` — `JobController` + Preflight Gates (WiFi, Battery)
   - Retry mit Backoff, Cancellation, Crash-Resume
   - Echo Reconciliation + Archive-Logik

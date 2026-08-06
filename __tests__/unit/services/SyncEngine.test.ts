@@ -5,6 +5,11 @@ import { JobController } from '../../../src/services/JobController';
 import { getCloudRemoteById } from '../../../src/db';
 import type { SyncRule, CloudRemote } from '../../../src/types';
 
+jest.mock('expo-modules-core', () => ({
+  requireNativeModule: jest.fn(),
+  EventEmitter: class { addListener = jest.fn() }
+}));
+
 jest.mock('../../../src/db', () => ({
   getDatabase: jest.fn(),
   getCloudRemoteById: jest.fn(),

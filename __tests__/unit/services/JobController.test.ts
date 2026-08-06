@@ -3,6 +3,10 @@ import { RcloneModule } from '../../../src/native/RcloneModule';
 import { updateFileStatus } from '../../../src/db';
 import type { FileState } from '../../../src/types';
 
+jest.mock('expo-modules-core', () => ({
+  requireNativeModule: jest.fn(),
+  EventEmitter: class { addListener = jest.fn() }
+}));
 jest.mock('../../../src/native/RcloneModule', () => ({
   RcloneModule: {
     sync: jest.fn(),
@@ -52,34 +56,26 @@ describe('JobController', () => {
   });
 
   it('retries on failure and eventually fails', async () => {
-    jest.useFakeTimers();
-
     mockRclone.sync.mockResolvedValue('job-1');
     mockRclone.subscribeToJobStatus.mockImplementation((cb) => {
-      // simulate error event
-      setTimeout(() => cb({ jobId: 'job-1', status: 'error', error: 'Upload failed' }), 0);
+      // synchronously invoke cb to avoid unhandled rejection in background
+      cb({ jobId: 'job-1', status: 'error', error: 'Upload failed' });
       return { remove: jest.fn() };
     });
 
+    // Mock setTimeout so backoff doesn't actually wait
+    jest.spyOn(global, 'setTimeout').mockImplementation((fn: any) => {
+      fn();
+      return 0 as any;
+    });
+
     const controller = new JobController(fileState, 'remote-1');
-    
-    const execPromise = controller.execute();
-    
-    // Attempt 0 fails, awaits backoff 1s
-    await jest.advanceTimersByTimeAsync(1001);
-    // Attempt 1 fails, awaits backoff 2s
-    await jest.advanceTimersByTimeAsync(2001);
-    // Attempt 2 fails, awaits backoff 4s
-    await jest.advanceTimersByTimeAsync(4001);
-    // Attempt 3 fails, awaits backoff 8s
-    await jest.advanceTimersByTimeAsync(8001);
-    
-    await expect(execPromise).rejects.toThrow('Upload failed');
+    await expect(controller.execute()).rejects.toThrow('Upload failed');
 
     expect(mockRclone.sync).toHaveBeenCalledTimes(4);
     expect(mockUpdateFileStatus).toHaveBeenLastCalledWith(undefined, 'f1', 'FAILED', 'Upload failed', false);
     
-    jest.useRealTimers();
+    (global.setTimeout as unknown as jest.Mock).mockRestore();
   });
 
   it('handles DELETED_LOCALLY files by deleting on remote', async () => {

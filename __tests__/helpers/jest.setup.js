@@ -12,7 +12,6 @@ jest.mock('expo-modules-core', () => {
 });
 
 jest.mock('react-native-reanimated', () => {
-  const React = require('react');
   const { View, Text, ScrollView } = require('react-native');
   return {
     __esModule: true,

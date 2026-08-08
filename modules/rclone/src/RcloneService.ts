@@ -1,14 +1,15 @@
 /**
  * RcloneService.ts — Typed service that translates high-level operations into
- * rclone RC (remote-control) calls via the native module.
+ * rclone RC (remote-control) HTTP calls via the native module.
  *
- * All methods currently throw NotImplemented because the librclone native
- * bindings ship in Phase 3b. Phase 4 (Sync Engine) codes against this
- * interface and can be developed independently.
+ * The native module starts `rclone rcd --rc-no-auth` on 127.0.0.1:5572 and
+ * exposes rpcCall() / startOAuthFlow() / exchangeOAuthCode() as async bridge
+ * methods. All public methods here encode params to JSON, call the bridge, and
+ * decode the JSON response.
  */
 
 import type { EventSubscription } from 'expo-modules-core';
-import { eventEmitter } from './RcloneNativeModule';
+import { nativeModule, eventEmitter } from './RcloneNativeModule';
 import type {
   RcloneConfig,
   RemoteSpec,
@@ -19,125 +20,123 @@ import type {
   RcloneJobEvent,
 } from './RcloneTypes';
 
-/** Subscription handle returned by subscribe helpers. */
 export type { EventSubscription };
+
+async function rpc<T = unknown>(
+  method: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  const raw = await nativeModule.rpcCall(method, JSON.stringify(params));
+  return JSON.parse(raw) as T;
+}
 
 export class RcloneService {
   // -------------------------------------------------------------------------
-  // Config operations
+  // Config
   // -------------------------------------------------------------------------
 
-  /** Return the parsed rclone config (maps to `config/dump` RC call). */
   async getConfig(): Promise<RcloneConfig> {
-    throw new Error('NotImplemented: RcloneService.getConfig');
+    return rpc<RcloneConfig>('config/dump');
   }
 
-  /** Add a new remote to rclone config (maps to `config/create`). */
-  async addRemote(_spec: RemoteSpec): Promise<void> {
-    throw new Error('NotImplemented: RcloneService.addRemote');
+  async addRemote(spec: RemoteSpec): Promise<void> {
+    await rpc('config/create', {
+      name: spec.name,
+      type: spec.provider,
+      parameters: spec.options ?? {},
+      obscure: true,
+    });
   }
 
-  /** Remove a remote from rclone config (maps to `config/delete`). */
-  async deleteRemote(_name: string): Promise<void> {
-    throw new Error('NotImplemented: RcloneService.deleteRemote');
+  async deleteRemote(name: string): Promise<void> {
+    await rpc('config/delete', { name });
   }
 
-  /**
-   * Create a union remote that aggregates several remotes.
-   * Maps to `config/create` with type=union.
-   * @returns The generated union remote name.
-   */
-  async createUnionRemote(_names: string[]): Promise<string> {
-    throw new Error('NotImplemented: RcloneService.createUnionRemote');
+  async createUnionRemote(names: string[]): Promise<string> {
+    const unionName = `union_${Date.now()}`;
+    await rpc('config/create', {
+      name: unionName,
+      type: 'union',
+      parameters: { upstreams: names.join(' ') },
+    });
+    return unionName;
   }
 
-  /**
-   * Create a crypt remote on top of an existing remote.
-   * Maps to `config/create` with type=crypt.
-   * @returns The generated crypt remote name.
-   */
-  async createCryptRemote(_baseName: string, _password: string): Promise<string> {
-    throw new Error('NotImplemented: RcloneService.createCryptRemote');
+  async createCryptRemote(baseName: string, password: string): Promise<string> {
+    const cryptName = `${baseName}_crypt`;
+    await rpc('config/create', {
+      name: cryptName,
+      type: 'crypt',
+      parameters: { remote: `${baseName}:`, password },
+      obscure: true,
+    });
+    return cryptName;
   }
 
   // -------------------------------------------------------------------------
-  // Sync operations
+  // Sync
   // -------------------------------------------------------------------------
 
-  /**
-   * Start an async sync job (maps to `sync/sync`).
-   * @returns Opaque job ID that can be used to track progress events.
-   */
   async sync(
-    _sourceDir: string,
-    _targetRemote: string,
-    _options?: SyncOptions,
+    sourceDir: string,
+    targetRemote: string,
+    options?: SyncOptions,
   ): Promise<string> {
-    throw new Error('NotImplemented: RcloneService.sync');
+    const params: Record<string, unknown> = {
+      srcFs: sourceDir,
+      dstFs: targetRemote,
+      _async: true,
+    };
+    if (options?.transfers !== undefined) params['transfers'] = options.transfers;
+    if (options?.checkers !== undefined) params['checkers'] = options.checkers;
+    if (options?.bwlimit !== undefined) params['bwlimit'] = options.bwlimit;
+    if (options?.retries !== undefined) params['retries'] = options.retries;
+    if (options?.dryRun) params['dryRun'] = true;
+    const result = await rpc<{ jobid: number }>('sync/sync', params);
+    return String(result.jobid);
   }
 
   // -------------------------------------------------------------------------
-  // Storage operations
+  // Storage
   // -------------------------------------------------------------------------
 
-  /** Query quota for a remote (maps to `operations/about`). */
-  async about(_remoteName: string): Promise<QuotaInfo> {
-    throw new Error('NotImplemented: RcloneService.about');
+  async about(remoteName: string): Promise<QuotaInfo> {
+    const r = await rpc<{ total?: number; used?: number; free?: number }>(
+      'operations/about',
+      { fs: `${remoteName}:` },
+    );
+    return { totalBytes: r.total ?? 0, usedBytes: r.used ?? 0, freeBytes: r.free ?? 0 };
   }
 
-  /** Purge a path on a remote (maps to `operations/purge`). */
-  async deleteRemotePath(_remoteName: string, _path: string): Promise<void> {
-    throw new Error('NotImplemented: RcloneService.deleteRemotePath');
+  async deleteRemotePath(remoteName: string, path: string): Promise<void> {
+    await rpc('operations/purge', { fs: `${remoteName}:`, remote: path });
   }
 
   // -------------------------------------------------------------------------
   // OAuth
   // -------------------------------------------------------------------------
 
-  /**
-   * Start the OAuth2 authorisation flow for a provider.
-   * @returns The authorisation URL the user must open in a browser.
-   */
-  async startOAuthFlow(_provider: string): Promise<string> {
-    throw new Error('NotImplemented: RcloneService.startOAuthFlow');
+  async startOAuthFlow(provider: string): Promise<string> {
+    return nativeModule.startOAuthFlow(provider);
   }
 
-  /**
-   * Exchange an OAuth2 code for an access token.
-   * @returns Parsed AuthorizeResult containing the token JSON.
-   */
-  async exchangeOAuthCode(_provider: string, _code: string): Promise<AuthorizeResult> {
-    throw new Error('NotImplemented: RcloneService.exchangeOAuthCode');
+  async exchangeOAuthCode(provider: string, code: string): Promise<AuthorizeResult> {
+    const raw = await nativeModule.exchangeOAuthCode(provider, code);
+    return JSON.parse(raw) as AuthorizeResult;
   }
 
   // -------------------------------------------------------------------------
   // Event subscriptions
   // -------------------------------------------------------------------------
 
-  /**
-   * Subscribe to progress events emitted during active sync jobs.
-   * @returns Subscription handle — call `.remove()` to unsubscribe.
-   */
-  subscribeToProgress(
-    cb: (event: RcloneProgressEvent) => void,
-  ): EventSubscription {
+  subscribeToProgress(cb: (event: RcloneProgressEvent) => void): EventSubscription {
     return eventEmitter.addListener('onProgress', cb);
   }
 
-  /**
-   * Subscribe to job status change events (running → success | error).
-   * @returns Subscription handle — call `.remove()` to unsubscribe.
-   */
-  subscribeToJobStatus(
-    cb: (event: RcloneJobEvent) => void,
-  ): EventSubscription {
+  subscribeToJobStatus(cb: (event: RcloneJobEvent) => void): EventSubscription {
     return eventEmitter.addListener('onJobStatusChange', cb);
   }
 
-  /**
-   * Subscribe to OAuth callback events from the native layer.
-   * @returns Subscription handle — call `.remove()` to unsubscribe.
-   */
   subscribeToAuthCallback(
     cb: (event: { provider: string; url: string }) => void,
   ): EventSubscription {

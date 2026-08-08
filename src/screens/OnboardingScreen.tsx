@@ -22,7 +22,7 @@ export function OnboardingScreen({ navigation }: RootStackScreenProps<'Onboardin
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.bg.canvas, padding: spacing.xl }]}>
       <View style={styles.header}>
-        <Text variant="xl" weight="bold">Welcome to EchoVault</Text>
+        <Text variant="xl" weight="bold">Welcome to Fibu</Text>
         <Text variant="base" color="muted" align="center" style={{ marginTop: spacing.md }}>
           Secure, seamless syncing between your local device and cloud storage.
         </Text>

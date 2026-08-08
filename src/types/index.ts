@@ -1,9 +1,24 @@
-export type Provider = 'drive' | 'mega' | 'onedrive' | 'dropbox' | 'union' | 'crypt';
+export type Provider =
+  // Major consumer clouds
+  | 'drive' | 'onedrive' | 'dropbox' | 'mega' | 'box' | 'pcloud'
+  | 'yandex' | 'jottacloud' | 'koofr' | 'mailru' | 'zoho' | 'hidrive'
+  | 'proton' | 'filen' | 'premiumizeme' | 'putio' | 'opendrive'
+  | 'sugarsync' | 'linkbox' | 'pikpak' | 'ulozto' | 'seafile'
+  | 'sharefile' | 'quatrix' | 'filefabric' | 'googlephotos'
+  | 'internetarchive'
+  // Object / block storage
+  | 's3' | 'b2' | 'storj' | 'idrive' | 'azureblob' | 'azurefiles'
+  | 'googlecloudstorage' | 'swift' | 'oracleobjectstorage' | 'sia' | 'hdfs'
+  // Server protocols
+  | 'sftp' | 'ftp' | 'ftps' | 'webdav' | 'smb' | 'nfs'
+  // rclone virtual remotes
+  | 'union' | 'crypt' | 'alias' | 'chunker' | 'compress' | 'cache'
+  | 'combine' | 'hasher'
+  // Forward-compatible: any future rclone provider ID
+  | (string & {});
 
 export type SyncMode = 'ECHO' | 'ARCHIVE';
-
 export type MediaType = 'PHOTOS' | 'VIDEOS' | 'BOTH';
-
 export type FileStatus = 'PENDING' | 'UPLOADING' | 'SYNCED' | 'FAILED' | 'DELETED_LOCALLY';
 
 export interface CloudRemote {

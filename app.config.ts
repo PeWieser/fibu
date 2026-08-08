@@ -48,6 +48,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         photosPermission: 'Fibu needs access to your photos to perform backups.',
         savePhotosPermission: 'Fibu needs permission to restore photos to your device.'
       }
+    ],
+    [
+      'expo-build-properties',
+      {
+        android: {
+          // Reduce Gradle daemon heap to prevent OOM on Windows with limited paging file.
+          // Default is -Xmx4g which exceeds available virtual memory on many dev machines.
+          extraPropertiesEntries: {
+            'org.gradle.jvmargs': '-Xmx1536m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError',
+            'org.gradle.daemon': 'true',
+            'org.gradle.parallel': 'true',
+            'org.gradle.caching': 'true',
+          }
+        }
+      }
     ]
   ]
 });

@@ -2,8 +2,8 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'EchoVault',
-  slug: 'echovault',
+  name: 'Fibu',
+  slug: 'fibu',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',

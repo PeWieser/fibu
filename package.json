@@ -10,6 +10,7 @@
     "expo": "~57.0.10",
     "expo-background-fetch": "~57.0.8",
     "expo-battery": "^57.0.1",
+    "expo-build-properties": "~0.14.0",
     "expo-crypto": "~57.0.1",
     "expo-media-library": "~57.0.3",
     "expo-network": "^57.0.1",

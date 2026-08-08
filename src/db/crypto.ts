@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { Logger } from '../utils/logger';
 
-const KEY_ALIAS = 'echovault_db_key';
+const KEY_ALIAS = 'fibu_db_key';
 let cachedKey: CryptoKey | null = null;
 
 // Convert base64 string to Uint8Array

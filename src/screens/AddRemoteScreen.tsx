@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -11,23 +11,34 @@ import { Text, Button } from '../components';
 import type { RootStackScreenProps } from '../navigation/types';
 import { useTheme } from '../theme/theme';
 import { useCloudRemotes } from '../hooks/useCloudRemotes';
-import type { Provider } from '../types';
-
-const PROVIDERS: { label: string; value: Provider }[] = [
-  { label: 'Google Drive', value: 'drive' },
-  { label: 'OneDrive', value: 'onedrive' },
-  { label: 'Dropbox', value: 'dropbox' },
-  { label: 'Mega', value: 'mega' },
-];
+import {
+  RCLONE_PROVIDERS,
+  PROVIDER_CATEGORIES,
+  filterProviders,
+  type RcloneProvider,
+  type RcloneCategory,
+} from '../data/rcloneProviders';
 
 export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'>) {
   const { colors, spacing, borderRadius: radius } = useTheme();
   const { addRemote } = useCloudRemotes();
 
   const [name, setName] = useState('');
-  const [provider, setProvider] = useState<Provider>('drive');
+  const [search, setSearch] = useState('');
+  const [provider, setProvider] = useState<RcloneProvider>(RCLONE_PROVIDERS[0]);
   const [rcloneConfig, setRcloneConfig] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const filtered = useMemo(() => filterProviders(search), [search]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<RcloneCategory, RcloneProvider[]>();
+    for (const cat of PROVIDER_CATEGORIES) {
+      const items = filtered.filter((p) => p.category === cat);
+      if (items.length > 0) map.set(cat, items);
+    }
+    return map;
+  }, [filtered]);
 
   const isValid = name.trim().length > 0 && rcloneConfig.trim().length > 0;
 
@@ -37,7 +48,7 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
     try {
       await addRemote({
         name: name.trim(),
-        provider,
+        provider: provider.rcloneType,
         rclone_config: rcloneConfig.trim(),
         is_encrypted: false,
         total_space_bytes: 0,
@@ -69,9 +80,7 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
     >
       {/* Name */}
       <View style={{ marginBottom: spacing.lg }}>
-        <Text variant="sm" weight="semibold" style={{ marginBottom: spacing.xs }}>
-          Name
-        </Text>
+        <Text variant="sm" weight="semibold" style={{ marginBottom: spacing.xs }}>Name</Text>
         <TextInput
           accessibilityLabel="Drive name"
           placeholder="My Cloud Drive"
@@ -84,43 +93,93 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
         />
       </View>
 
-      {/* Provider */}
+      {/* Provider picker */}
       <View style={{ marginBottom: spacing.lg }}>
-        <Text variant="sm" weight="semibold" style={{ marginBottom: spacing.xs }}>
-          Provider
-        </Text>
-        <View style={{ gap: spacing.xs }}>
-          {PROVIDERS.map((p) => {
-            const selected = provider === p.value;
-            return (
-              <TouchableOpacity
-                key={p.value}
-                accessibilityRole="radio"
-                accessibilityLabel={p.label}
-                accessibilityState={{ selected }}
-                onPress={() => setProvider(p.value)}
-                style={[
-                  styles.providerRow,
-                  {
-                    backgroundColor: selected ? colors.accent.muted : colors.bg.surface,
-                    borderColor: selected ? colors.accent.default : colors.border.default,
-                    borderRadius: radius.sm,
-                    padding: spacing.md,
-                    minHeight: 44,
-                  },
-                ]}
-              >
-                <Text
-                  variant="base"
-                  weight={selected ? 'semibold' : 'normal'}
-                  color={selected ? 'accent' : 'primary'}
-                >
-                  {p.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <Text variant="sm" weight="semibold" style={{ marginBottom: spacing.xs }}>Provider</Text>
+
+        {/* Search bar */}
+        <View style={[styles.searchRow, {
+          backgroundColor: colors.bg.surface,
+          borderColor: colors.border.default,
+          borderRadius: radius.sm,
+          marginBottom: spacing.sm,
+        }]}>
+          <TextInput
+            accessibilityLabel="Search providers"
+            accessibilityRole="search"
+            placeholder="Search providers…"
+            placeholderTextColor={colors.text.muted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            style={[styles.searchInput, { color: colors.text.primary, fontSize: 15 }]}
+          />
         </View>
+
+        {/* Selected pill */}
+        <View style={[styles.selectedPill, {
+          backgroundColor: colors.accent.muted,
+          borderColor: colors.accent.default,
+          borderRadius: radius.sm,
+          padding: spacing.md,
+          marginBottom: spacing.sm,
+        }]}>
+          <Text variant="xs" color="muted">Selected</Text>
+          <Text variant="base" weight="semibold" color="accent">{provider.name}</Text>
+          <Text variant="xs" color="muted">{provider.description}</Text>
+        </View>
+
+        {/* Grouped provider list */}
+        {filtered.length === 0 ? (
+          <Text variant="sm" color="muted" style={{ textAlign: 'center', paddingVertical: spacing.md }}>
+            No providers found for "{search}"
+          </Text>
+        ) : (
+          Array.from(grouped.entries()).map(([cat, providers]) => (
+            <View key={cat} style={{ marginBottom: spacing.sm }}>
+              <Text
+                variant="xs"
+                weight="semibold"
+                color="muted"
+                style={{ marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.8 }}
+              >
+                {cat}
+              </Text>
+              {providers.map((p) => {
+                const selected = provider.id === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    accessibilityRole="radio"
+                    accessibilityLabel={p.name}
+                    accessibilityHint={p.description}
+                    accessibilityState={{ selected }}
+                    onPress={() => setProvider(p)}
+                    style={[styles.providerRow, {
+                      backgroundColor: selected ? colors.accent.muted : colors.bg.surface,
+                      borderColor: selected ? colors.accent.default : colors.border.default,
+                      borderRadius: radius.sm,
+                      padding: spacing.md,
+                      minHeight: 56,
+                      marginBottom: spacing.xs,
+                    }]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text variant="base" weight={selected ? 'semibold' : 'normal'} color={selected ? 'accent' : 'primary'}>
+                        {p.name}
+                      </Text>
+                      <Text variant="xs" color="muted">{p.description}</Text>
+                    </View>
+                    {p.requiresOAuth && (
+                      <Text variant="xs" color="muted" style={{ marginLeft: spacing.xs }}>OAuth</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))
+        )}
       </View>
 
       {/* rclone config */}
@@ -130,7 +189,7 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
         </Text>
         <TextInput
           accessibilityLabel="rclone config"
-          placeholder={'{\n  "type": "drive",\n  "token": "..."\n}'}
+          placeholder={'{\n  "type": "' + provider.rcloneType + '",\n  ...\n}'}
           placeholderTextColor={colors.text.muted}
           value={rcloneConfig}
           onChangeText={setRcloneConfig}
@@ -140,6 +199,7 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
         />
         <Text variant="xs" color="muted" style={{ marginTop: spacing.xs }}>
           Paste the rclone backend config block as JSON.
+          {provider.s3Provider ? ` Include "provider": "${provider.s3Provider}".` : ''}
         </Text>
       </View>
 
@@ -155,12 +215,9 @@ export function AddRemoteScreen({ navigation }: RootStackScreenProps<'AddRemote'
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-  },
-  providerRow: {
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  container: { flexGrow: 1 },
+  searchRow: { borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+  searchInput: { flex: 1, height: 44 },
+  selectedPill: { borderWidth: 1, gap: 2 },
+  providerRow: { borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
 });

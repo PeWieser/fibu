@@ -54,6 +54,7 @@ export function MainTabs() {
         options={{
           title: 'Rules',
           tabBarIcon: ({ color, size }) => <ListTree color={color} size={size} />,
+          tabBarButtonTestID: 'rules_tab',
         }}
       />
       <Tab.Screen

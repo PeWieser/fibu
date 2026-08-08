@@ -5,4 +5,6 @@ appId: com.echovault.app # Update this later if app ID changes
 - assertVisible: "Welcome to EchoVault"
 - tapOn: "Skip for now"
 - assertVisible: "Dashboard"
+- tapOn:
+    id: "rules_tab"
 - assertVisible: "No Sync Rules"

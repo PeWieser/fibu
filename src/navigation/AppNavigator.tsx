@@ -16,7 +16,7 @@ export function AppNavigator() {
     <NavigationContainer>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack.Navigator
-        initialRouteName="Main" // Note: Will change based on DB state later
+        initialRouteName="Onboarding" // Note: Will change based on DB state later
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.bg.canvas },

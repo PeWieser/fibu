@@ -1,4 +1,4 @@
-# EchoVault — Projektregeln (AGENTS.md)
+# Fibu — Projektregeln (AGENTS.md)
 
 > Diese Regeln gelten **immer** — in jeder Phase, für jeden Agenten, bei jeder Änderung.
 > Kein Agent darf diese Regeln verletzen, unabhängig von der Aufgabe.

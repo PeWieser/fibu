@@ -3,10 +3,25 @@
   "compilerOptions": {
     "strict": true,
     "ignoreDeprecations": "6.0",
-    "types": ["jest", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     }
-  }
+  },
+  "include": [
+    "src",
+    "modules",
+    "App.tsx",
+    "index.ts",
+    "app.config.ts",
+    "babel.config.js",
+    "metro.config.js",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".expo",
+    "__tests__",
+    "e2e"
+  ]
 }

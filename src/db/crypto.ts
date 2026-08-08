@@ -5,37 +5,39 @@ import { Logger } from '../utils/logger';
 const KEY_ALIAS = 'fibu_db_key';
 let cachedKey: CryptoKey | null = null;
 
-// Convert base64 string to Uint8Array
 function base64ToUint8Array(base64: string): Uint8Array {
-  if (typeof atob === 'function') {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
-  return new Uint8Array(Buffer.from(base64, 'base64'));
+  return bytes;
 }
 
-// Convert Uint8Array to base64 string
 function uint8ArrayToBase64(bytes: Uint8Array): string {
-  if (typeof btoa === 'function') {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
-  return Buffer.from(bytes).toString('base64');
+  return btoa(binary);
+}
+
+function getSubtle(): SubtleCrypto | null {
+  // globalThis.crypto is available in React Native (Hermes) and browsers.
+  // Avoids referencing the Node-only `global` or `Buffer` globals.
+  const subtle = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto?.subtle;
+  return subtle ?? null;
 }
 
 export async function getOrCreateKey(): Promise<CryptoKey | null> {
-  if (cachedKey) {
-    return cachedKey;
+  if (cachedKey) return cachedKey;
+
+  const subtle = getSubtle();
+  if (!subtle) {
+    Logger.warn('Web Crypto API not available. Encryption disabled.');
+    return null;
   }
+
   try {
     let keyBase64 = await SecureStore.getItemAsync(KEY_ALIAS);
     if (!keyBase64) {
@@ -43,15 +45,9 @@ export async function getOrCreateKey(): Promise<CryptoKey | null> {
       keyBase64 = uint8ArrayToBase64(randomBytes);
       await SecureStore.setItemAsync(KEY_ALIAS, keyBase64);
     }
-    const rawKey = base64ToUint8Array(keyBase64);
-    if (typeof global.crypto === 'undefined' || typeof global.crypto.subtle === 'undefined') {
-      Logger.warn('Web Crypto API not available. Encryption disabled.');
-      return null;
-    }
-    cachedKey = await global.crypto.subtle.importKey(
+    cachedKey = await subtle.importKey(
       'raw',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rawKey as any,
+      base64ToUint8Array(keyBase64),
       { name: 'AES-GCM' },
       false,
       ['encrypt', 'decrypt']
@@ -69,16 +65,14 @@ export async function encrypt(plainText: string): Promise<string> {
   const key = await getOrCreateKey();
   if (!key) return plainText;
 
+  const subtle = getSubtle()!;
   const iv = await Crypto.getRandomBytesAsync(12);
-  const encoder = new TextEncoder();
-  const encodedText = encoder.encode(plainText);
+  const encodedText = new TextEncoder().encode(plainText);
 
-  const cipherTextBuffer = await global.crypto.subtle.encrypt(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    { name: 'AES-GCM', iv: iv as any },
+  const cipherTextBuffer = await subtle.encrypt(
+    { name: 'AES-GCM', iv },
     key,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    encodedText as any
+    encodedText
   );
 
   const cipherTextArray = new Uint8Array(cipherTextBuffer);
@@ -91,25 +85,22 @@ export async function encrypt(plainText: string): Promise<string> {
 
 export async function decrypt(cipherText: string): Promise<string> {
   if (!cipherText) return cipherText;
-  
   const key = await getOrCreateKey();
   if (!key) return cipherText;
 
   try {
+    const subtle = getSubtle()!;
     const combined = base64ToUint8Array(cipherText);
     const iv = combined.slice(0, 12);
     const data = combined.slice(12);
 
-    const decryptedBuffer = await global.crypto.subtle.decrypt(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { name: 'AES-GCM', iv: iv as any },
+    const decryptedBuffer = await subtle.decrypt(
+      { name: 'AES-GCM', iv },
       key,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data as any
+      data
     );
 
-    const decoder = new TextDecoder();
-    return decoder.decode(decryptedBuffer);
+    return new TextDecoder().decode(decryptedBuffer);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     Logger.error(`Decryption failed: ${errMsg}`);

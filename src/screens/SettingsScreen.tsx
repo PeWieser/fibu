@@ -3,6 +3,7 @@ import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Surface, Text, ListRow, Button } from '../components';
 import { Settings as SettingsIcon, Info, Database, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
+import { resetDatabase } from '../db';
 
 export function SettingsScreen() {
   const { colors, borderRadius, spacing } = useTheme();
@@ -13,13 +14,15 @@ export function SettingsScreen() {
       "Der lokale Sync-Status wird zurückgesetzt. Beim nächsten Sync werden alle Dateien erneut geprüft.",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Reset", 
-          style: "destructive", 
+        {
+          text: "Reset",
+          style: "destructive",
           onPress: () => {
-            // Placeholder for actual reset logic
-          } 
-        }
+            resetDatabase().catch((e) => {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Reset failed.');
+            });
+          },
+        },
       ]
     );
   };

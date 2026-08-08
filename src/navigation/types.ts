@@ -7,6 +7,7 @@ export type RootStackParamList = {
   Main: { screen?: keyof MainTabParamList } | undefined;
   Settings: undefined;
   RemoteDetail: { remoteId: string };
+  AddRemote: undefined;
 };
 
 export type MainTabParamList = {

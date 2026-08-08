@@ -4,8 +4,9 @@ import { Text, Surface, EmptyState, ListRow, IconButton } from '../components';
 import { useCloudRemotes } from '../hooks/useCloudRemotes';
 import { Cloud, AlertCircle, Plus, HardDrive, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
+import type { MainTabScreenProps } from '../navigation/types';
 
-export function CloudDrivesScreen() {
+export function CloudDrivesScreen({ navigation }: MainTabScreenProps<'CloudDrives'>) {
   const { remotes, loading, error, refresh, deleteRemote } = useCloudRemotes();
   const { colors, spacing } = useTheme();
 
@@ -59,7 +60,7 @@ export function CloudDrivesScreen() {
           <Text variant="xl">Cloud Drives</Text>
           <IconButton 
             icon={<Plus size={24} color={colors.text.primary} />} 
-            onPress={() => { /* TODO: Add remote */ }} 
+            onPress={() => navigation.navigate('AddRemote')} 
             accessibilityLabel="Add Remote"
           />
         </View>
@@ -70,7 +71,7 @@ export function CloudDrivesScreen() {
             description="Connect a cloud drive to start syncing your files."
             icon={<Cloud color={colors.text.secondary} size={48} />}
             actionLabel="Add Drive"
-            onAction={() => { /* TODO: Add remote */ }}
+            onAction={() => navigation.navigate('AddRemote')}
           />
         ) : (
           <Surface elevation="surface" borderRadius="lg" border>

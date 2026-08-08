@@ -22,6 +22,20 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return dbInitPromise;
 }
 
+/**
+ * Resets the local sync index: clears all FileState rows and sets user_version to 0
+ * so the next call to getDatabase() re-runs all migrations.
+ * Does NOT delete CloudRemotes or SyncRules — only sync state.
+ */
+export async function resetDatabase(): Promise<void> {
+  const db = await getDatabase();
+  // Clear only file sync state; preserve configuration tables
+  await db.execAsync('DELETE FROM FileState;');
+  // Reset the singleton so subsequent getDatabase() re-initialises migrations
+  dbInstance = null;
+  dbInitPromise = null;
+}
+
 export * from './types';
 export * from './migrations';
 export * from './repositories';

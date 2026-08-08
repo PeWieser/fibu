@@ -4,15 +4,18 @@ import { Text, Button, Surface } from '../components';
 import type { RootStackScreenProps } from '../navigation/types';
 import { Cloud, Server, Shield } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
+import { markOnboardingComplete } from '../utils/onboarding';
 
 export function OnboardingScreen({ navigation }: RootStackScreenProps<'Onboarding'>) {
   const { colors, spacing } = useTheme();
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    await markOnboardingComplete();
     navigation.replace('Main');
   };
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
+    await markOnboardingComplete();
     navigation.replace('Main', { screen: 'CloudDrives' });
   };
 

@@ -10,17 +10,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.echovault.app',
+    bundleIdentifier: 'com.fibu.app',
     infoPlist: {
       NSPhotoLibraryUsageDescription:
-        'EchoVault needs access to your photo library to back up photos and videos to your connected cloud storage.',
+        'Fibu needs access to your photo library to back up photos and videos to your connected cloud storage.',
       NSPhotoLibraryAddUsageDescription:
-        'EchoVault needs permission to save restored media to your photo library.',
+        'Fibu needs permission to save restored media to your photo library.',
       UIBackgroundModes: ['fetch', 'processing']
     }
   },
   android: {
-    package: 'com.echovault.app',
+    package: 'com.fibu.app',
     adaptiveIcon: {
       backgroundColor: '#0F172A',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -45,8 +45,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-media-library',
       {
-        photosPermission: 'EchoVault needs access to your photos to perform backups.',
-        savePhotosPermission: 'EchoVault needs permission to restore photos to your device.'
+        photosPermission: 'Fibu needs access to your photos to perform backups.',
+        savePhotosPermission: 'Fibu needs permission to restore photos to your device.'
       }
     ]
   ]

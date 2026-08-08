@@ -5,9 +5,9 @@ import { Logger } from '../utils/logger';
 const KEY_ALIAS = 'fibu_db_key';
 let cachedKey: CryptoKey | null = null;
 
-function base64ToUint8Array(base64: string): Uint8Array {
+function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
+  const bytes = new Uint8Array(binaryString.length) as Uint8Array<ArrayBuffer>;
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
@@ -24,9 +24,19 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 
 function getSubtle(): SubtleCrypto | null {
   // globalThis.crypto is available in React Native (Hermes) and browsers.
-  // Avoids referencing the Node-only `global` or `Buffer` globals.
   const subtle = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto?.subtle;
   return subtle ?? null;
+}
+
+// Ensures the underlying buffer is a plain ArrayBuffer (not SharedArrayBuffer),
+// which TypeScript 6 requires for SubtleCrypto's BufferSource parameter.
+function toArrayBuffer(u8: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (u8.buffer instanceof ArrayBuffer) {
+    return u8 as Uint8Array<ArrayBuffer>;
+  }
+  const copy = new ArrayBuffer(u8.byteLength);
+  new Uint8Array(copy).set(u8);
+  return new Uint8Array(copy) as Uint8Array<ArrayBuffer>;
 }
 
 export async function getOrCreateKey(): Promise<CryptoKey | null> {
@@ -66,8 +76,8 @@ export async function encrypt(plainText: string): Promise<string> {
   if (!key) return plainText;
 
   const subtle = getSubtle()!;
-  const iv = await Crypto.getRandomBytesAsync(12);
-  const encodedText = new TextEncoder().encode(plainText);
+  const iv = toArrayBuffer(await Crypto.getRandomBytesAsync(12));
+  const encodedText = toArrayBuffer(new TextEncoder().encode(plainText));
 
   const cipherTextBuffer = await subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -76,9 +86,9 @@ export async function encrypt(plainText: string): Promise<string> {
   );
 
   const cipherTextArray = new Uint8Array(cipherTextBuffer);
-  const combined = new Uint8Array(iv.length + cipherTextArray.length);
+  const combined = new Uint8Array(iv.byteLength + cipherTextArray.byteLength);
   combined.set(iv);
-  combined.set(cipherTextArray, iv.length);
+  combined.set(cipherTextArray, iv.byteLength);
 
   return uint8ArrayToBase64(combined);
 }
@@ -91,8 +101,8 @@ export async function decrypt(cipherText: string): Promise<string> {
   try {
     const subtle = getSubtle()!;
     const combined = base64ToUint8Array(cipherText);
-    const iv = combined.slice(0, 12);
-    const data = combined.slice(12);
+    const iv = toArrayBuffer(combined.slice(0, 12));
+    const data = toArrayBuffer(combined.slice(12));
 
     const decryptedBuffer = await subtle.decrypt(
       { name: 'AES-GCM', iv },

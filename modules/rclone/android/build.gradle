@@ -1,38 +1,20 @@
-apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'expo-module-gradle-plugin'
-
-android {
-  namespace "expo.modules.rclone"
-  compileSdk 36
-
-
-  defaultConfig {
-    minSdk 24
-    targetSdk 36
-    versionCode 1
-    versionName "1.0.0"
-    ndk {
-      abiFilters 'arm64-v8a', 'x86_64'
-    }
-  }
-
-  compileOptions {
-    sourceCompatibility JavaVersion.VERSION_17
-    targetCompatibility JavaVersion.VERSION_17
-  }
-
-  kotlinOptions {
-    jvmTarget = '17'
-  }
-
-  sourceSets {
-    main {
-      assets.srcDirs = ['src/main/assets']
-    }
-  }
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
 }
 
-dependencies {
-  implementation project(':expo-modules-core')
+group = 'expo.modules.rclone'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.rclone'
+
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+
+  lintOptions {
+    abortOnError false
+  }
 }

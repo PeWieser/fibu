@@ -2,6 +2,14 @@
 
 Vollständige Dokumentation aller Änderungen, die in dieser Session vorgenommen wurden.
 
+> **Korrektur:** Die Abschnitte zum ausführbaren rclone-Binary beschreiben einen
+> nicht releasefähigen Prototyp. Moderne Android-Versionen dürfen keine Dateien
+> aus beschreibbarem App-Speicher ausführen; `Foundation.Process` und ein
+> macOS-Binary funktionieren nicht auf iOS. Außerdem ist
+> `react-native-worklets` für Reanimated 4 erforderlich und nicht durch
+> `react-native-worklets-core` ersetzbar. Der aktuelle Stand und die
+> Folgearchitektur sind in `walkthrough.md` dokumentiert.
+
 ---
 
 ## 1. CI-Fix: ESLint-Peer-Dependency-Konflikt
@@ -166,14 +174,12 @@ Hilfsfunktion `rpc<T>(method, params)` kapselt HTTP POST + JSON-Parsing.
 
 ---
 
-## 11. Binary-Download-Script
+## 11. Binary-Download-Script (entfernt)
 
-**`scripts/download-rclone.sh`** (neu)
-- Lädt aktuelle (oder gepinnte) rclone-Version von `downloads.rclone.org`
-- Android arm64 → `modules/rclone/android/src/main/assets/rclone/`
-- iOS arm64 (macOS-Build) → `modules/rclone/ios/Resources/rclone/`
-- Schreibt `version.txt` für den Versions-Check im Native Module
-- Konfigurierbar via `RCLONE_VERSION`-Env-Variable
+Der damalige Ansatz über `scripts/download-rclone.sh` wurde entfernt. Der
+Android-Artefaktname existierte nicht, und ein macOS-Binary ist kein gültiges
+iOS-Artefakt. Die geplante Ablösung ist `librclone/gomobile` für beide
+Plattformen.
 
 ---
 
@@ -188,10 +194,12 @@ Hilfsfunktion `rpc<T>(method, params)` kapselt HTTP POST + JSON-Parsing.
 
 ---
 
-## Was noch manuell erledigt werden muss
+## Was noch erledigt werden muss
 
-1. **`.github/workflows/ci.yml`**: Node 22 + Java 21 (braucht `workflows`-OAuth-Scope)
-2. **`scripts/download-rclone.sh`** einmalig ausführen vor dem ersten Build
-3. **`RclonePackage.kt`** anlegen (Expo-Module-Registrierung für Android)
-4. **iOS**: Xcode-Target um Binary-Resources und Swift-Datei ergänzen nach `expo prebuild`
-5. **OAuth-Flow**: `expo-web-browser` + `expo-auth-session` verdrahten
+Die früher hier genannten manuellen Build-Schritte sind überholt: Android- und
+Apple-Autolinking sind inzwischen konfiguriert; ein `RclonePackage.kt` ist mit
+der aktuellen Expo Modules API nicht erforderlich. Die erweiterte `ci.yml` wird
+wegen fehlender Workflow-Berechtigung separat manuell übernommen.
+
+1. **Mobile rclone Engine:** `librclone/gomobile` als Android-AAR und iOS-XCFramework integrieren.
+2. **OAuth-Flow:** `expo-web-browser` + `expo-auth-session` verdrahten.

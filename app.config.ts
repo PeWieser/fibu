@@ -16,8 +16,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         'Fibu needs access to your photo library to back up photos and videos to your connected cloud storage.',
       NSPhotoLibraryAddUsageDescription:
         'Fibu needs permission to save restored media to your photo library.',
-      UIBackgroundModes: ['fetch', 'processing']
-    }
+      UIBackgroundModes: ['fetch'],
+    },
   },
   android: {
     package: 'com.fibu.app',
@@ -25,44 +25,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#0F172A',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
-      monochromeImage: './assets/android-icon-monochrome.png'
+      monochromeImage: './assets/android-icon-monochrome.png',
     },
-    permissions: [
-      'READ_MEDIA_IMAGES',
-      'READ_MEDIA_VIDEO',
-      'READ_EXTERNAL_STORAGE',
-      'WRITE_EXTERNAL_STORAGE',
-      'FOREGROUND_SERVICE',
-      'RECEIVE_BOOT_COMPLETED',
-      'ACCESS_NETWORK_STATE',
-      'WAKE_LOCK'
-    ]
   },
   web: {
-    favicon: './assets/favicon.png'
+    favicon: './assets/favicon.png',
   },
   plugins: [
     [
       'expo-media-library',
       {
         photosPermission: 'Fibu needs access to your photos to perform backups.',
-        savePhotosPermission: 'Fibu needs permission to restore photos to your device.'
-      }
+        savePhotosPermission: 'Fibu needs permission to restore photos to your device.',
+        granularPermissions: ['photo', 'video'],
+      },
     ],
-    [
-      'expo-build-properties',
-      {
-        android: {
-          // Reduce Gradle daemon heap to prevent OOM on Windows with limited paging file.
-          // Default is -Xmx4g which exceeds available virtual memory on many dev machines.
-          extraPropertiesEntries: {
-            'org.gradle.jvmargs': '-Xmx1536m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError',
-            'org.gradle.daemon': 'true',
-            'org.gradle.parallel': 'true',
-            'org.gradle.caching': 'true',
-          }
-        }
-      }
-    ]
-  ]
+  ],
 });

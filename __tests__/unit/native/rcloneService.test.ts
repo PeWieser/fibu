@@ -1,18 +1,10 @@
-/**
- * rcloneService.test.ts — Unit tests for RcloneService.
- *
- * expo-modules-core is mocked so that requireNativeModule / EventEmitter never
- * touch native infrastructure in the Jest (Node.js) environment.
- */
-
-// ---------------------------------------------------------------------------
-// Mock expo-modules-core BEFORE any module under test is imported.
-// ---------------------------------------------------------------------------
+/** Unit tests for the typed rclone RC adapter. */
 
 jest.mock('expo-modules-core', () => {
   class MockEventEmitter {
     addListener = jest.fn(() => ({ remove: jest.fn() }));
   }
+
   return {
     __esModule: true,
     requireNativeModule: jest.fn(() => ({
@@ -25,185 +17,189 @@ jest.mock('expo-modules-core', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Import AFTER mocks are in place.
-// ---------------------------------------------------------------------------
-
 import { RcloneService } from '../../../modules/rclone/src/RcloneService';
+import { eventEmitter, nativeModule } from '../../../modules/rclone/src/RcloneNativeModule';
+import type { NativeRcloneModule } from '../../../modules/rclone/src/RcloneNativeModule';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const mockedNativeModule = nativeModule as jest.Mocked<NativeRcloneModule>;
 
-/**
- * Assert that a given async function rejects with an Error whose message
- * matches the NotImplemented pattern for RcloneService.
- */
-async function expectNotImplemented(
-  fn: () => Promise<unknown>,
-  methodName: string,
-): Promise<void> {
-  await expect(fn()).rejects.toThrow(
-    new Error(`NotImplemented: RcloneService.${methodName}`),
-  );
+function rpcParams(callIndex = 0): Record<string, unknown> {
+  const serialized = mockedNativeModule.rpcCall.mock.calls[callIndex]?.[1];
+  if (serialized === undefined) {
+    throw new Error(`Missing rpcCall at index ${callIndex}`);
+  }
+  return JSON.parse(serialized) as Record<string, unknown>;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('RcloneService', () => {
-  let svc: RcloneService;
+  let service: RcloneService;
 
   beforeEach(() => {
-    svc = new RcloneService();
     jest.clearAllMocks();
+    mockedNativeModule.initialize.mockResolvedValue(undefined);
+    mockedNativeModule.rpcCall.mockResolvedValue('{}');
+    mockedNativeModule.startOAuthFlow.mockResolvedValue('https://auth.example.test');
+    mockedNativeModule.exchangeOAuthCode.mockResolvedValue(
+      JSON.stringify({ provider: 'drive', configName: 'photos', token: 'encrypted' }),
+    );
+    service = new RcloneService();
   });
 
-  // -------------------------------------------------------------------------
-  // NotImplemented stubs
-  // -------------------------------------------------------------------------
+  describe('native lifecycle', () => {
+    it('initializes the native engine once before concurrent RPC calls', async () => {
+      mockedNativeModule.rpcCall.mockResolvedValue('{}');
 
-  describe('NotImplemented stubs', () => {
-    it('getConfig throws NotImplemented', async () => {
-      await expectNotImplemented(() => svc.getConfig(), 'getConfig');
+      await Promise.all([service.getConfig(), service.deleteRemote('archive')]);
+
+      expect(mockedNativeModule.initialize).toHaveBeenCalledTimes(1);
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledTimes(2);
     });
 
-    it('addRemote throws NotImplemented', async () => {
-      await expectNotImplemented(
-        () => svc.addRemote({ name: 'test', provider: 'drive' }),
-        'addRemote',
-      );
-    });
+    it('retries initialization after a rejected attempt', async () => {
+      mockedNativeModule.initialize
+        .mockRejectedValueOnce(new Error('startup failed'))
+        .mockResolvedValueOnce(undefined);
 
-    it('deleteRemote throws NotImplemented', async () => {
-      await expectNotImplemented(() => svc.deleteRemote('test'), 'deleteRemote');
-    });
+      await expect(service.getConfig()).rejects.toThrow('startup failed');
+      await expect(service.getConfig()).resolves.toEqual({});
 
-    it('createUnionRemote throws NotImplemented', async () => {
-      await expectNotImplemented(
-        () => svc.createUnionRemote(['remote1', 'remote2']),
-        'createUnionRemote',
-      );
-    });
-
-    it('createCryptRemote throws NotImplemented', async () => {
-      await expectNotImplemented(
-        () => svc.createCryptRemote('base', 'secret'),
-        'createCryptRemote',
-      );
-    });
-
-    it('sync throws NotImplemented (not a silent no-op)', async () => {
-      await expectNotImplemented(
-        () => svc.sync('/local/photos', 'drive:EchoVault'),
-        'sync',
-      );
-    });
-
-    it('sync throws NotImplemented even when options are provided', async () => {
-      await expectNotImplemented(
-        () =>
-          svc.sync('/local/photos', 'drive:EchoVault', {
-            transfers: 4,
-            dryRun: true,
-          }),
-        'sync',
-      );
-    });
-
-    it('about throws NotImplemented', async () => {
-      await expectNotImplemented(() => svc.about('drive:'), 'about');
-    });
-
-    it('deleteRemotePath throws NotImplemented', async () => {
-      await expectNotImplemented(
-        () => svc.deleteRemotePath('drive:', '/EchoVault/img.jpg'),
-        'deleteRemotePath',
-      );
-    });
-
-    it('startOAuthFlow throws NotImplemented', async () => {
-      await expectNotImplemented(() => svc.startOAuthFlow('drive'), 'startOAuthFlow');
-    });
-
-    it('exchangeOAuthCode throws NotImplemented', async () => {
-      await expectNotImplemented(
-        () => svc.exchangeOAuthCode('drive', 'auth-code-123'),
-        'exchangeOAuthCode',
-      );
+      expect(mockedNativeModule.initialize).toHaveBeenCalledTimes(2);
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Error shape
-  // -------------------------------------------------------------------------
+  describe('configuration RPCs', () => {
+    it('loads and parses the rclone config', async () => {
+      const config = { photos: { type: 'drive' } };
+      mockedNativeModule.rpcCall.mockResolvedValue(JSON.stringify(config));
 
-  describe('Error shape', () => {
-    it('every method rejects with an Error instance (not a string)', async () => {
-      const rejection = await svc.getConfig().catch((e: unknown) => e);
-      expect(rejection).toBeInstanceOf(Error);
+      await expect(service.getConfig()).resolves.toEqual(config);
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledWith('config/dump', '{}');
     });
 
-    it('error message matches /^NotImplemented: RcloneService\\./', async () => {
-      const rejection = await svc.getConfig().catch((e: unknown) => e);
-      expect(rejection).toBeInstanceOf(Error);
-      expect((rejection as Error).message).toMatch(
-        /^NotImplemented: RcloneService\./,
+    it('creates a remote with obscured credentials', async () => {
+      await service.addRemote({
+        name: 'photos',
+        provider: 'drive',
+        options: { token: 'secret-token' },
+      });
+
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledWith('config/create', expect.any(String));
+      expect(rpcParams()).toEqual({
+        name: 'photos',
+        type: 'drive',
+        parameters: { token: 'secret-token' },
+        obscure: true,
+      });
+    });
+
+    it('deletes a remote', async () => {
+      await service.deleteRemote('photos');
+
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledWith(
+        'config/delete',
+        JSON.stringify({ name: 'photos' }),
       );
+    });
+
+    it('creates and returns a deterministic union name', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1234);
+
+      await expect(service.createUnionRemote(['a:', 'b:'])).resolves.toBe('union_1234');
+      expect(rpcParams()).toEqual({
+        name: 'union_1234',
+        type: 'union',
+        parameters: { upstreams: 'a: b:' },
+      });
+    });
+
+    it('creates a crypt remote without duplicating the remote separator', async () => {
+      await expect(service.createCryptRemote('photos:', 'password')).resolves.toBe('photos_crypt');
+      expect(rpcParams()).toEqual({
+        name: 'photos_crypt',
+        type: 'crypt',
+        parameters: { remote: 'photos:', password: 'password' },
+        obscure: true,
+      });
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Event subscription helpers
-  // -------------------------------------------------------------------------
+  describe('sync and storage RPCs', () => {
+    it('starts an asynchronous sync and returns its job id', async () => {
+      mockedNativeModule.rpcCall.mockResolvedValue(JSON.stringify({ jobid: 42 }));
 
-  describe('Event subscription helpers', () => {
-    it('subscribeToProgress returns an object with a remove() method', () => {
-      const sub = svc.subscribeToProgress(() => undefined);
-      expect(sub).toHaveProperty('remove');
-      expect(typeof sub.remove).toBe('function');
+      await expect(
+        service.sync('/local/photos', 'drive:backup', {
+          transfers: 4,
+          checkers: 2,
+          bwlimit: '10M',
+          retries: 3,
+          dryRun: true,
+        }),
+      ).resolves.toBe('42');
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledWith('sync/sync', expect.any(String));
+      expect(rpcParams()).toEqual({
+        srcFs: '/local/photos',
+        dstFs: 'drive:backup',
+        _async: true,
+        transfers: 4,
+        checkers: 2,
+        bwlimit: '10M',
+        retries: 3,
+        dryRun: true,
+      });
     });
 
-    it('subscribeToJobStatus returns an object with a remove() method', () => {
-      const sub = svc.subscribeToJobStatus(() => undefined);
-      expect(sub).toHaveProperty('remove');
-      expect(typeof sub.remove).toBe('function');
+    it('maps missing quota values to zero', async () => {
+      mockedNativeModule.rpcCall.mockResolvedValue(JSON.stringify({ total: 100, used: 40 }));
+
+      await expect(service.about('drive:')).resolves.toEqual({
+        totalBytes: 100,
+        usedBytes: 40,
+        freeBytes: 0,
+      });
+      expect(rpcParams()).toEqual({ fs: 'drive:' });
     });
 
-    it('subscribeToAuthCallback returns an object with a remove() method', () => {
-      const sub = svc.subscribeToAuthCallback(() => undefined);
-      expect(sub).toHaveProperty('remove');
-      expect(typeof sub.remove).toBe('function');
+    it('purges a path from a normalized remote root', async () => {
+      await service.deleteRemotePath('drive', '/backup/photo.jpg');
+
+      expect(mockedNativeModule.rpcCall).toHaveBeenCalledWith(
+        'operations/purge',
+        expect.any(String),
+      );
+      expect(rpcParams()).toEqual({ fs: 'drive:', remote: '/backup/photo.jpg' });
+    });
+  });
+
+  describe('OAuth bridge', () => {
+    it('initializes and starts the provider flow', async () => {
+      await expect(service.startOAuthFlow('drive')).resolves.toBe('https://auth.example.test');
+      expect(mockedNativeModule.initialize).toHaveBeenCalledTimes(1);
+      expect(mockedNativeModule.startOAuthFlow).toHaveBeenCalledWith('drive');
     });
 
-    it('calling remove() on the returned subscription does not throw', () => {
-      const sub = svc.subscribeToProgress(() => undefined);
-      expect(() => sub.remove()).not.toThrow();
+    it('parses the authorization-code exchange result', async () => {
+      await expect(service.exchangeOAuthCode('drive', 'code-123')).resolves.toEqual({
+        provider: 'drive',
+        configName: 'photos',
+        token: 'encrypted',
+      });
+      expect(mockedNativeModule.exchangeOAuthCode).toHaveBeenCalledWith('drive', 'code-123');
     });
+  });
 
-    it('subscribeToProgress registers listener via addListener("onProgress")', () => {
-      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
-      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
-      const cb = jest.fn();
-      svc.subscribeToProgress(cb);
-      expect(addListenerSpy).toHaveBeenCalledWith('onProgress', cb);
-    });
+  describe('event subscriptions', () => {
+    it.each([
+      ['subscribeToProgress', 'onProgress'],
+      ['subscribeToJobStatus', 'onJobStatusChange'],
+      ['subscribeToAuthCallback', 'onAuthCallback'],
+    ] as const)('%s registers %s and returns a removable subscription', (method, eventName) => {
+      const callback = jest.fn();
+      const subscription = service[method](callback);
 
-    it('subscribeToJobStatus registers listener via addListener("onJobStatusChange")', () => {
-      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
-      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
-      const cb = jest.fn();
-      svc.subscribeToJobStatus(cb);
-      expect(addListenerSpy).toHaveBeenCalledWith('onJobStatusChange', cb);
-    });
-
-    it('subscribeToAuthCallback registers listener via addListener("onAuthCallback")', () => {
-      const { eventEmitter } = require('../../../modules/rclone/src/RcloneNativeModule');
-      const addListenerSpy = jest.spyOn(eventEmitter, 'addListener');
-      const cb = jest.fn();
-      svc.subscribeToAuthCallback(cb);
-      expect(addListenerSpy).toHaveBeenCalledWith('onAuthCallback', cb);
+      expect(eventEmitter.addListener).toHaveBeenCalledWith(eventName, callback);
+      expect(subscription).toHaveProperty('remove');
+      expect(() => subscription.remove()).not.toThrow();
     });
   });
 });

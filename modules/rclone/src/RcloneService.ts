@@ -1,15 +1,12 @@
 /**
- * RcloneService.ts — Typed service that translates high-level operations into
- * rclone RC (remote-control) HTTP calls via the native module.
- *
- * The native module starts `rclone rcd --rc-no-auth` on 127.0.0.1:5572 and
- * exposes rpcCall() / startOAuthFlow() / exchangeOAuthCode() as async bridge
- * methods. All public methods here encode params to JSON, call the bridge, and
- * decode the JSON response.
+ * Typed service that translates high-level operations into rclone RC calls.
+ * Native initialization is shared by all calls on a service instance so that
+ * concurrent requests cannot race the rclone engine startup.
  */
 
 import type { EventSubscription } from 'expo-modules-core';
 import { nativeModule, eventEmitter } from './RcloneNativeModule';
+import type { NativeRcloneModule } from './RcloneNativeModule';
 import type {
   RcloneConfig,
   RemoteSpec,
@@ -22,25 +19,37 @@ import type {
 
 export type { EventSubscription };
 
-async function rpc<T = unknown>(
-  method: string,
-  params: Record<string, unknown> = {},
-): Promise<T> {
-  const raw = await nativeModule.rpcCall(method, JSON.stringify(params));
-  return JSON.parse(raw) as T;
+function remoteRoot(remoteName: string): string {
+  return remoteName.endsWith(':') ? remoteName : `${remoteName}:`;
 }
 
 export class RcloneService {
-  // -------------------------------------------------------------------------
-  // Config
-  // -------------------------------------------------------------------------
+  private initialization: Promise<void> | null = null;
+
+  constructor(private readonly module: NativeRcloneModule = nativeModule) {}
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialization === null) {
+      this.initialization = this.module.initialize().catch((error: unknown) => {
+        this.initialization = null;
+        throw error;
+      });
+    }
+    await this.initialization;
+  }
+
+  private async rpc<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    await this.ensureInitialized();
+    const raw = await this.module.rpcCall(method, JSON.stringify(params));
+    return JSON.parse(raw) as T;
+  }
 
   async getConfig(): Promise<RcloneConfig> {
-    return rpc<RcloneConfig>('config/dump');
+    return this.rpc<RcloneConfig>('config/dump');
   }
 
   async addRemote(spec: RemoteSpec): Promise<void> {
-    await rpc('config/create', {
+    await this.rpc('config/create', {
       name: spec.name,
       type: spec.provider,
       parameters: spec.options ?? {},
@@ -49,12 +58,12 @@ export class RcloneService {
   }
 
   async deleteRemote(name: string): Promise<void> {
-    await rpc('config/delete', { name });
+    await this.rpc('config/delete', { name });
   }
 
   async createUnionRemote(names: string[]): Promise<string> {
     const unionName = `union_${Date.now()}`;
-    await rpc('config/create', {
+    await this.rpc('config/create', {
       name: unionName,
       type: 'union',
       parameters: { upstreams: names.join(' ') },
@@ -63,25 +72,18 @@ export class RcloneService {
   }
 
   async createCryptRemote(baseName: string, password: string): Promise<string> {
-    const cryptName = `${baseName}_crypt`;
-    await rpc('config/create', {
+    const normalizedBaseName = baseName.replace(/:+$/, '');
+    const cryptName = `${normalizedBaseName}_crypt`;
+    await this.rpc('config/create', {
       name: cryptName,
       type: 'crypt',
-      parameters: { remote: `${baseName}:`, password },
+      parameters: { remote: remoteRoot(normalizedBaseName), password },
       obscure: true,
     });
     return cryptName;
   }
 
-  // -------------------------------------------------------------------------
-  // Sync
-  // -------------------------------------------------------------------------
-
-  async sync(
-    sourceDir: string,
-    targetRemote: string,
-    options?: SyncOptions,
-  ): Promise<string> {
+  async sync(sourceDir: string, targetRemote: string, options?: SyncOptions): Promise<string> {
     const params: Record<string, unknown> = {
       srcFs: sourceDir,
       dstFs: targetRemote,
@@ -92,42 +94,39 @@ export class RcloneService {
     if (options?.bwlimit !== undefined) params['bwlimit'] = options.bwlimit;
     if (options?.retries !== undefined) params['retries'] = options.retries;
     if (options?.dryRun) params['dryRun'] = true;
-    const result = await rpc<{ jobid: number }>('sync/sync', params);
+    const result = await this.rpc<{ jobid: number }>('sync/sync', params);
     return String(result.jobid);
   }
 
-  // -------------------------------------------------------------------------
-  // Storage
-  // -------------------------------------------------------------------------
-
   async about(remoteName: string): Promise<QuotaInfo> {
-    const r = await rpc<{ total?: number; used?: number; free?: number }>(
+    const result = await this.rpc<{ total?: number; used?: number; free?: number }>(
       'operations/about',
-      { fs: `${remoteName}:` },
+      { fs: remoteRoot(remoteName) },
     );
-    return { totalBytes: r.total ?? 0, usedBytes: r.used ?? 0, freeBytes: r.free ?? 0 };
+    return {
+      totalBytes: result.total ?? 0,
+      usedBytes: result.used ?? 0,
+      freeBytes: result.free ?? 0,
+    };
   }
 
   async deleteRemotePath(remoteName: string, path: string): Promise<void> {
-    await rpc('operations/purge', { fs: `${remoteName}:`, remote: path });
+    await this.rpc('operations/purge', {
+      fs: remoteRoot(remoteName),
+      remote: path,
+    });
   }
 
-  // -------------------------------------------------------------------------
-  // OAuth
-  // -------------------------------------------------------------------------
-
   async startOAuthFlow(provider: string): Promise<string> {
-    return nativeModule.startOAuthFlow(provider);
+    await this.ensureInitialized();
+    return this.module.startOAuthFlow(provider);
   }
 
   async exchangeOAuthCode(provider: string, code: string): Promise<AuthorizeResult> {
-    const raw = await nativeModule.exchangeOAuthCode(provider, code);
+    await this.ensureInitialized();
+    const raw = await this.module.exchangeOAuthCode(provider, code);
     return JSON.parse(raw) as AuthorizeResult;
   }
-
-  // -------------------------------------------------------------------------
-  // Event subscriptions
-  // -------------------------------------------------------------------------
 
   subscribeToProgress(cb: (event: RcloneProgressEvent) => void): EventSubscription {
     return eventEmitter.addListener('onProgress', cb);

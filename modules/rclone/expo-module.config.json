@@ -1,4 +1,9 @@
 {
-  "name": "rclone",
-  "platforms": ["ios", "android"]
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["RcloneModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.rclone.RcloneModule"]
+  }
 }

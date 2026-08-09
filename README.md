@@ -47,11 +47,7 @@ Built with Expo (React Native), TypeScript strict, NativeWind, and expo-sqlite.
 # Install dependencies
 npm ci
 
-# Download rclone binaries (run once before building)
-chmod +x scripts/download-rclone.sh
-./scripts/download-rclone.sh
-
-# Generate native projects
+# Generate the iOS and Android projects
 npx expo prebuild
 
 # Start development server
@@ -88,8 +84,6 @@ fibu/
 │       ├── src/          # RcloneService.ts (JS layer)
 │       ├── android/      # Kotlin Expo Module
 │       └── ios/          # Swift Expo Module
-├── scripts/
-│   └── download-rclone.sh
 └── __tests__/
 ```
 
@@ -109,13 +103,15 @@ For OAuth providers (Google Drive, OneDrive, Dropbox, …) you will be redirecte
 
 ## Rclone Bridge
 
-Fibu embeds the rclone binary directly in the app. On first launch:
+The typed JavaScript service and the local Expo module are autolinked for both
+Android and iOS. The app shell can therefore be generated for both platforms
+without manual edits to Gradle or Xcode.
 
-1. The binary is extracted from app assets to the device's internal storage
-2. `rclone rcd --rc-no-auth` starts as a local background process on `127.0.0.1:5572`
-3. All cloud operations are HTTP POST requests to this local daemon
-
-No data leaves the device except to your configured cloud provider.
+The in-process rclone engine is not release-ready yet. Both native bridges
+currently reject rclone calls with an explicit `NotImplemented` error. A
+production implementation must package rclone's `librclone/gomobile` output as
+an Android AAR and iOS XCFramework. Executing a binary copied into writable app
+storage is not a supported mobile architecture.
 
 ---
 

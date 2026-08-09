@@ -6,56 +6,37 @@ Stand: 2026-08-08
 
 ## Sofort (Blocker)
 
-- [ ] **`.github/workflows/ci.yml` manuell editieren** (GitHub MCP-Token hat kein `workflows`-Scope)
-  - `node-version: '24'` → `'22'`
-  - Java-Setup-Schritt **vor** dem Node-Setup einfügen:
-    ```yaml
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '21'
-    ```
-
-- [ ] **`scripts/download-rclone.sh` einmalig ausführen** bevor der erste Build läuft:
-  ```bash
-  chmod +x scripts/download-rclone.sh
-  ./scripts/download-rclone.sh
-  ```
-  Legt die rclone-Binaries ab in:
-  - `modules/rclone/android/src/main/assets/rclone/rclone` (arm64-v8a)
-  - `modules/rclone/ios/Resources/rclone/rclone` (arm64)
+- [ ] **rclone als Mobile-Library integrieren**
+  - Android: `librclone/gomobile` als AAR bauen und im lokalen Expo-Modul aufrufen.
+  - iOS: `librclone/gomobile` als XCFramework bauen und im Pod verlinken.
+  - Keine ausführbaren Desktop-/Linux-Binaries in beschreibbaren App-Speicher kopieren.
+  - Bis dahin baut die App-Shell für beide Plattformen; native rclone-Aufrufe liefern bewusst `NotImplemented`.
 
 ---
 
 ## Native Module — Android
 
-- [ ] **Expo Module in `modules/rclone/android/` registrieren**
-  Sicherstellen, dass `RcloneModule` in der `ExpoModulesCore`-Packages-Liste steht.
-  Anlegen: `modules/rclone/android/src/main/java/expo/modules/rclone/RclonePackage.kt`
-  ```kotlin
-  class RclonePackage : ExpoModulesPackage() {
-    override fun createModules(context: ReactApplicationContext) = listOf(RcloneModule())
-  }
-  ```
+- [x] **Expo Module registrieren**
+  - Moderne Expo-Autoverlinkung über `expo-module.config.json`.
+  - Kein manuelles `RclonePackage.kt` erforderlich.
+  - Mit `expo-modules-autolinking resolve --platform android` geprüft.
 
-- [ ] **Assets-Ordner in Android-Gradle-Build einbinden** (falls `expo prebuild` ihn nicht automatisch übernimmt):
-  In `modules/rclone/android/build.gradle` prüfen ob `sourceSets.main.assets.srcDirs` auf den richtigen Pfad zeigt.
+- [ ] **librclone-AAR integrieren**
+  Der nicht mobilefähige Asset-/`ProcessBuilder`-Ansatz wurde entfernt. Der aktuelle Android-Stub lehnt rclone-Aufrufe explizit ab, bis das AAR verlinkt ist.
 
 - [ ] **Foreground-Service für laufende rclone-Syncs** implementieren
-  (Verhindert, dass Android den `rclone rcd`-Prozess im Hintergrund killt.)
+  (Verhindert, dass Android einen aktiven librclone-Job im Hintergrund beendet.)
 
 ---
 
 ## Native Module — iOS
 
-- [ ] **`RcloneModule.swift` in Xcode-Target einbinden**
-  Nach `expo prebuild --platform ios` die Datei im Xcode-Projekt dem Target hinzufügen.
+- [x] **`RcloneModule.swift` automatisch einbinden**
+  - `Rclone.podspec` und Apple-Moduldeklaration ergänzt.
+  - Mit `expo-modules-autolinking resolve --platform apple` geprüft.
 
-- [ ] **Rclone-Binary Bundle Resources**
-  `modules/rclone/ios/Resources/rclone/` dem Xcode-Target als „Copy Bundle Resources"-Phase hinzufügen.
-
-- [ ] **Entitlement für ausführbare Dateien** (App Store / TestFlight)
-  `com.apple.security.cs.allow-unsigned-executable-memory` oder alternativ rclone via `xcrun codesign` signieren.
+- [ ] **Prozess-Prototyp durch librclone-XCFramework ersetzen**
+  `Foundation.Process` und ein macOS-rclone-Binary sind auf iOS nicht verfügbar. Der aktuelle iOS-Bridge-Stub lehnt daher jeden Aufruf explizit ab, bis ein echtes Mobile-Framework verlinkt ist.
 
 ---
 
@@ -82,8 +63,8 @@ Stand: 2026-08-08
 
 ## Qualität
 
-- [ ] **`tsc --noEmit` auf 0 Fehler bringen** — nach `expo prebuild` generierte Typen prüfen
-- [ ] **Jest-Tests für RcloneService** — Mock für `nativeModule.rpcCall`, alle 11 Methoden testen
+- [x] **App- und Test-Typecheck auf 0 Fehler bringen** — inklusive NativeWind-CSS-Deklaration
+- [x] **Jest-Tests für RcloneService** — Native-Initialisierung und alle RPC-/OAuth-Pfade gemockt
 - [ ] **Maestro E2E** — Flows für AddRemote-Screen, Provider-Suche, Remote löschen
 - [ ] **App-Icon + Splash Screen** — Assets für "Fibu" erstellen (ersetzt Expo-Platzhalter)
 

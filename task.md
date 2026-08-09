@@ -133,3 +133,20 @@
   - [x] Validierung: TypeCheck ✅, Lint ✅, Tests ✅ (41/41 Service Tests)
 
 - [ ] Phase 8: Release (🟢 Gemini Flash 3.6) — EAS Build, Store Listings, Sentry
+
+---
+
+## Maintenance: CI & Expo Native Builds (2026-08-08)
+
+- [x] `package.json` und `package-lock.json` synchronisiert; `npm ci` wieder reproduzierbar
+- [x] Expo-SDK-57-Abhängigkeiten aus `expo/bundledNativeModules.json` ausgerichtet und inkompatibles `expo-build-properties@0.14` entfernt
+- [x] `react-native-worklets` ergänzt und das nicht verwendete `react-native-worklets-core` entfernt
+- [x] App- und Test-Typecheck in `npm run typecheck` zusammengeführt
+- [x] Veraltete RcloneService-Stub-Tests durch RPC- und Lifecycle-Tests ersetzt
+- [x] Lokales Expo-Modul für Android und Apple korrekt autoverlinkt
+- [x] Android-Gradle-Modul auf das aktuelle Expo-Module-Template umgestellt
+- [x] iOS-Podspec ergänzt; nicht mobilefähige Prozessansätze auf Android und iOS durch explizite Stubs ersetzt
+- [x] 119 versehentlich versionierte Android-Buildartefakte entfernt
+- [ ] CI manuell um Jest, Expo Prebuild und Android-Debug-Build erweitern (`ci.yml` wegen fehlender Workflow-Berechtigung nicht Teil des PRs)
+- [x] Validierung: TypeCheck, ESLint, 36 Jest-Tests, Android-Bundle und Prebuild für Android/iOS
+- [ ] Releasefähige rclone-Engine als gomobile AAR/XCFramework integrieren

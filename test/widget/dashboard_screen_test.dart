@@ -1,0 +1,154 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' as material;
+import 'package:flutter/cupertino.dart' as cupertino;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart';
+
+import 'package:fibu/core/localization/app_strings.dart';
+import 'package:fibu/core/localization/locale_provider.dart';
+import 'package:fibu/core/services/rclone_provider.dart';
+import 'package:fibu/core/services/mock_rclone_service.dart';
+import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:fibu/features/dashboard/presentation/widgets/storage_card.dart';
+
+void main() {
+  group('DashboardScreen Widget Tests', () {
+    late MockRcloneService mockRcloneService;
+    const strings = AppStrings(AppLocale.de);
+
+    setUp(() {
+      mockRcloneService = MockRcloneService();
+    });
+
+    tearDown(() {
+      mockRcloneService.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    Widget createWidgetUnderTest() {
+      return ProviderScope(
+        overrides: [
+          rcloneServiceProvider.overrideWithValue(mockRcloneService),
+        ],
+        child: const fluent.FluentApp(
+          home: DashboardScreen(),
+        ),
+      );
+    }
+
+    testWidgets('Renders Windows Fluent UI layout successfully', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      
+      try {
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pumpAndSettle();
+
+        // Verify Windows Fluent scaffold elements
+        expect(find.byType(fluent.ScaffoldPage), findsOneWidget);
+        expect(find.text(strings.navDashboard), findsOneWidget);
+        
+        // Global sync status defaults to completed
+        expect(find.text(strings.allFilesSynced), findsOneWidget);
+        
+        // StorageCard should render for Windows layout
+        expect(find.byType(StorageCard), findsOneWidget);
+        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
+
+        // Verify Sync All action is present
+        expect(find.text(strings.syncAll), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('Renders iOS Cupertino layout successfully', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              rcloneServiceProvider.overrideWithValue(mockRcloneService),
+            ],
+            child: const cupertino.CupertinoApp(
+              home: DashboardScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Verify iOS Cupertino elements
+        expect(find.byType(cupertino.CupertinoPageScaffold), findsOneWidget);
+        expect(find.byType(cupertino.CupertinoNavigationBar), findsOneWidget);
+        expect(find.text(strings.navDashboard), findsOneWidget);
+        
+        // StorageCard renders for iOS Cupertino
+        expect(find.byType(StorageCard), findsOneWidget);
+        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('Renders Android Material 3 layout successfully', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              rcloneServiceProvider.overrideWithValue(mockRcloneService),
+            ],
+            child: material.MaterialApp(
+              home: const DashboardScreen(),
+              theme: material.ThemeData(useMaterial3: true),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Verify Android Material 3 elements
+        expect(find.byType(material.Scaffold), findsOneWidget);
+        expect(find.byType(material.AppBar), findsOneWidget);
+        expect(find.text(strings.navDashboard), findsOneWidget);
+        
+        // StorageCard renders for Android Material 3
+        expect(find.byType(StorageCard), findsOneWidget);
+        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('Tapping Sync All triggers simulated job and shows active job card (Windows)', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      try {
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pumpAndSettle();
+
+        // Identify and tap the Sync All button
+        final buttonFinder = find.widgetWithText(fluent.FilledButton, strings.syncAll);
+        expect(buttonFinder, findsOneWidget);
+        await tester.tap(buttonFinder);
+        
+        // Advance clock to let mock sync delay fire and trigger provider state updates
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Status updates to Syncing
+        expect(find.text(strings.syncActive), findsOneWidget);
+        
+        // Expect active task panel to show up
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.text(strings.activeTaskProgress), findsOneWidget);
+
+        // Let the simulation complete so its periodic timer is cancelled
+        await tester.pump(const Duration(seconds: 2));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  });
+}

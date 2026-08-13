@@ -1,0 +1,78 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+
+# Android (unused in this desktop app, kept for safety)
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+
+# iOS / macOS (unused in this desktop app, kept for safety)
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/DerivedData
+**/ios/**/*.hmap
+**/ios/**/*.ipa
+**/ios/**/*.xcuserstate
+**/ios/.generated/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/ephemeral/
+
+# Windows
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_plugins.cmake
+
+# Web
+lib/generated_plugin_registrant.dart
+
+# Dart & Flutter analysis
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# IntelliJ IDEA
+.idea/
+
+# macOS
+.DS_Store
+
+# Secrets / Credentials
+*.pem
+*.p12
+*.key
+*.env
+*.env.*
+
+# rclone binary (downloaded at runtime, not committed)
+rclone.exe
+rclone
+
+# Test coverage
+coverage/
+
+# Dart pub cache
+.pub/
+.pub-cache/

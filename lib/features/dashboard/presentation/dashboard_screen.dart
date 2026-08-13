@@ -1,0 +1,693 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' as material;
+import 'package:flutter/cupertino.dart' as cupertino;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../theme/theme.dart';
+import '../../../core/localization/app_strings.dart';
+import '../../../core/services/rclone_service.dart';
+import '../../../core/services/rclone_provider.dart';
+import 'dashboard_controller.dart';
+import 'widgets/storage_card.dart';
+import 'widgets/dashboard_dialogs.dart';
+import 'cloud_explorer_screen.dart';
+
+/// Platform-adaptive Dashboard Screen. Renders layout dynamically based on current platform.
+/// Handles page-refresh commands and taps on status banner/storage cards.
+class DashboardScreen extends ConsumerWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final platform = defaultTargetPlatform;
+
+    if (platform == TargetPlatform.windows) {
+      return _buildWindows(context, ref);
+    } else if (platform == TargetPlatform.iOS) {
+      return _buildIOS(context, ref);
+    } else {
+      return _buildAndroid(context, ref);
+    }
+  }
+
+  // --- Windows (Fluent Design) ---
+  Widget _buildWindows(BuildContext context, WidgetRef ref) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final activeJob = ref.watch(activeJobProvider);
+    final quotaAsync = ref.watch(primaryQuotaProvider);
+
+    return fluent.ScaffoldPage(
+      header: fluent.PageHeader(
+        title: fluent.Text(
+          strings.navDashboard,
+          style: fluent.FluentTheme.of(context).typography.title,
+        ),
+        commandBar: fluent.CommandBar(
+          primaryItems: [
+            fluent.CommandBarButton(
+              icon: Icon(fluent.FluentIcons.refresh, semanticLabel: strings.refresh),
+              label: Text(strings.refresh),
+              onPressed: () {
+                ref.invalidate(remotesProvider);
+                ref.invalidate(primaryQuotaProvider);
+              },
+            ),
+          ],
+        ),
+      ),
+      content: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(horizontal: theme.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildClickableStatusBanner(context, activeJob, strings),
+            SizedBox(height: theme.lg),
+            quotaAsync.when(
+              data: (quota) {
+                if (quota == null) {
+                  return fluent.Card(
+                    padding: EdgeInsets.all(theme.md),
+                    child: Row(
+                      children: [
+                        Icon(
+                          fluent.FluentIcons.cloud_add,
+                          color: theme.textSecondary,
+                          size: 20,
+                          semanticLabel: strings.noDrivesConfigured,
+                        ),
+                        SizedBox(width: theme.md),
+                        Expanded(
+                          child: Text(
+                            strings.noDrivesConfigured,
+                            style: TextStyle(color: theme.textSecondary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+              },
+              loading: () => const fluent.ProgressBar(),
+              error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+            ),
+            SizedBox(height: theme.xl),
+            _buildActiveJobPanelWindows(context, ref, activeJob, strings),
+            SizedBox(height: theme.xl),
+            _buildSyncActionsWindows(context, ref, activeJob, strings),
+            SizedBox(height: theme.xl),
+            fluent.Button(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
+                );
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
+                      const SizedBox(width: 8),
+                      Text(strings.exploreRemoteFiles),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: theme.xl),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveJobPanelWindows(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+    final theme = context.theme;
+    if (job.status == RcloneJobStatus.completed && job.jobId == null) {
+      return const SizedBox.shrink();
+    }
+
+    return fluent.Card(
+      padding: EdgeInsets.all(theme.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          fluent.Text(
+            strings.activeTaskProgress,
+            style: fluent.FluentTheme.of(context).typography.subtitle,
+          ),
+          SizedBox(height: theme.sm),
+          fluent.Text(
+            '${strings.currentFile} ${job.currentFile.isEmpty ? strings.preparing : job.currentFile}',
+            style: fluent.FluentTheme.of(context).typography.body,
+          ),
+          SizedBox(height: theme.sm),
+          fluent.ProgressBar(value: job.percentage),
+          SizedBox(height: theme.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              fluent.Text('ETA: ${job.eta}'),
+              fluent.Text('${job.percentage.toStringAsFixed(1)}%'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSyncActionsWindows(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+    final isSyncing = job.status == RcloneJobStatus.syncing || job.status == RcloneJobStatus.pending;
+    final theme = context.theme;
+
+    if (isSyncing) {
+      return fluent.Button(
+        onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+        style: fluent.ButtonStyle(
+          backgroundColor: WidgetStatePropertyAll(theme.error),
+          foregroundColor: const WidgetStatePropertyAll(Color(0xffffffff)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+          ),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(fluent.FluentIcons.cancel, size: 16, color: Color(0xffffffff), semanticLabel: 'Cancel'),
+                const SizedBox(width: 8),
+                Text(
+                  strings.cancelSync,
+                  style: const TextStyle(color: Color(0xffffffff), fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return fluent.FilledButton(
+      onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(fluent.FluentIcons.sync, size: 16, semanticLabel: 'Sync'),
+              const SizedBox(width: 8),
+              Text(strings.syncAll),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- iOS (Cupertino Design) ---
+  Widget _buildIOS(BuildContext context, WidgetRef ref) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final activeJob = ref.watch(activeJobProvider);
+    final quotaAsync = ref.watch(primaryQuotaProvider);
+    final isSyncing = activeJob.status == RcloneJobStatus.syncing || activeJob.status == RcloneJobStatus.pending;
+
+    return cupertino.CupertinoPageScaffold(
+      navigationBar: cupertino.CupertinoNavigationBar(
+        middle: Text(strings.navDashboard),
+        trailing: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: cupertino.CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Icon(cupertino.CupertinoIcons.refresh, size: 22, semanticLabel: strings.refresh),
+            onPressed: () {
+              ref.invalidate(remotesProvider);
+              ref.invalidate(primaryQuotaProvider);
+            },
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(theme.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildClickableStatusBanner(context, activeJob, strings),
+              SizedBox(height: theme.lg),
+              quotaAsync.when(
+                data: (quota) {
+                  if (quota == null) {
+                    return Container(
+                      padding: EdgeInsets.all(theme.lg),
+                      decoration: BoxDecoration(
+                        color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+                        borderRadius: BorderRadius.circular(theme.radiusLg),
+                        border: Border.all(
+                          color: cupertino.CupertinoColors.separator.resolveFrom(context),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            cupertino.CupertinoIcons.cloud,
+                            color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                            size: 24,
+                            semanticLabel: strings.noDrivesConfigured,
+                          ),
+                          SizedBox(width: theme.md),
+                          Expanded(
+                            child: Text(
+                              strings.noDrivesConfigured,
+                              style: TextStyle(
+                                color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+                },
+                loading: () => const cupertino.CupertinoActivityIndicator(),
+                error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+              ),
+              SizedBox(height: theme.xl),
+              if (isSyncing) ...[
+                _buildActiveJobPanelIOS(context, ref, activeJob, strings),
+                SizedBox(height: theme.xl),
+              ],
+              if (isSyncing)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: cupertino.CupertinoButton(
+                    color: theme.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                    onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          cupertino.CupertinoIcons.stop_circle,
+                          color: cupertino.CupertinoColors.white,
+                          size: 20,
+                          semanticLabel: 'Cancel',
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          strings.cancelSync,
+                          style: const TextStyle(color: cupertino.CupertinoColors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: cupertino.CupertinoButton.filled(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                    onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          cupertino.CupertinoIcons.arrow_2_circlepath,
+                          color: cupertino.CupertinoColors.white,
+                          size: 20,
+                          semanticLabel: 'Sync',
+                        ),
+                        const SizedBox(width: 8),
+                        Text(strings.syncAll),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: cupertino.CupertinoButton(
+                  color: theme.accent.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  borderRadius: BorderRadius.circular(theme.radiusSm),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        cupertino.CupertinoIcons.folder,
+                        color: theme.accent,
+                        size: 18,
+                        semanticLabel: strings.exploreRemoteFiles,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        strings.exploreRemoteFiles,
+                        style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveJobPanelIOS(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+    final theme = context.theme;
+    return Container(
+      padding: EdgeInsets.all(theme.lg),
+      decoration: BoxDecoration(
+        color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(theme.radiusLg),
+        border: Border.all(color: cupertino.CupertinoColors.separator.resolveFrom(context), width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: theme.sm),
+          Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 1, overflow: TextOverflow.ellipsis),
+          SizedBox(height: theme.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            child: SizedBox(
+              height: 6,
+              child: Stack(
+                children: [
+                  Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
+                  FractionallySizedBox(
+                    widthFactor: job.percentage / 100,
+                    child: Container(color: cupertino.CupertinoColors.activeGreen.resolveFrom(context)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: theme.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('ETA: ${job.eta}', style: const TextStyle(fontSize: 12, color: cupertino.CupertinoColors.secondaryLabel)),
+              Text('${job.percentage.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: cupertino.CupertinoColors.secondaryLabel)),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  // --- Android (Material 3 Design) ---
+  Widget _buildAndroid(BuildContext context, WidgetRef ref) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final activeJob = ref.watch(activeJobProvider);
+    final quotaAsync = ref.watch(primaryQuotaProvider);
+    final isSyncing = activeJob.status == RcloneJobStatus.syncing || activeJob.status == RcloneJobStatus.pending;
+
+    return material.Scaffold(
+      appBar: material.AppBar(
+        title: Text(strings.navDashboard),
+        elevation: 0,
+        actions: [
+          material.IconButton(
+            icon: Icon(material.Icons.refresh, semanticLabel: strings.refresh),
+            onPressed: () {
+              ref.invalidate(remotesProvider);
+              ref.invalidate(primaryQuotaProvider);
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(theme.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildClickableStatusBanner(context, activeJob, strings),
+            SizedBox(height: theme.lg),
+            quotaAsync.when(
+              data: (quota) {
+                if (quota == null) {
+                  return material.Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(theme.radiusLg),
+                      side: BorderSide(
+                        color: material.Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(theme.lg),
+                      child: Row(
+                        children: [
+                          Icon(
+                            material.Icons.cloud_off_outlined,
+                            color: theme.textSecondary,
+                            size: 24,
+                            semanticLabel: strings.noDrivesConfigured,
+                          ),
+                          SizedBox(width: theme.md),
+                          Expanded(
+                            child: Text(
+                              strings.noDrivesConfigured,
+                              style: TextStyle(
+                                color: theme.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+              },
+              loading: () => const material.CircularProgressIndicator(),
+              error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+            ),
+            SizedBox(height: theme.xl),
+            if (isSyncing) ...[
+              _buildActiveJobPanelAndroid(context, ref, activeJob, strings),
+              SizedBox(height: theme.xl),
+            ],
+            if (isSyncing)
+              material.ElevatedButton.icon(
+                onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+                icon: const Icon(material.Icons.stop_circle_outlined, semanticLabel: 'Cancel'),
+                label: Text(strings.cancelSync),
+                style: material.ElevatedButton.styleFrom(
+                  backgroundColor: theme.error,
+                  foregroundColor: material.Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                ),
+              )
+            else
+              material.ElevatedButton.icon(
+                onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
+                label: Text(strings.syncAll),
+                style: material.ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                ),
+              ),
+            const SizedBox(height: 12),
+            material.OutlinedButton.icon(
+              icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
+              label: Text(strings.exploreRemoteFiles),
+              style: material.OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveJobPanelAndroid(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+    final theme = context.theme;
+    return material.Card(
+      elevation: 2,
+      child: Padding(
+        padding: EdgeInsets.all(theme.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(strings.activeTaskProgress, style: material.Theme.of(context).textTheme.titleSmall),
+            SizedBox(height: theme.sm),
+            Text(
+              '${strings.currentFile} ${job.currentFile.isEmpty ? strings.preparing : job.currentFile}',
+              style: material.Theme.of(context).textTheme.bodyMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            SizedBox(height: theme.sm),
+            material.LinearProgressIndicator(value: job.percentage / 100),
+            SizedBox(height: theme.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('ETA: ${job.eta}', style: material.Theme.of(context).textTheme.bodySmall),
+                Text('${job.percentage.toStringAsFixed(1)}%', style: material.Theme.of(context).textTheme.bodySmall),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Clickable Status Banner Wrapper ---
+  Widget _buildClickableStatusBanner(BuildContext context, ActiveJobState job, AppStrings strings) {
+    return GestureDetector(
+      onTap: () => showSyncLogsDialog(context, job.logs, job.status),
+      behavior: HitTestBehavior.opaque,
+      child: Semantics(
+        label: '${strings.activityLogsTitle}. ${strings.viewActivityLogs}',
+        button: true,
+        child: _buildGlobalStatusWidget(context, job.status, strings),
+      ),
+    );
+  }
+
+  // --- Common Helper Widgets ---
+  Widget _buildGlobalStatusWidget(BuildContext context, RcloneJobStatus status, AppStrings strings) {
+    final theme = context.theme;
+    Color statusColor;
+    String statusText;
+    IconData icon;
+
+    switch (status) {
+      case RcloneJobStatus.pending:
+      case RcloneJobStatus.syncing:
+        statusColor = theme.accent;
+        statusText = strings.syncActive;
+        icon = defaultTargetPlatform == TargetPlatform.windows
+            ? fluent.FluentIcons.sync_status
+            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.arrow_2_circlepath : material.Icons.sync);
+        break;
+      case RcloneJobStatus.failed:
+        statusColor = theme.error;
+        statusText = strings.syncFailed;
+        icon = defaultTargetPlatform == TargetPlatform.windows
+            ? fluent.FluentIcons.error
+            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.exclamationmark_triangle : material.Icons.error);
+        break;
+      case RcloneJobStatus.cancelled:
+        statusColor = theme.offline;
+        statusText = strings.syncCancelled;
+        icon = defaultTargetPlatform == TargetPlatform.windows
+            ? fluent.FluentIcons.cancel
+            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.xmark_circle : material.Icons.cancel);
+        break;
+      case RcloneJobStatus.completed:
+        statusColor = theme.success;
+        statusText = strings.allFilesSynced;
+        icon = defaultTargetPlatform == TargetPlatform.windows
+            ? fluent.FluentIcons.completed
+            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.check_mark_circled : material.Icons.check_circle);
+        break;
+    }
+
+    final chevronIcon = defaultTargetPlatform == TargetPlatform.windows
+        ? fluent.FluentIcons.chevron_right
+        : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.chevron_forward : material.Icons.chevron_right);
+
+    final infoIcon = defaultTargetPlatform == TargetPlatform.windows
+        ? fluent.FluentIcons.info
+        : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.info_circle : material.Icons.info_outline);
+
+    return Container(
+      padding: EdgeInsets.all(theme.md),
+      constraints: const BoxConstraints(minHeight: 52),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1.0),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: statusColor, size: 24, semanticLabel: statusText),
+          SizedBox(width: theme.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    color: theme.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      infoIcon,
+                      size: 12,
+                      color: theme.textSecondary,
+                      semanticLabel: strings.viewActivityLogs,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      strings.viewActivityLogs,
+                      style: TextStyle(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            chevronIcon,
+            color: statusColor,
+            size: 16,
+            semanticLabel: strings.viewActivityLogs,
+          ),
+        ],
+      ),
+    );
+  }
+}

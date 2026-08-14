@@ -93,9 +93,12 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         title: const fluent.Text('Storage Details'),
         content: buildContent(),
         actions: [
-          fluent.Button(
-            child: const Text('OK'),
+          fluent.FilledButton(
             onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -114,8 +117,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         ),
         actions: [
           cupertino.CupertinoDialogAction(
-            child: const Text('OK'),
+            isDefaultAction: true,
             onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -127,9 +131,12 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         title: const Text('Storage Details'),
         content: buildContent(),
         actions: [
-          material.TextButton(
-            child: const Text('OK'),
+          material.FilledButton(
             onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -180,9 +187,12 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
         title: const fluent.Text('Sync Activity Logs'),
         content: buildContent(),
         actions: [
-          fluent.Button(
-            child: const Text('OK'),
+          fluent.FilledButton(
             onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -204,8 +214,9 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
         ),
         actions: [
           cupertino.CupertinoDialogAction(
-            child: const Text('OK'),
+            isDefaultAction: true,
             onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -220,9 +231,12 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
           child: buildContent(),
         ),
         actions: [
-          material.TextButton(
-            child: const Text('OK'),
+          material.FilledButton(
             onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

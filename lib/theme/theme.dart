@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -116,16 +119,78 @@ class ThemeConfig {
   }
 }
 
-/// State notifier to manage user appearance settings.
+/// State notifier to manage user appearance settings with JSON file persistence.
 class ThemeNotifier extends StateNotifier<ThemeConfig> {
-  ThemeNotifier() : super(const ThemeConfig());
+  ThemeNotifier() : super(const ThemeConfig()) {
+    _loadThemeConfig();
+  }
+
+  Future<File> _getSettingsFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/settings.json');
+  }
+
+  Future<void> _loadThemeConfig() async {
+    try {
+      final file = await _getSettingsFile();
+      if (file.existsSync()) {
+        final content = await file.readAsString();
+        final Map<String, dynamic> data = json.decode(content);
+        
+        SanzoWadaPalette? lightPal;
+        SanzoWadaPalette? darkPal;
+
+        if (data['selectedLightPalette'] != null) {
+          try {
+            lightPal = SanzoWadaPalette.values.firstWhere(
+              (p) => p.name == data['selectedLightPalette'],
+            );
+          } catch (_) {}
+        }
+
+        if (data['selectedDarkPalette'] != null) {
+          try {
+            darkPal = SanzoWadaPalette.values.firstWhere(
+              (p) => p.name == data['selectedDarkPalette'],
+            );
+          } catch (_) {}
+        }
+
+        state = ThemeConfig(
+          syncWithSystem: data['syncWithSystem'] as bool? ?? true,
+          forceDarkMode: data['forceDarkMode'] as bool? ?? false,
+          selectedLightPalette: lightPal,
+          selectedDarkPalette: darkPal,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistThemeConfig() async {
+    try {
+      final file = await _getSettingsFile();
+      Map<String, dynamic> data = {};
+      if (file.existsSync()) {
+        try {
+          data = json.decode(await file.readAsString());
+        } catch (_) {}
+      }
+      data['syncWithSystem'] = state.syncWithSystem;
+      data['forceDarkMode'] = state.forceDarkMode;
+      data['selectedLightPalette'] = state.selectedLightPalette?.name;
+      data['selectedDarkPalette'] = state.selectedDarkPalette?.name;
+      await file.writeAsString(json.encode(data));
+    } catch (_) {}
+  }
 
   void setSyncWithSystem(bool sync) {
     state = state.copyWith(syncWithSystem: sync);
+    _persistThemeConfig();
   }
 
   void setForceDarkMode(bool forceDark) {
     state = state.copyWith(forceDarkMode: forceDark);
+    _persistThemeConfig();
   }
 
   void setLightPalette(SanzoWadaPalette? palette) {
@@ -133,6 +198,7 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
       selectedLightPalette: palette,
       clearLightPalette: palette == null,
     );
+    _persistThemeConfig();
   }
 
   void setDarkPalette(SanzoWadaPalette? palette) {
@@ -140,6 +206,7 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
       selectedDarkPalette: palette,
       clearDarkPalette: palette == null,
     );
+    _persistThemeConfig();
   }
 }
 

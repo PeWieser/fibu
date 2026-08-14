@@ -138,4 +138,10 @@ class SanzoWadaPalette {
         forestMori,
         volcanoKazan,
       ];
+
+  /// Returns all available Wada palettes.
+  static List<SanzoWadaPalette> get values => [
+        ...lightPalettes,
+        ...darkPalettes,
+      ];
 }

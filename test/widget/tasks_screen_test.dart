@@ -25,7 +25,7 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('Renders Windows Fluent UI layout successfully', (WidgetTester tester) async {
+    testWidgets('Renders Windows Empty State when no tasks exist', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
@@ -41,19 +41,19 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Check Windows headers are visible
+        // Header
         expect(find.text(strings.tasksTitle), findsOneWidget);
-        
-        // Assert mock tasks are listed
-        expect(find.text('Camera Photos Backup'), findsOneWidget);
-        expect(find.text('GoPro Videos Archive'), findsOneWidget);
-        expect(find.text('Work Documents Sync'), findsOneWidget);
+        // Empty state
+        expect(find.text(strings.noTasksConfigured), findsOneWidget);
+        expect(find.text(strings.noTasksDescription), findsOneWidget);
+        // CTA Button
+        expect(find.text(strings.addTask), findsWidgets);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('Renders iOS Cupertino layout successfully', (WidgetTester tester) async {
+    testWidgets('Renders iOS Empty State when no tasks exist', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       try {
@@ -69,17 +69,17 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Check Cupertino section title
-        expect(find.text(strings.backupJobsHeader), findsOneWidget);
-        
-        // Assert mock tasks are listed
-        expect(find.text('Camera Photos Backup'), findsOneWidget);
+        // Empty state
+        expect(find.text(strings.noTasksConfigured), findsOneWidget);
+        expect(find.text(strings.noTasksDescription), findsOneWidget);
+        // CTA Button
+        expect(find.text(strings.addTask), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('Renders Android Material 3 layout successfully', (WidgetTester tester) async {
+    testWidgets('Renders Android Empty State when no tasks exist', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
       try {
@@ -95,53 +95,48 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Check Material AppBar title
+        // AppBar title
         expect(find.text(strings.tasksTitle), findsOneWidget);
-        
-        // Assert mock tasks are listed
-        expect(find.text('Camera Photos Backup'), findsOneWidget);
+        // Empty state
+        expect(find.text(strings.noTasksConfigured), findsOneWidget);
+        expect(find.text(strings.noTasksDescription), findsOneWidget);
+        // FAB and CTA button
         expect(find.byType(material.FloatingActionButton), findsOneWidget);
+        expect(find.text(strings.addTask), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('Toggling task switch updates active state', (WidgetTester tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-
-      try {
-        final container = ProviderContainer();
-
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const material.MaterialApp(
-              home: TasksScreen(),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        // First task is initially active (isActive = true)
-        expect(container.read(tasksListProvider)[0].isActive, isTrue);
-
-        // Tap Switch on first ListTile
-        final switchFinder = find.byType(material.Switch).first;
-        await tester.tap(switchFinder);
-        await tester.pumpAndSettle();
-
-        // First task should now be inactive
-        expect(container.read(tasksListProvider)[0].isActive, isFalse);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
-
-    testWidgets('Deleting task triggers confirmation dialog with plain text consequence', (WidgetTester tester) async {
+    testWidgets('Renders populated tasks with Incremental and Echo-Modus badges', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
         final container = ProviderContainer();
+
+        // Add 2 tasks (incremental & mirror)
+        container.read(tasksListProvider.notifier).addTask(
+          const BackupTask(
+            id: 'task_inc',
+            name: 'Incremental Backup Task',
+            sourcePath: 'D:\\Photos',
+            targetRemote: 'OneDrive_Backup:backup',
+            schedule: 'Daily at 02:00',
+            isActive: true,
+            syncMode: SyncMode.incremental,
+          ),
+        );
+        container.read(tasksListProvider.notifier).addTask(
+          const BackupTask(
+            id: 'task_mir',
+            name: 'Mirror Backup Task',
+            sourcePath: 'D:\\Documents',
+            targetRemote: 'GoogleDrive_Backup:backup',
+            schedule: 'Manual',
+            isActive: false,
+            syncMode: SyncMode.mirror,
+          ),
+        );
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -153,15 +148,87 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Find and tap delete button for the first task
+        expect(find.text('Incremental Backup Task'), findsOneWidget);
+        expect(find.text('Mirror Backup Task'), findsOneWidget);
+
+        // Badges
+        expect(find.text(strings.syncModeBadgeIncremental), findsOneWidget);
+        expect(find.text(strings.syncModeBadgeMirror), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('Toggling task switch updates active state', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      try {
+        final container = ProviderContainer();
+        container.read(tasksListProvider.notifier).addTask(
+          const BackupTask(
+            id: 'task_test',
+            name: 'Toggle Test Task',
+            sourcePath: 'C:\\Folder',
+            targetRemote: 'Remote:backup',
+            schedule: 'Manual',
+            isActive: true,
+          ),
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const material.MaterialApp(
+              home: TasksScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(container.read(tasksListProvider)[0].isActive, isTrue);
+
+        final switchFinder = find.byType(material.Switch).first;
+        await tester.tap(switchFinder);
+        await tester.pumpAndSettle();
+
+        expect(container.read(tasksListProvider)[0].isActive, isFalse);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('Deleting task triggers confirmation dialog with plain text consequence', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      try {
+        final container = ProviderContainer();
+        container.read(tasksListProvider.notifier).addTask(
+          const BackupTask(
+            id: 'task_del',
+            name: 'Delete Test Task',
+            sourcePath: 'C:\\Folder',
+            targetRemote: 'Remote:backup',
+            schedule: 'Manual',
+            isActive: true,
+          ),
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const fluent.FluentApp(
+              home: TasksScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
         final deleteBtn = find.byIcon(fluent.FluentIcons.delete).first;
         await tester.tap(deleteBtn);
         await tester.pumpAndSettle();
 
         // Confirmation dialog should be visible
         expect(find.text(strings.deleteTaskConfirmTitle), findsOneWidget);
-        
-        // Verify Rule 6 plain text consequence is present
         expect(find.textContaining(strings.deleteTaskRule6Notice), findsOneWidget);
 
         // Tap cancel/abbrechen
@@ -170,8 +237,7 @@ void main() {
         await tester.tap(cancelBtn);
         await tester.pumpAndSettle();
 
-        // Tasks count remains 3
-        expect(container.read(tasksListProvider), hasLength(3));
+        expect(container.read(tasksListProvider), hasLength(1));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

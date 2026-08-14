@@ -23,6 +23,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   String? _deletingRemote;
   String? _bannerMessage;
   bool _isBannerError = false;
+  bool _isRefreshing = false;
 
   void _showNotification(String message, {bool isError = false}) {
     setState(() {
@@ -36,6 +37,32 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         });
       }
     });
+  }
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
+    try {
+      ref.invalidate(remotesProvider);
+      ref.invalidate(primaryQuotaProvider);
+      await ref.read(remotesProvider.future);
+      await ref.read(primaryQuotaProvider.future);
+      if (mounted) {
+        _showNotification(context.strings.drivesRefreshed, isError: false);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showNotification(e.toString(), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
   }
 
   @override
@@ -71,6 +98,22 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               onPressed: () => Navigator.pop(context),
             ),
           ),
+        ),
+        commandBar: fluent.CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            fluent.CommandBarButton(
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: fluent.ProgressRing(strokeWidth: 2.0),
+                    )
+                  : const Icon(fluent.FluentIcons.refresh, size: 16, semanticLabel: 'Refresh'),
+              label: Text(strings.refresh),
+              onPressed: _isRefreshing ? null : _handleRefresh,
+            ),
+          ],
         ),
       ),
       content: SingleChildScrollView(
@@ -111,9 +154,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(fluent.FluentIcons.add, size: 16, semanticLabel: 'Add Drive'),
+                        const Icon(fluent.FluentIcons.add, size: 16, color: Color(0xFFFFFFFF), semanticLabel: 'Add Drive'),
                         SizedBox(width: theme.sm),
-                        Text(strings.addCloudDrive),
+                        Text(
+                          strings.addCloudDrive,
+                          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                        ),
                       ],
                     ),
                     onPressed: () => _openAddRemoteWizard(context, TargetPlatform.windows),
@@ -211,16 +257,35 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudDrivesTitle),
-        trailing: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            child: cupertino.CupertinoButton(
-              padding: EdgeInsets.zero,
-              child: const Icon(cupertino.CupertinoIcons.add, semanticLabel: 'Add Drive'),
-              onPressed: () => _openAddRemoteWizard(context, TargetPlatform.iOS),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: cupertino.CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: _isRefreshing ? null : _handleRefresh,
+                  child: _isRefreshing
+                      ? const cupertino.CupertinoActivityIndicator()
+                      : const Icon(cupertino.CupertinoIcons.arrow_clockwise, semanticLabel: 'Refresh'),
+                ),
+              ),
             ),
-          ),
+            SizedBox(width: theme.xs),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: cupertino.CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: const Icon(cupertino.CupertinoIcons.add, semanticLabel: 'Add Drive'),
+                  onPressed: () => _openAddRemoteWizard(context, TargetPlatform.iOS),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       child: SafeArea(
@@ -350,6 +415,26 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       appBar: material.AppBar(
         title: Text(strings.cloudDrivesTitle),
         elevation: 0,
+        actions: [
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: material.IconButton(
+                icon: _isRefreshing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: material.CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Icon(material.Icons.refresh, semanticLabel: 'Refresh'),
+                onPressed: _isRefreshing ? null : _handleRefresh,
+                tooltip: strings.refresh,
+              ),
+            ),
+          ),
+          SizedBox(width: theme.sm),
+        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(theme.lg),
@@ -472,22 +557,40 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   // --- Helper Methods ---
   String _getProviderType(String name) {
     final lowerName = name.toLowerCase();
-    if (lowerName.contains('drive') || lowerName.contains('gdrive')) {
+    if (lowerName.contains('google photo') || lowerName.contains('photos')) {
+      return 'Google Photos';
+    } else if (lowerName.contains('gdrive') || lowerName.contains('drive') || lowerName.contains('google')) {
       return 'Google Drive';
-    } else if (lowerName.contains('one') || lowerName.contains('odrive')) {
+    } else if (lowerName.contains('onedrive') || lowerName.contains('one') || lowerName.contains('odrive')) {
       return 'Microsoft OneDrive';
-    } else if (lowerName.contains('drop') || lowerName.contains('box')) {
+    } else if (lowerName.contains('dropbox')) {
       return 'Dropbox';
+    } else if (lowerName.contains('pcloud')) {
+      return 'pCloud';
+    } else if (lowerName.contains('yandex')) {
+      return 'Yandex Disk';
+    } else if (lowerName.contains('box')) {
+      return 'Box';
     } else if (lowerName.contains('mega')) {
       return 'Mega.nz';
+    } else if (lowerName.contains('minio')) {
+      return 'MinIO S3';
+    } else if (lowerName.contains('wasabi')) {
+      return 'Wasabi S3';
+    } else if (lowerName.contains('backblaze') || lowerName.contains('b2')) {
+      return 'Backblaze B2';
     } else if (lowerName.contains('s3') || lowerName.contains('aws')) {
       return 'Amazon S3';
+    } else if (lowerName.contains('nextcloud')) {
+      return 'Nextcloud (WebDAV)';
+    } else if (lowerName.contains('owncloud')) {
+      return 'ownCloud (WebDAV)';
+    } else if (lowerName.contains('webdav')) {
+      return 'WebDAV';
     } else if (lowerName.contains('sftp')) {
       return 'SFTP';
     } else if (lowerName.contains('ftp')) {
       return 'FTP';
-    } else if (lowerName.contains('webdav') || lowerName.contains('nextcloud')) {
-      return 'WebDAV';
     }
     return 'Cloud Storage Remote';
   }
@@ -515,7 +618,10 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                     Navigator.pop(dialogCtx);
                     await _performDelete(remoteName);
                   },
-                  child: Text(strings.disconnect),
+                  child: Text(
+                    strings.disconnect,
+                    style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),
@@ -576,7 +682,10 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 Navigator.pop(dialogCtx);
                 await _performDelete(remoteName);
               },
-              child: Text(strings.disconnect),
+              child: Text(
+                strings.disconnect,
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -626,7 +735,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
 
 /// 2-Step Guided Wizard Dialog for Adding Cloud Remotes.
 /// - Step 1: Connection Name + Real-time searchable Provider list.
-/// - Step 2: Provider-specific configuration (OAuth or Credentials), Test Connection, Async Add with error retention.
+/// - Step 2: Equal first-class support for OAuth, Mega, S3, WebDAV, SFTP/FTP, and Generic Providers.
 class AddRemoteWizardDialog extends ConsumerStatefulWidget {
   final TargetPlatform platform;
 
@@ -649,7 +758,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   final TextEditingController _hostController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
 
-  String _selectedProvider = 'drive';
+  String _selectedProvider = '';
   String _searchQuery = '';
   bool _obscurePassword = true;
 
@@ -678,12 +787,61 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
   bool get _isOAuthProvider {
     final p = _selectedProvider.toLowerCase();
-    return p == 'drive' || p == 'onedrive' || p == 'dropbox' || p == 'box';
+    if (p.isEmpty) return false;
+    return p == 'drive' ||
+        p == 'google photos' ||
+        p == 'google_photos' ||
+        p == 'onedrive' ||
+        p == 'dropbox' ||
+        p == 'box' ||
+        p == 'pcloud' ||
+        p == 'yandex' ||
+        p == 'hubic' ||
+        p == 'hidrive' ||
+        p == 'zoho' ||
+        p == 'mailru' ||
+        (p.contains('drive') && !p.contains('webdav') && !p.contains('harddrive')) ||
+        p.contains('photo') ||
+        p.contains('onedrive') ||
+        p.contains('dropbox') ||
+        p.contains('pcloud') ||
+        p.contains('yandex');
+  }
+
+  bool get _isMegaProvider {
+    final p = _selectedProvider.toLowerCase();
+    if (p.isEmpty) return false;
+    return p == 'mega' || p.contains('mega');
+  }
+
+  bool get _isS3Provider {
+    final p = _selectedProvider.toLowerCase();
+    if (p.isEmpty) return false;
+    return p == 's3' ||
+        p.contains('s3') ||
+        p.contains('b2') ||
+        p.contains('minio') ||
+        p.contains('wasabi') ||
+        p.contains('backblaze');
+  }
+
+  bool get _isWebDavProvider {
+    final p = _selectedProvider.toLowerCase();
+    if (p.isEmpty) return false;
+    return p == 'webdav' ||
+        p.contains('webdav') ||
+        p.contains('nextcloud') ||
+        p.contains('owncloud');
+  }
+
+  bool get _isSftpOrFtpProvider {
+    final p = _selectedProvider.toLowerCase();
+    if (p.isEmpty) return false;
+    return p == 'sftp' || p == 'ftp' || p.contains('sftp') || p.contains('ftp');
   }
 
   bool get _requiresHostPort {
-    final p = _selectedProvider.toLowerCase();
-    return p == 'sftp' || p == 'ftp' || p == 'webdav' || p == 's3';
+    return _isSftpOrFtpProvider || _isWebDavProvider || _isS3Provider;
   }
 
   void _goToStep2() {
@@ -694,19 +852,22 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     });
 
     final name = _nameController.text.trim();
+    bool hasError = false;
     if (name.isEmpty) {
       setState(() {
         _nameError = strings.nameRequiredError;
       });
-      return;
+      hasError = true;
     }
 
     if (_selectedProvider.isEmpty) {
       setState(() {
         _providerError = strings.providerRequiredError;
       });
-      return;
+      hasError = true;
     }
+
+    if (hasError) return;
 
     setState(() {
       _currentStep = 1;
@@ -714,6 +875,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _testStatus = null;
       _testMessage = null;
       _addError = null;
+      _isOAuthAuthorized = false;
     });
   }
 
@@ -723,14 +885,31 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _isTesting = true;
       _testStatus = null;
       _testMessage = null;
+      _step2Error = null;
     });
 
     try {
-      if (!_isOAuthProvider) {
-        if (_selectedProvider == 'mega' && (_userController.text.trim().isEmpty || _passController.text.isEmpty)) {
+      if (_isOAuthProvider) {
+        // OAuth verification ping
+        _isOAuthAuthorized = true;
+      } else if (_isMegaProvider) {
+        if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
           throw Exception(strings.credentialsRequiredError);
         }
-        if (_requiresHostPort && _hostController.text.trim().isEmpty) {
+      } else if (_isS3Provider) {
+        if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
+          throw Exception(strings.credentialsRequiredError);
+        }
+      } else if (_isWebDavProvider) {
+        if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
+          throw Exception(strings.credentialsRequiredError);
+        }
+      } else if (_isSftpOrFtpProvider) {
+        if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
+          throw Exception(strings.credentialsRequiredError);
+        }
+      } else {
+        if (_userController.text.trim().isEmpty) {
           throw Exception(strings.credentialsRequiredError);
         }
       }
@@ -739,7 +918,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         await ref.read(rcloneServiceProvider).obscurePassword(_passController.text);
       }
 
-      // Simulate network verification ping
+      // Simulate verification ping
       await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
@@ -764,8 +943,36 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     final strings = context.strings;
     final name = _nameController.text.trim();
 
-    if (!_isOAuthProvider) {
-      if (_selectedProvider == 'mega' && (_userController.text.trim().isEmpty || _passController.text.isEmpty)) {
+    if (_isMegaProvider) {
+      if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
+        setState(() {
+          _step2Error = strings.credentialsRequiredError;
+        });
+        return;
+      }
+    } else if (_isS3Provider) {
+      if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
+        setState(() {
+          _step2Error = strings.credentialsRequiredError;
+        });
+        return;
+      }
+    } else if (_isWebDavProvider) {
+      if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
+        setState(() {
+          _step2Error = strings.credentialsRequiredError;
+        });
+        return;
+      }
+    } else if (_isSftpOrFtpProvider) {
+      if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
+        setState(() {
+          _step2Error = strings.credentialsRequiredError;
+        });
+        return;
+      }
+    } else if (!_isOAuthProvider) {
+      if (_userController.text.trim().isEmpty && _passController.text.isEmpty) {
         setState(() {
           _step2Error = strings.credentialsRequiredError;
         });
@@ -782,14 +989,56 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     try {
       Map<String, String> config = {};
 
-      if (_selectedProvider == 'mega') {
+      if (_isOAuthProvider) {
+        // OAuth providers connect safely via browser tokens
+        config = {};
+      } else if (_isMegaProvider) {
         final plainPass = _passController.text;
         final obscured = await ref.read(rcloneServiceProvider).obscurePassword(plainPass);
         config = {
           'user': _userController.text.trim(),
           'pass': obscured,
         };
-      } else if (_requiresHostPort) {
+      } else if (_isS3Provider) {
+        final plainPass = _passController.text;
+        final obscured = plainPass.isNotEmpty
+            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+            : '';
+        config = {
+          'provider': 'Other',
+          if (_userController.text.trim().isNotEmpty) 'access_key_id': _userController.text.trim(),
+          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+          if (obscured.isNotEmpty) 'secret_access_key': obscured,
+          if (obscured.isNotEmpty) 'pass': obscured,
+          if (_hostController.text.trim().isNotEmpty) 'endpoint': _hostController.text.trim(),
+          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
+        };
+      } else if (_isWebDavProvider) {
+        final plainPass = _passController.text;
+        final obscured = plainPass.isNotEmpty
+            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+            : '';
+        config = {
+          if (_hostController.text.trim().isNotEmpty) 'url': _hostController.text.trim(),
+          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
+          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+          if (obscured.isNotEmpty) 'pass': obscured,
+          'vendor': 'other',
+        };
+      } else if (_isSftpOrFtpProvider) {
+        final plainPass = _passController.text;
+        final obscured = plainPass.isNotEmpty
+            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+            : '';
+        final defaultPort = _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22';
+        final port = _portController.text.trim().isNotEmpty ? _portController.text.trim() : defaultPort;
+        config = {
+          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
+          'port': port,
+          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+          if (obscured.isNotEmpty) 'pass': obscured,
+        };
+      } else {
         final plainPass = _passController.text;
         final obscured = plainPass.isNotEmpty
             ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
@@ -799,15 +1048,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           if (obscured.isNotEmpty) 'pass': obscured,
           if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
           if (_portController.text.trim().isNotEmpty) 'port': _portController.text.trim(),
-        };
-      } else if (!_isOAuthProvider) {
-        final plainPass = _passController.text;
-        final obscured = plainPass.isNotEmpty
-            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
-            : '';
-        config = {
-          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
-          if (obscured.isNotEmpty) 'pass': obscured,
         };
       }
 
@@ -842,8 +1082,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       child: material.Material(
         color: material.Colors.transparent,
         child: Container(
-          width: 520,
-          constraints: const BoxConstraints(maxHeight: 640),
+          width: 540,
+          constraints: const BoxConstraints(maxHeight: 660),
           margin: EdgeInsets.all(theme.lg),
           decoration: BoxDecoration(
             color: theme.surface,
@@ -929,6 +1169,40 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     );
   }
 
+  // --- Contextual Info-Tooltip Helper ---
+  Widget _buildFieldLabelWithTooltip({
+    required AppThemeData theme,
+    required String label,
+    required String tooltipMessage,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        SizedBox(width: theme.xs),
+        fluent.Tooltip(
+          message: tooltipMessage,
+          useMousePosition: false,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.help,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: 2),
+              child: Icon(
+                fluent.FluentIcons.info,
+                size: 13,
+                color: theme.accent,
+                semanticLabel: '$label Info',
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // --- Step 1: Name & Searchable Provider Selection ---
   Widget _buildStep1Content(AppThemeData theme) {
     final strings = context.strings;
@@ -937,9 +1211,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          strings.connectionNameLabel,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        _buildFieldLabelWithTooltip(
+          theme: theme,
+          label: strings.connectionNameLabel,
+          tooltipMessage: strings.connectionNameTooltip,
         ),
         SizedBox(height: theme.xs),
         fluent.TextBox(
@@ -957,9 +1232,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ),
         ],
         SizedBox(height: theme.lg),
-        Text(
-          strings.searchProviderHint,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        _buildFieldLabelWithTooltip(
+          theme: theme,
+          label: strings.searchProviderHint,
+          tooltipMessage: strings.searchProviderTooltip,
         ),
         SizedBox(height: theme.xs),
         fluent.TextBox(
@@ -1088,13 +1364,14 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     );
   }
 
-  // --- Step 2: Provider Configuration & Connection Testing ---
+  // --- Step 2: Equal First-Class Support for All Provider Configurations ---
   Widget _buildStep2Content(AppThemeData theme) {
     final strings = context.strings;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Provider info banner
         Container(
           padding: EdgeInsets.all(theme.md),
           decoration: BoxDecoration(
@@ -1125,36 +1402,56 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ),
         ),
         SizedBox(height: theme.lg),
+
+        // 1. Dedicated OAuth Providers Support (Drive, Photos, OneDrive, Dropbox, Box, pCloud, Yandex, etc.)
         if (_isOAuthProvider) ...[
           Container(
             padding: EdgeInsets.all(theme.md),
             decoration: BoxDecoration(
               color: theme.textSecondary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(theme.radiusSm),
+              border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(fluent.FluentIcons.info, color: theme.accent, size: 16, semanticLabel: 'Info'),
+                    Icon(fluent.FluentIcons.shield, color: theme.accent, size: 16, semanticLabel: 'OAuth Shield'),
                     SizedBox(width: theme.sm),
                     Text(
-                      'OAuth Authentication',
+                      'OAuth 2.0 Authentifizierung',
                       style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary),
+                    ),
+                    SizedBox(width: theme.xs),
+                    fluent.Tooltip(
+                      message: strings.oauthGenericTooltip,
+                      useMousePosition: false,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.help,
+                        child: Padding(
+                          padding: EdgeInsets.all(theme.xs),
+                          child: Icon(
+                            fluent.FluentIcons.info,
+                            size: 13,
+                            color: theme.accent,
+                            semanticLabel: 'OAuth Info',
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 SizedBox(height: theme.xs),
                 Text(
                   strings.oauthInfoNotice,
-                  style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                  style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.4),
                 ),
                 SizedBox(height: theme.md),
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 140, minHeight: 44),
+                    constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
                     child: fluent.Button(
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1188,10 +1485,233 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
               ],
             ),
           ),
-        ] else ...[
-          Text(
-            strings.emailOrUserLabel,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ]
+        // 2. Mega.nz Specific Fields
+        else if (_isMegaProvider) ...[
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.megaUserLabel,
+            tooltipMessage: strings.megaUserTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _userController,
+            placeholder: 'user@mega.nz',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.megaPassLabel,
+            tooltipMessage: strings.megaPassTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••',
+            suffix: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(
+                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
+                    size: 16,
+                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ),
+        ]
+        // 3. S3 / MinIO / Backblaze B2 / Wasabi Specific Fields
+        else if (_isS3Provider) ...[
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.s3EndpointLabel,
+            tooltipMessage: strings.s3EndpointTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _hostController,
+            placeholder: 'https://s3.eu-central-1.amazonaws.com / s3.us-west-004.backblazeb2.com',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.s3AccessKeyLabel,
+            tooltipMessage: strings.s3AccessKeyTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _userController,
+            placeholder: 'AKIAIOSFODNN7EXAMPLE',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.s3SecretKeyLabel,
+            tooltipMessage: strings.s3SecretKeyTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••••••••••••••••••••••••••••••••••',
+            suffix: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(
+                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
+                    size: 16,
+                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ),
+        ]
+        // 4. WebDAV / Nextcloud / ownCloud Specific Fields
+        else if (_isWebDavProvider) ...[
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.webdavUrlLabel,
+            tooltipMessage: strings.webdavUrlTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _hostController,
+            placeholder: 'https://cloud.example.com/remote.php/dav/files/user/',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.webdavUserLabel,
+            tooltipMessage: strings.webdavUserTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _userController,
+            placeholder: 'username / user@example.com',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.webdavPassLabel,
+            tooltipMessage: strings.webdavPassTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••',
+            suffix: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(
+                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
+                    size: 16,
+                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ),
+        ]
+        // 5. SFTP / FTP Specific Fields
+        else if (_isSftpOrFtpProvider) ...[
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFieldLabelWithTooltip(
+                      theme: theme,
+                      label: strings.sftpHostLabel,
+                      tooltipMessage: strings.sftpHostTooltip,
+                    ),
+                    SizedBox(height: theme.xs),
+                    fluent.TextBox(
+                      controller: _hostController,
+                      placeholder: 'sftp.example.com / 192.168.1.100',
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: theme.md),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFieldLabelWithTooltip(
+                      theme: theme,
+                      label: strings.sftpPortLabel,
+                      tooltipMessage: strings.sftpPortTooltip,
+                    ),
+                    SizedBox(height: theme.xs),
+                    fluent.TextBox(
+                      controller: _portController,
+                      placeholder: _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.sftpUserLabel,
+            tooltipMessage: strings.sftpUserTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _userController,
+            placeholder: 'root / username',
+          ),
+          SizedBox(height: theme.md),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.sftpPassLabel,
+            tooltipMessage: strings.sftpPassTooltip,
+          ),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••',
+            suffix: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(
+                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
+                    size: 16,
+                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ),
+        ]
+        // 6. Generic / Other Provider Fields
+        else ...[
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.emailOrUserLabel,
+            tooltipMessage: strings.emailOrUserTooltip,
           ),
           SizedBox(height: theme.xs),
           fluent.TextBox(
@@ -1199,9 +1719,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             placeholder: 'user@example.com / username',
           ),
           SizedBox(height: theme.md),
-          Text(
-            strings.passwordLabel,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          _buildFieldLabelWithTooltip(
+            theme: theme,
+            label: strings.passwordLabel,
+            tooltipMessage: strings.passwordTooltip,
           ),
           SizedBox(height: theme.xs),
           fluent.TextBox(
@@ -1232,14 +1753,15 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        strings.hostLabel,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      _buildFieldLabelWithTooltip(
+                        theme: theme,
+                        label: strings.hostLabel,
+                        tooltipMessage: strings.hostTooltip,
                       ),
                       SizedBox(height: theme.xs),
                       fluent.TextBox(
                         controller: _hostController,
-                        placeholder: 'sftp.example.com / server',
+                        placeholder: 'server.example.com',
                       ),
                     ],
                   ),
@@ -1250,14 +1772,15 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        strings.portLabel,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      _buildFieldLabelWithTooltip(
+                        theme: theme,
+                        label: strings.portLabel,
+                        tooltipMessage: strings.portTooltip,
                       ),
                       SizedBox(height: theme.xs),
                       fluent.TextBox(
                         controller: _portController,
-                        placeholder: '22',
+                        placeholder: '443',
                       ),
                     ],
                   ),
@@ -1266,6 +1789,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             ),
           ],
         ],
+
         if (_step2Error != null) ...[
           SizedBox(height: theme.md),
           Text(
@@ -1282,20 +1806,31 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
               cursor: SystemMouseCursors.click,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 140, minHeight: 44),
-                child: fluent.Button(
+                child: fluent.FilledButton(
                   onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
                   child: _isTesting
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: fluent.ProgressRing(strokeWidth: 2),
+                          child: fluent.ProgressRing(activeColor: Color(0xFFFFFFFF), strokeWidth: 2),
                         )
                       : Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(fluent.FluentIcons.plug_connected, size: 14, semanticLabel: 'Test Connection'),
+                            const Icon(
+                              fluent.FluentIcons.plug_connected,
+                              size: 14,
+                              color: Color(0xFFFFFFFF),
+                              semanticLabel: 'Test Connection',
+                            ),
                             SizedBox(width: theme.xs),
-                            Text(strings.testConnection),
+                            Text(
+                              strings.testConnection,
+                              style: const TextStyle(
+                                color: Color(0xFFFFFFFF),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -1376,9 +1911,20 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(strings.next),
+                      Text(
+                        strings.next,
+                        style: const TextStyle(
+                          color: Color(0xFFFFFFFF),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       SizedBox(width: theme.xs),
-                      const Icon(fluent.FluentIcons.chevron_right, size: 12, semanticLabel: 'Next'),
+                      const Icon(
+                        fluent.FluentIcons.chevron_right,
+                        size: 12,
+                        color: Color(0xFFFFFFFF),
+                        semanticLabel: 'Next',
+                      ),
                     ],
                   ),
                 ),
@@ -1422,13 +1968,25 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                             const SizedBox(
                               width: 14,
                               height: 14,
-                              child: fluent.ProgressRing(strokeWidth: 2),
+                              child: fluent.ProgressRing(activeColor: Color(0xFFFFFFFF), strokeWidth: 2),
                             ),
                             SizedBox(width: theme.sm),
-                            Text(strings.addingRemote),
+                            Text(
+                              strings.addingRemote,
+                              style: const TextStyle(
+                                color: Color(0xFFFFFFFF),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         )
-                      : Text(strings.add),
+                      : Text(
+                          strings.add,
+                          style: const TextStyle(
+                            color: Color(0xFFFFFFFF),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),

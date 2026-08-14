@@ -17,6 +17,7 @@ import 'cloud_drives_screen.dart';
 /// - Two separate rows of Sanzo Wada color palettes (4 Light palettes & 4 Dark palettes).
 /// - Manage Cloud Drives sub-page navigation.
 /// - Functional Language configuration (German & English) with immediate UI update.
+/// Enriched with accessible contextual tooltips across theme toggles, palettes, and language selectors.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -124,81 +125,93 @@ class SettingsScreen extends ConsumerWidget {
               SizedBox(height: theme.lg),
               fluent.Text(strings.appearanceSection, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
-              fluent.Card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: Row(
-                        children: [
-                          Text(strings.syncWithSystem),
-                          const Spacer(),
-                          fluent.ToggleSwitch(
-                            checked: config.syncWithSystem,
-                            onChanged: (val) {
-                              ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!config.syncWithSystem) ...[
-                      const SizedBox(height: 8),
-                      const fluent.Divider(),
-                      const SizedBox(height: 8),
+              fluent.Tooltip(
+                message: strings.tooltipThemeMode,
+                child: fluent.Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 44),
                         child: Row(
                           children: [
-                            Text(strings.useDarkMode),
+                            Text(strings.syncWithSystem),
                             const Spacer(),
                             fluent.ToggleSwitch(
-                              checked: config.forceDarkMode,
+                              checked: config.syncWithSystem,
                               onChanged: (val) {
-                                ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                                ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
                               },
                             ),
                           ],
                         ),
                       ),
+                      if (!config.syncWithSystem) ...[
+                        const SizedBox(height: 8),
+                        const fluent.Divider(),
+                        const SizedBox(height: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Row(
+                            children: [
+                              Text(strings.useDarkMode),
+                              const Spacer(),
+                              fluent.ToggleSwitch(
+                                checked: config.forceDarkMode,
+                                onChanged: (val) {
+                                  ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               SizedBox(height: theme.lg),
-              fluent.Text(strings.lightModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              fluent.Tooltip(
+                message: strings.tooltipWadaPalette,
+                child: fluent.Text(strings.lightModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              ),
               SizedBox(height: theme.sm),
-              _buildWadaPaletteRow(context, ref, config, false),
+              _buildWadaPaletteRow(context, ref, config, false, strings),
               SizedBox(height: theme.lg),
-              fluent.Text(strings.darkModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              fluent.Tooltip(
+                message: strings.tooltipWadaPalette,
+                child: fluent.Text(strings.darkModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              ),
               SizedBox(height: theme.sm),
-              _buildWadaPaletteRow(context, ref, config, true),
+              _buildWadaPaletteRow(context, ref, config, true, strings),
               SizedBox(height: theme.xl),
               fluent.Text(strings.appConfiguration, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
-              fluent.Card(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: Row(
-                    children: [
-                      Text(strings.languageSection),
-                      const Spacer(),
-                      fluent.ComboBox<AppLocale>(
-                        value: currentLocale,
-                        items: AppLocale.values.map((loc) {
-                          return fluent.ComboBoxItem<AppLocale>(
-                            value: loc,
-                            child: Text(loc.displayName),
-                          );
-                        }).toList(),
-                        onChanged: (loc) {
-                          if (loc != null) {
-                            ref.read(localeProvider.notifier).setLocale(loc);
-                          }
-                        },
-                      ),
-                    ],
+              fluent.Tooltip(
+                message: strings.tooltipLanguage,
+                child: fluent.Card(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Row(
+                      children: [
+                        Text(strings.languageSection),
+                        const Spacer(),
+                        fluent.ComboBox<AppLocale>(
+                          value: currentLocale,
+                          items: AppLocale.values.map((loc) {
+                            return fluent.ComboBoxItem<AppLocale>(
+                              value: loc,
+                              child: Text(loc.displayName),
+                            );
+                          }).toList(),
+                          onChanged: (loc) {
+                            if (loc != null) {
+                              ref.read(localeProvider.notifier).setLocale(loc);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -257,92 +270,104 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              cupertino.CupertinoFormSection.insetGrouped(
-                header: Text(strings.themeMode.toUpperCase()),
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: cupertino.CupertinoFormRow(
-                      prefix: Text(strings.syncWithSystem),
-                      child: cupertino.CupertinoSwitch(
-                        value: config.syncWithSystem,
-                        onChanged: (val) {
-                          ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                        },
-                      ),
-                    ),
-                  ),
-                  if (!config.syncWithSystem)
+              material.Tooltip(
+                message: strings.tooltipThemeMode,
+                child: cupertino.CupertinoFormSection.insetGrouped(
+                  header: Text(strings.themeMode.toUpperCase()),
+                  children: [
                     ConstrainedBox(
                       constraints: const BoxConstraints(minHeight: 44),
                       child: cupertino.CupertinoFormRow(
-                        prefix: Text(strings.useDarkMode),
+                        prefix: Text(strings.syncWithSystem),
                         child: cupertino.CupertinoSwitch(
-                          value: config.forceDarkMode,
+                          value: config.syncWithSystem,
                           onChanged: (val) {
-                            ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                            ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
                           },
                         ),
                       ),
                     ),
-                ],
+                    if (!config.syncWithSystem)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: cupertino.CupertinoFormRow(
+                          prefix: Text(strings.useDarkMode),
+                          child: cupertino.CupertinoSwitch(
+                            value: config.forceDarkMode,
+                            onChanged: (val) {
+                              ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.sm),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      strings.lightModeSection.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: cupertino.CupertinoColors.secondaryLabel,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: theme.sm),
-                    _buildWadaPaletteRow(context, ref, config, false),
-                    SizedBox(height: theme.lg),
-                    Text(
-                      strings.darkModeSection.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: cupertino.CupertinoColors.secondaryLabel,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: theme.sm),
-                    _buildWadaPaletteRow(context, ref, config, true),
-                  ],
-                ),
-              ),
-              cupertino.CupertinoFormSection.insetGrouped(
-                header: Text(strings.preferences.toUpperCase()),
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _showIOSLanguagePicker(context, ref, currentLocale, strings),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: cupertino.CupertinoFormRow(
-                        prefix: Text(strings.languageSection),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(currentLocale.displayName, style: const TextStyle(color: cupertino.CupertinoColors.activeBlue)),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              cupertino.CupertinoIcons.chevron_up_chevron_down,
-                              size: 14,
-                              color: cupertino.CupertinoColors.inactiveGray,
-                              semanticLabel: 'Select language',
-                            ),
-                          ],
+                    material.Tooltip(
+                      message: strings.tooltipWadaPalette,
+                      child: Text(
+                        strings.lightModeSection.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: cupertino.CupertinoColors.secondaryLabel,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    SizedBox(height: theme.sm),
+                    _buildWadaPaletteRow(context, ref, config, false, strings),
+                    SizedBox(height: theme.lg),
+                    material.Tooltip(
+                      message: strings.tooltipWadaPalette,
+                      child: Text(
+                        strings.darkModeSection.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: cupertino.CupertinoColors.secondaryLabel,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: theme.sm),
+                    _buildWadaPaletteRow(context, ref, config, true, strings),
+                  ],
+                ),
+              ),
+              material.Tooltip(
+                message: strings.tooltipLanguage,
+                child: cupertino.CupertinoFormSection.insetGrouped(
+                  header: Text(strings.preferences.toUpperCase()),
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showIOSLanguagePicker(context, ref, currentLocale, strings),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: cupertino.CupertinoFormRow(
+                          prefix: Text(strings.languageSection),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(currentLocale.displayName, style: const TextStyle(color: cupertino.CupertinoColors.activeBlue)),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                cupertino.CupertinoIcons.chevron_up_chevron_down,
+                                size: 14,
+                                color: cupertino.CupertinoColors.inactiveGray,
+                                semanticLabel: 'Select language',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -388,70 +413,82 @@ class SettingsScreen extends ConsumerWidget {
             SizedBox(height: theme.lg),
             Text(strings.appearanceSection, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Column(
-                children: [
-                  material.SwitchListTile(
-                    title: Text(strings.syncWithSystem),
-                    value: config.syncWithSystem,
-                    onChanged: (val) {
-                      ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                    },
-                  ),
-                  if (!config.syncWithSystem) ...[
-                    const material.Divider(height: 1),
+            material.Tooltip(
+              message: strings.tooltipThemeMode,
+              child: material.Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(theme.radiusLg),
+                  side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+                ),
+                child: Column(
+                  children: [
                     material.SwitchListTile(
-                      title: Text(strings.useDarkMode),
-                      value: config.forceDarkMode,
+                      title: Text(strings.syncWithSystem),
+                      value: config.syncWithSystem,
                       onChanged: (val) {
-                        ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                        ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
                       },
                     ),
+                    if (!config.syncWithSystem) ...[
+                      const material.Divider(height: 1),
+                      material.SwitchListTile(
+                        title: Text(strings.useDarkMode),
+                        value: config.forceDarkMode,
+                        onChanged: (val) {
+                          ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             SizedBox(height: theme.lg),
-            Text(strings.lightModePalette, style: material.Theme.of(context).textTheme.titleSmall),
+            material.Tooltip(
+              message: strings.tooltipWadaPalette,
+              child: Text(strings.lightModePalette, style: material.Theme.of(context).textTheme.titleSmall),
+            ),
             SizedBox(height: theme.sm),
-            _buildWadaPaletteRow(context, ref, config, false),
+            _buildWadaPaletteRow(context, ref, config, false, strings),
             SizedBox(height: theme.lg),
-            Text(strings.darkModePalette, style: material.Theme.of(context).textTheme.titleSmall),
+            material.Tooltip(
+              message: strings.tooltipWadaPalette,
+              child: Text(strings.darkModePalette, style: material.Theme.of(context).textTheme.titleSmall),
+            ),
             SizedBox(height: theme.sm),
-            _buildWadaPaletteRow(context, ref, config, true),
+            _buildWadaPaletteRow(context, ref, config, true, strings),
             SizedBox(height: theme.xl),
             Text(strings.preferences, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: material.ListTile(
-                minTileHeight: 48,
-                title: Text(strings.languageSection),
-                trailing: material.DropdownButton<AppLocale>(
-                  value: currentLocale,
-                  underline: const SizedBox.shrink(),
-                  items: AppLocale.values.map((loc) {
-                    return material.DropdownMenuItem(
-                      value: loc,
-                      child: Text(loc.displayName),
-                    );
-                  }).toList(),
-                  onChanged: (loc) {
-                    if (loc != null) {
-                      ref.read(localeProvider.notifier).setLocale(loc);
-                    }
-                  },
+            material.Tooltip(
+              message: strings.tooltipLanguage,
+              child: material.Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(theme.radiusLg),
+                  side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
                 ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                child: material.ListTile(
+                  minTileHeight: 48,
+                  title: Text(strings.languageSection),
+                  trailing: material.DropdownButton<AppLocale>(
+                    value: currentLocale,
+                    underline: const SizedBox.shrink(),
+                    items: AppLocale.values.map((loc) {
+                      return material.DropdownMenuItem(
+                        value: loc,
+                        child: Text(loc.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (loc) {
+                      if (loc != null) {
+                        ref.read(localeProvider.notifier).setLocale(loc);
+                      }
+                    },
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                ),
               ),
             ),
             SizedBox(height: theme.xl),
@@ -462,8 +499,15 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // --- Wada Color Palette Grid Swatch Selector Row ---
-  Widget _buildWadaPaletteRow(BuildContext context, WidgetRef ref, ThemeConfig config, bool isDarkRow) {
+  Widget _buildWadaPaletteRow(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeConfig config,
+    bool isDarkRow,
+    AppStrings strings,
+  ) {
     final theme = context.theme;
+    final platform = defaultTargetPlatform;
 
     // Build items: Standard/Default first, then the 4 curated palettes
     final palettes = isDarkRow
@@ -493,7 +537,9 @@ class SettingsScreen extends ConsumerWidget {
           final dot2Color = palette?.accent ?? (isDarkRow ? const Color(0xff30d158) : const Color(0xff34c759));
           final dot3Color = palette?.background ?? (isDarkRow ? const Color(0xff0c0c0e) : const Color(0xfffcfbfa));
 
-          return GestureDetector(
+          final paletteLabel = palette?.name ?? (isDarkRow ? strings.useDarkMode : strings.syncWithSystem);
+
+          final swatchCard = GestureDetector(
             onTap: () {
               if (isDarkRow) {
                 ref.read(themeConfigProvider.notifier).setDarkPalette(palette);
@@ -547,6 +593,18 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          );
+
+          if (platform == TargetPlatform.windows) {
+            return fluent.Tooltip(
+              message: '$paletteLabel — ${strings.tooltipWadaPalette}',
+              child: swatchCard,
+            );
+          }
+
+          return material.Tooltip(
+            message: '$paletteLabel — ${strings.tooltipWadaPalette}',
+            child: swatchCard,
           );
         },
       ),

@@ -15,25 +15,101 @@ import 'widgets/dashboard_dialogs.dart';
 import 'cloud_explorer_screen.dart';
 
 /// Platform-adaptive Dashboard Screen. Renders layout dynamically based on current platform.
-/// Handles page-refresh commands and taps on status banner/storage cards.
-class DashboardScreen extends ConsumerWidget {
+/// Handles page-refresh commands with animated spinning indicators and feedback toasts,
+/// and provides rich contextual tooltips across cards, status banner, and actions.
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _spinController;
+  bool _isRefreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleRefresh(BuildContext context, AppStrings strings) async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    _spinController.repeat();
+
+    ref.invalidate(remotesProvider);
+    ref.invalidate(primaryQuotaProvider);
+
+    // Provide tactile feedback duration
+    await Future.delayed(const Duration(milliseconds: 650));
+
+    if (!mounted) return;
+    _spinController.stop();
+    _spinController.reset();
+    setState(() => _isRefreshing = false);
+
+    _showRefreshFeedback(this.context, strings);
+  }
+
+  void _showRefreshFeedback(BuildContext context, AppStrings strings) {
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.windows) {
+      fluent.displayInfoBar(
+        context,
+        builder: (context, close) => fluent.InfoBar(
+          title: fluent.Text(strings.refreshedSuccess),
+          content: fluent.Text(strings.drivesRefreshed),
+          severity: fluent.InfoBarSeverity.success,
+          onClose: close,
+        ),
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      try {
+        material.ScaffoldMessenger.of(context).showSnackBar(
+          material.SnackBar(
+            content: Text(strings.drivesRefreshed),
+            duration: const Duration(seconds: 2),
+            behavior: material.SnackBarBehavior.floating,
+          ),
+        );
+      } catch (_) {}
+    } else {
+      material.ScaffoldMessenger.of(context).showSnackBar(
+        material.SnackBar(
+          content: Text(strings.drivesRefreshed),
+          duration: const Duration(seconds: 2),
+          behavior: material.SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
 
     if (platform == TargetPlatform.windows) {
-      return _buildWindows(context, ref);
+      return _buildWindows(context);
     } else if (platform == TargetPlatform.iOS) {
-      return _buildIOS(context, ref);
+      return _buildIOS(context);
     } else {
-      return _buildAndroid(context, ref);
+      return _buildAndroid(context);
     }
   }
 
   // --- Windows (Fluent Design) ---
-  Widget _buildWindows(BuildContext context, WidgetRef ref) {
+  Widget _buildWindows(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final activeJob = ref.watch(activeJobProvider);
@@ -48,12 +124,14 @@ class DashboardScreen extends ConsumerWidget {
         commandBar: fluent.CommandBar(
           primaryItems: [
             fluent.CommandBarButton(
-              icon: Icon(fluent.FluentIcons.refresh, semanticLabel: strings.refresh),
+              icon: _isRefreshing
+                  ? const SizedBox(width: 16, height: 16, child: fluent.ProgressRing())
+                  : RotationTransition(
+                      turns: _spinController,
+                      child: Icon(fluent.FluentIcons.refresh, semanticLabel: strings.refresh),
+                    ),
               label: Text(strings.refresh),
-              onPressed: () {
-                ref.invalidate(remotesProvider);
-                ref.invalidate(primaryQuotaProvider);
-              },
+              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
             ),
           ],
         ),
@@ -68,55 +146,64 @@ class DashboardScreen extends ConsumerWidget {
             quotaAsync.when(
               data: (quota) {
                 if (quota == null) {
-                  return fluent.Card(
-                    padding: EdgeInsets.all(theme.md),
-                    child: Row(
-                      children: [
-                        Icon(
-                          fluent.FluentIcons.cloud_add,
-                          color: theme.textSecondary,
-                          size: 20,
-                          semanticLabel: strings.noDrivesConfigured,
-                        ),
-                        SizedBox(width: theme.md),
-                        Expanded(
-                          child: Text(
-                            strings.noDrivesConfigured,
-                            style: TextStyle(color: theme.textSecondary),
+                  return fluent.Tooltip(
+                    message: strings.tooltipStorageCard,
+                    child: fluent.Card(
+                      padding: EdgeInsets.all(theme.md),
+                      child: Row(
+                        children: [
+                          Icon(
+                            fluent.FluentIcons.cloud_add,
+                            color: theme.textSecondary,
+                            size: 20,
+                            semanticLabel: strings.noDrivesConfigured,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: theme.md),
+                          Expanded(
+                            child: Text(
+                              strings.noDrivesConfigured,
+                              style: TextStyle(color: theme.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
-                return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+                return fluent.Tooltip(
+                  message: strings.tooltipStorageCard,
+                  child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
+                );
               },
               loading: () => const fluent.ProgressBar(),
               error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
             ),
             SizedBox(height: theme.xl),
-            _buildActiveJobPanelWindows(context, ref, activeJob, strings),
+            _buildActiveJobPanelWindows(context, activeJob, strings),
             SizedBox(height: theme.xl),
-            _buildSyncActionsWindows(context, ref, activeJob, strings),
+            _buildSyncActionsWindows(context, activeJob, strings),
             SizedBox(height: theme.xl),
-            fluent.Button(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
-                );
-              },
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
-                      const SizedBox(width: 8),
-                      Text(strings.exploreRemoteFiles),
-                    ],
+            fluent.Tooltip(
+              message: strings.exploreRemoteFiles,
+              child: fluent.Button(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
+                  );
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
+                        const SizedBox(width: 8),
+                        Text(strings.exploreRemoteFiles),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -128,7 +215,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActiveJobPanelWindows(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+  Widget _buildActiveJobPanelWindows(BuildContext context, ActiveJobState job, AppStrings strings) {
     final theme = context.theme;
     if (job.status == RcloneJobStatus.completed && job.jobId == null) {
       return const SizedBox.shrink();
@@ -163,20 +250,47 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSyncActionsWindows(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+  Widget _buildSyncActionsWindows(BuildContext context, ActiveJobState job, AppStrings strings) {
     final isSyncing = job.status == RcloneJobStatus.syncing || job.status == RcloneJobStatus.pending;
     final theme = context.theme;
 
     if (isSyncing) {
-      return fluent.Button(
-        onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-        style: fluent.ButtonStyle(
-          backgroundColor: WidgetStatePropertyAll(theme.error),
-          foregroundColor: const WidgetStatePropertyAll(Color(0xffffffff)),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+      return fluent.Tooltip(
+        message: strings.cancelSync,
+        child: fluent.Button(
+          onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+          style: fluent.ButtonStyle(
+            backgroundColor: WidgetStatePropertyAll(theme.error),
+            foregroundColor: const WidgetStatePropertyAll(Color(0xffffffff)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+            ),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(fluent.FluentIcons.cancel, size: 16, color: Color(0xffffffff), semanticLabel: 'Cancel'),
+                  const SizedBox(width: 8),
+                  Text(
+                    strings.cancelSync,
+                    style: const TextStyle(color: Color(0xffffffff), fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+      );
+    }
+
+    return fluent.Tooltip(
+      message: strings.syncAll,
+      child: fluent.FilledButton(
+        onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
@@ -184,32 +298,11 @@ class DashboardScreen extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(fluent.FluentIcons.cancel, size: 16, color: Color(0xffffffff), semanticLabel: 'Cancel'),
+                const Icon(fluent.FluentIcons.sync, size: 16, semanticLabel: 'Sync'),
                 const SizedBox(width: 8),
-                Text(
-                  strings.cancelSync,
-                  style: const TextStyle(color: Color(0xffffffff), fontWeight: FontWeight.bold),
-                ),
+                Text(strings.syncAll),
               ],
             ),
-          ),
-        ),
-      );
-    }
-
-    return fluent.FilledButton(
-      onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(fluent.FluentIcons.sync, size: 16, semanticLabel: 'Sync'),
-              const SizedBox(width: 8),
-              Text(strings.syncAll),
-            ],
           ),
         ),
       ),
@@ -217,7 +310,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   // --- iOS (Cupertino Design) ---
-  Widget _buildIOS(BuildContext context, WidgetRef ref) {
+  Widget _buildIOS(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final activeJob = ref.watch(activeJobProvider);
@@ -229,13 +322,18 @@ class DashboardScreen extends ConsumerWidget {
         middle: Text(strings.navDashboard),
         trailing: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: cupertino.CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Icon(cupertino.CupertinoIcons.refresh, size: 22, semanticLabel: strings.refresh),
-            onPressed: () {
-              ref.invalidate(remotesProvider);
-              ref.invalidate(primaryQuotaProvider);
-            },
+          child: material.Tooltip(
+            message: strings.refresh,
+            child: cupertino.CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
+              child: _isRefreshing
+                  ? const cupertino.CupertinoActivityIndicator(radius: 9)
+                  : RotationTransition(
+                      turns: _spinController,
+                      child: Icon(cupertino.CupertinoIcons.refresh, size: 22, semanticLabel: strings.refresh),
+                    ),
+            ),
           ),
         ),
       ),
@@ -250,125 +348,140 @@ class DashboardScreen extends ConsumerWidget {
               quotaAsync.when(
                 data: (quota) {
                   if (quota == null) {
-                    return Container(
-                      padding: EdgeInsets.all(theme.lg),
-                      decoration: BoxDecoration(
-                        color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
-                        borderRadius: BorderRadius.circular(theme.radiusLg),
-                        border: Border.all(
-                          color: cupertino.CupertinoColors.separator.resolveFrom(context),
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            cupertino.CupertinoIcons.cloud,
-                            color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-                            size: 24,
-                            semanticLabel: strings.noDrivesConfigured,
+                    return material.Tooltip(
+                      message: strings.tooltipStorageCard,
+                      child: Container(
+                        padding: EdgeInsets.all(theme.lg),
+                        decoration: BoxDecoration(
+                          color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+                          borderRadius: BorderRadius.circular(theme.radiusLg),
+                          border: Border.all(
+                            color: cupertino.CupertinoColors.separator.resolveFrom(context),
+                            width: 0.5,
                           ),
-                          SizedBox(width: theme.md),
-                          Expanded(
-                            child: Text(
-                              strings.noDrivesConfigured,
-                              style: TextStyle(
-                                color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-                                fontSize: 14,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              cupertino.CupertinoIcons.cloud,
+                              color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                              size: 24,
+                              semanticLabel: strings.noDrivesConfigured,
+                            ),
+                            SizedBox(width: theme.md),
+                            Expanded(
+                              child: Text(
+                                strings.noDrivesConfigured,
+                                style: TextStyle(
+                                  color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   }
-                  return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+                  return material.Tooltip(
+                    message: strings.tooltipStorageCard,
+                    child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
+                  );
                 },
                 loading: () => const cupertino.CupertinoActivityIndicator(),
                 error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
               ),
               SizedBox(height: theme.xl),
               if (isSyncing) ...[
-                _buildActiveJobPanelIOS(context, ref, activeJob, strings),
+                _buildActiveJobPanelIOS(context, activeJob, strings),
                 SizedBox(height: theme.xl),
               ],
               if (isSyncing)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: cupertino.CupertinoButton(
-                    color: theme.error,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                    onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          cupertino.CupertinoIcons.stop_circle,
-                          color: cupertino.CupertinoColors.white,
-                          size: 20,
-                          semanticLabel: 'Cancel',
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          strings.cancelSync,
-                          style: const TextStyle(color: cupertino.CupertinoColors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                material.Tooltip(
+                  message: strings.cancelSync,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: cupertino.CupertinoButton(
+                      color: theme.error,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      borderRadius: BorderRadius.circular(theme.radiusSm),
+                      onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            cupertino.CupertinoIcons.stop_circle,
+                            color: cupertino.CupertinoColors.white,
+                            size: 20,
+                            semanticLabel: 'Cancel',
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            strings.cancelSync,
+                            style: const TextStyle(color: cupertino.CupertinoColors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
               else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: cupertino.CupertinoButton.filled(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                    onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          cupertino.CupertinoIcons.arrow_2_circlepath,
-                          color: cupertino.CupertinoColors.white,
-                          size: 20,
-                          semanticLabel: 'Sync',
-                        ),
-                        const SizedBox(width: 8),
-                        Text(strings.syncAll),
-                      ],
+                material.Tooltip(
+                  message: strings.syncAll,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: cupertino.CupertinoButton.filled(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      borderRadius: BorderRadius.circular(theme.radiusSm),
+                      onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            cupertino.CupertinoIcons.arrow_2_circlepath,
+                            color: cupertino.CupertinoColors.white,
+                            size: 20,
+                            semanticLabel: 'Sync',
+                          ),
+                          const SizedBox(width: 8),
+                          Text(strings.syncAll),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
-                child: cupertino.CupertinoButton(
-                  color: theme.accent.withValues(alpha: 0.15),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  borderRadius: BorderRadius.circular(theme.radiusSm),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        cupertino.CupertinoIcons.folder,
-                        color: theme.accent,
-                        size: 18,
-                        semanticLabel: strings.exploreRemoteFiles,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        strings.exploreRemoteFiles,
-                        style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+              material.Tooltip(
+                message: strings.exploreRemoteFiles,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: cupertino.CupertinoButton(
+                    color: theme.accent.withValues(alpha: 0.15),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          cupertino.CupertinoIcons.folder,
+                          color: theme.accent,
+                          size: 18,
+                          semanticLabel: strings.exploreRemoteFiles,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          strings.exploreRemoteFiles,
+                          style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
+                      );
+                    },
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
-                    );
-                  },
                 ),
               ),
             ],
@@ -378,7 +491,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActiveJobPanelIOS(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+  Widget _buildActiveJobPanelIOS(BuildContext context, ActiveJobState job, AppStrings strings) {
     final theme = context.theme;
     return Container(
       padding: EdgeInsets.all(theme.lg),
@@ -423,7 +536,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   // --- Android (Material 3 Design) ---
-  Widget _buildAndroid(BuildContext context, WidgetRef ref) {
+  Widget _buildAndroid(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final activeJob = ref.watch(activeJobProvider);
@@ -435,12 +548,21 @@ class DashboardScreen extends ConsumerWidget {
         title: Text(strings.navDashboard),
         elevation: 0,
         actions: [
-          material.IconButton(
-            icon: Icon(material.Icons.refresh, semanticLabel: strings.refresh),
-            onPressed: () {
-              ref.invalidate(remotesProvider);
-              ref.invalidate(primaryQuotaProvider);
-            },
+          material.Tooltip(
+            message: strings.refresh,
+            child: material.IconButton(
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: material.CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : RotationTransition(
+                      turns: _spinController,
+                      child: Icon(material.Icons.refresh, semanticLabel: strings.refresh),
+                    ),
+              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
+            ),
           ),
         ],
       ),
@@ -454,85 +576,100 @@ class DashboardScreen extends ConsumerWidget {
             quotaAsync.when(
               data: (quota) {
                 if (quota == null) {
-                  return material.Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(theme.radiusLg),
-                      side: BorderSide(
-                        color: material.Theme.of(context).colorScheme.outlineVariant,
+                  return material.Tooltip(
+                    message: strings.tooltipStorageCard,
+                    child: material.Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(theme.radiusLg),
+                        side: BorderSide(
+                          color: material.Theme.of(context).colorScheme.outlineVariant,
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(theme.lg),
-                      child: Row(
-                        children: [
-                          Icon(
-                            material.Icons.cloud_off_outlined,
-                            color: theme.textSecondary,
-                            size: 24,
-                            semanticLabel: strings.noDrivesConfigured,
-                          ),
-                          SizedBox(width: theme.md),
-                          Expanded(
-                            child: Text(
-                              strings.noDrivesConfigured,
-                              style: TextStyle(
-                                color: theme.textSecondary,
-                                fontSize: 14,
+                      child: Padding(
+                        padding: EdgeInsets.all(theme.lg),
+                        child: Row(
+                          children: [
+                            Icon(
+                              material.Icons.cloud_off_outlined,
+                              color: theme.textSecondary,
+                              size: 24,
+                              semanticLabel: strings.noDrivesConfigured,
+                            ),
+                            SizedBox(width: theme.md),
+                            Expanded(
+                              child: Text(
+                                strings.noDrivesConfigured,
+                                style: TextStyle(
+                                  color: theme.textSecondary,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }
-                return StorageCard(quota: quota, title: strings.cloudBackupStorage);
+                return material.Tooltip(
+                  message: strings.tooltipStorageCard,
+                  child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
+                );
               },
               loading: () => const material.CircularProgressIndicator(),
               error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
             ),
             SizedBox(height: theme.xl),
             if (isSyncing) ...[
-              _buildActiveJobPanelAndroid(context, ref, activeJob, strings),
+              _buildActiveJobPanelAndroid(context, activeJob, strings),
               SizedBox(height: theme.xl),
             ],
             if (isSyncing)
-              material.ElevatedButton.icon(
-                onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-                icon: const Icon(material.Icons.stop_circle_outlined, semanticLabel: 'Cancel'),
-                label: Text(strings.cancelSync),
-                style: material.ElevatedButton.styleFrom(
-                  backgroundColor: theme.error,
-                  foregroundColor: material.Colors.white,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+              material.Tooltip(
+                message: strings.cancelSync,
+                child: material.ElevatedButton.icon(
+                  onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+                  icon: const Icon(material.Icons.stop_circle_outlined, semanticLabel: 'Cancel'),
+                  label: Text(strings.cancelSync),
+                  style: material.ElevatedButton.styleFrom(
+                    backgroundColor: theme.error,
+                    foregroundColor: material.Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                  ),
                 ),
               )
             else
-              material.ElevatedButton.icon(
-                onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
-                icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
-                label: Text(strings.syncAll),
-                style: material.ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+              material.Tooltip(
+                message: strings.syncAll,
+                child: material.ElevatedButton.icon(
+                  onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                  icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
+                  label: Text(strings.syncAll),
+                  style: material.ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                  ),
                 ),
               ),
             const SizedBox(height: 12),
-            material.OutlinedButton.icon(
-              icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
-              label: Text(strings.exploreRemoteFiles),
-              style: material.OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+            material.Tooltip(
+              message: strings.exploreRemoteFiles,
+              child: material.OutlinedButton.icon(
+                icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
+                label: Text(strings.exploreRemoteFiles),
+                style: material.OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
+                  );
+                },
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
-                );
-              },
             ),
           ],
         ),
@@ -540,7 +677,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActiveJobPanelAndroid(BuildContext context, WidgetRef ref, ActiveJobState job, AppStrings strings) {
+  Widget _buildActiveJobPanelAndroid(BuildContext context, ActiveJobState job, AppStrings strings) {
     final theme = context.theme;
     return material.Card(
       elevation: 2,
@@ -575,7 +712,8 @@ class DashboardScreen extends ConsumerWidget {
 
   // --- Clickable Status Banner Wrapper ---
   Widget _buildClickableStatusBanner(BuildContext context, ActiveJobState job, AppStrings strings) {
-    return GestureDetector(
+    final platform = defaultTargetPlatform;
+    final bannerWidget = GestureDetector(
       onTap: () => showSyncLogsDialog(context, job.logs, job.status),
       behavior: HitTestBehavior.opaque,
       child: Semantics(
@@ -583,6 +721,18 @@ class DashboardScreen extends ConsumerWidget {
         button: true,
         child: _buildGlobalStatusWidget(context, job.status, strings),
       ),
+    );
+
+    if (platform == TargetPlatform.windows) {
+      return fluent.Tooltip(
+        message: strings.tooltipSyncBanner,
+        child: bannerWidget,
+      );
+    }
+
+    return material.Tooltip(
+      message: strings.tooltipSyncBanner,
+      child: bannerWidget,
     );
   }
 

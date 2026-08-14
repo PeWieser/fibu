@@ -7,10 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/file_viewer_service.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../theme/theme.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
+import 'widgets/file_metadata_helper.dart';
+import 'widgets/file_preview_dialog.dart';
 
 /// Screen displaying remote files and folders dynamically, supporting interactive
 /// breadcrumb navigation, file inspection actions, exclusion rules, and multi-drive browsing.
@@ -21,19 +24,26 @@ class CloudExplorerScreen extends ConsumerStatefulWidget {
   ConsumerState<CloudExplorerScreen> createState() => _CloudExplorerScreenState();
 }
 
-class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
+class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
+    with SingleTickerProviderStateMixin {
   String? _selectedRemote;
   String _currentPath = '';
   final List<String> _navigationHistory = [];
   bool _isLoading = false;
+  bool _isRefreshing = false;
   List<RcloneFileInfo> _files = [];
   String? _errorMessage;
   String? _bannerMessage;
   bool _isBannerError = false;
+  late final AnimationController _rotationController;
 
   @override
   void initState() {
     super.initState();
+    _rotationController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    );
     // Safely load the first remote after widget builds
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final remotes = await ref.read(remotesProvider.future);
@@ -42,6 +52,27 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
           _selectedRemote = remotes.first;
         });
         _loadFiles();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  void _showNotification(String message, {bool isError = false}) {
+    if (!mounted) return;
+    setState(() {
+      _bannerMessage = message;
+      _isBannerError = isError;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _bannerMessage == message) {
+        setState(() {
+          _bannerMessage = null;
+        });
       }
     });
   }
@@ -69,6 +100,29 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
           _errorMessage = e.toString();
           _isLoading = false;
           _files = [];
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRefresh({bool showSuccessBanner = true}) async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
+    _rotationController.repeat();
+
+    try {
+      await _loadFiles();
+      if (mounted && showSuccessBanner && _errorMessage == null) {
+        _showNotification(context.strings.filesRefreshed, isError: false);
+      }
+    } finally {
+      if (mounted) {
+        _rotationController.stop();
+        _rotationController.reset();
+        setState(() {
+          _isRefreshing = false;
         });
       }
     }
@@ -176,10 +230,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
   }
 
   void _simulateDownload(RcloneFileInfo file, AppStrings strings) {
-    setState(() {
-      _bannerMessage = '${file.name}: ${strings.downloadFile} ${strings.success.toLowerCase()}.';
-      _isBannerError = false;
-    });
+    _showNotification('${file.name}: ${strings.downloadFile} ${strings.success.toLowerCase()}.', isError: false);
   }
 
   Future<void> _executeDeleteAndExclude(String fileName, String fullFilePath, AppStrings strings) async {
@@ -199,19 +250,15 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       ref.read(tasksListProvider.notifier).addExcludeRule(remote, fullFilePath);
 
       if (mounted) {
-        setState(() {
-          _bannerMessage = '$fileName: ${strings.delete.toLowerCase()}. ${strings.excludeRuleCreated}';
-          _isBannerError = false;
-        });
+        _showNotification('$fileName: ${strings.delete.toLowerCase()}. ${strings.excludeRuleCreated}', isError: false);
       }
 
       // 3. Reload files
       await _loadFiles();
     } catch (e) {
       if (mounted) {
+        _showNotification('${strings.error}: $e', isError: true);
         setState(() {
-          _bannerMessage = '${strings.error}: $e';
-          _isBannerError = true;
           _isLoading = false;
         });
       }
@@ -230,34 +277,48 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       fluent.showDialog(
         context: context,
         builder: (dialogCtx) => fluent.ContentDialog(
+          constraints: const BoxConstraints(maxWidth: 480, minWidth: 380),
           title: fluent.Text(title),
           content: Text(message, style: TextStyle(color: theme.textPrimary, height: 1.4)),
           actions: [
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
-                child: fluent.FilledButton(
-                  style: fluent.ButtonStyle(
-                    backgroundColor: WidgetStateProperty.resolveWith((_) => theme.error),
+            Wrap(
+              spacing: theme.sm,
+              runSpacing: theme.xs,
+              alignment: WrapAlignment.end,
+              children: [
+                fluent.Tooltip(
+                  message: strings.delete,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                      child: fluent.FilledButton(
+                        style: fluent.ButtonStyle(
+                          backgroundColor: WidgetStateProperty.resolveWith((_) => theme.error),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(dialogCtx);
+                          await _executeDeleteAndExclude(file.name, fullFilePath, strings);
+                        },
+                        child: Text(strings.delete),
+                      ),
+                    ),
                   ),
-                  onPressed: () async {
-                    Navigator.pop(dialogCtx);
-                    await _executeDeleteAndExclude(file.name, fullFilePath, strings);
-                  },
-                  child: Text(strings.delete),
                 ),
-              ),
-            ),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
-                child: fluent.Button(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: Text(strings.cancel),
+                fluent.Tooltip(
+                  message: strings.cancel,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                      child: fluent.Button(
+                        onPressed: () => Navigator.pop(dialogCtx),
+                        child: Text(strings.cancel),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),
@@ -317,92 +378,300 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
   // --- Details / Actions Modals ---
   void _showWindowsFileDetails(BuildContext context, RcloneFileInfo file, AppThemeData theme, AppStrings strings) {
     final fullFilePath = _currentPath.isEmpty ? file.name : '$_currentPath/${file.name}';
+    final specificMetadata = FileMetadataHelper.getSpecificMetadata(fileName: file.name, fileSize: file.size);
+    final mimeType = FileMetadataHelper.getMimeType(file.name);
+    final exactBytes = FileMetadataHelper.formatExactBytes(file.size);
+    final formatLabel = FileMetadataHelper.getFormatLabel(file.name);
+
     fluent.showDialog(
       context: context,
       builder: (dialogCtx) => fluent.ContentDialog(
-        title: fluent.Text(strings.fileDetailsTitle),
+        constraints: const BoxConstraints(maxWidth: 620, minWidth: 480),
+        title: Row(
+          children: [
+            Icon(fluent.FluentIcons.info, size: 18, color: theme.accent),
+            SizedBox(width: theme.sm),
+            Text(strings.fileDetailsTitle),
+          ],
+        ),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(fluent.FluentIcons.document, size: 36, color: theme.accent, semanticLabel: strings.fileName),
-                  SizedBox(width: theme.md),
-                  Expanded(
-                    child: Text(
-                      file.name,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textPrimary),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+          constraints: const BoxConstraints(maxWidth: 580),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with large icon and title
+                Container(
+                  padding: EdgeInsets.all(theme.md),
+                  decoration: BoxDecoration(
+                    color: theme.canvas,
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                    border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(fluent.FluentIcons.document, size: 40, color: theme.accent, semanticLabel: strings.fileName),
+                      SizedBox(width: theme.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              file.name,
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textPrimary),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: theme.xs),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: theme.accent.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                                  ),
+                                  child: Text(
+                                    formatLabel,
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.accent),
+                                  ),
+                                ),
+                                SizedBox(width: theme.sm),
+                                Text(
+                                  _formatBytes(file.size),
+                                  style: TextStyle(fontSize: 12, color: theme.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: theme.lg),
+
+                // Sektion 1: Allgemeine Informationen
+                Text(
+                  strings.metadataSectionGeneral,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.accent),
+                ),
+                SizedBox(height: theme.xs),
+                Container(
+                  padding: EdgeInsets.all(theme.md),
+                  decoration: BoxDecoration(
+                    color: theme.canvas,
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildDetailRow(strings.filePath, '/$fullFilePath', theme),
+                      SizedBox(height: theme.xs),
+                      _buildDetailRow(strings.cloudRemote, _selectedRemote ?? '-', theme),
+                      SizedBox(height: theme.xs),
+                      _buildDetailRow(strings.metadataMimeType, mimeType, theme),
+                      SizedBox(height: theme.xs),
+                      _buildDetailRow(strings.metadataExactBytes, exactBytes, theme),
+                      SizedBox(height: theme.xs),
+                      _buildDetailRow(strings.fileModTime, _formatDate(file.modTime), theme),
+                    ],
+                  ),
+                ),
+                SizedBox(height: theme.lg),
+
+                // Sektion 2: Spezifische Metadaten
+                if (specificMetadata.isNotEmpty) ...[
+                  Text(
+                    strings.metadataSectionDetails,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.accent),
+                  ),
+                  SizedBox(height: theme.xs),
+                  Container(
+                    padding: EdgeInsets.all(theme.md),
+                    decoration: BoxDecoration(
+                      color: theme.canvas,
+                      borderRadius: BorderRadius.circular(theme.radiusSm),
+                    ),
+                    child: Column(
+                      children: specificMetadata.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: _buildDetailRow('${entry.key}:', entry.value, theme),
+                        );
+                      }).toList(),
                     ),
                   ),
                 ],
-              ),
-              SizedBox(height: theme.lg),
-              _buildDetailRow(strings.filePath, '/$fullFilePath', theme),
-              SizedBox(height: theme.sm),
-              _buildDetailRow(strings.fileSize, _formatBytes(file.size), theme),
-              SizedBox(height: theme.sm),
-              _buildDetailRow(strings.fileModTime, _formatDate(file.modTime), theme),
-            ],
+              ],
+            ),
           ),
         ),
         actions: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: fluent.FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogCtx);
-                  _simulateDownload(file, strings);
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(fluent.FluentIcons.download, size: 16, semanticLabel: strings.downloadFile),
-                    SizedBox(width: theme.sm),
-                    Text(strings.downloadFile),
-                  ],
+          Wrap(
+            spacing: theme.sm,
+            runSpacing: theme.xs,
+            alignment: WrapAlignment.end,
+            children: [
+              // Vorschau (Quick Look)
+              fluent.Tooltip(
+                message: strings.previewFile,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.FilledButton(
+                      onPressed: () {
+                        Navigator.pop(dialogCtx);
+                        material.showDialog(
+                          context: context,
+                          builder: (_) => FilePreviewDialog(
+                            fileName: file.name,
+                            remoteName: _selectedRemote ?? '',
+                            remotePath: fullFilePath,
+                            fileSize: file.size,
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(fluent.FluentIcons.view, size: 16, color: Color(0xFFFFFFFF), semanticLabel: 'Preview'),
+                          SizedBox(width: theme.sm),
+                          Text(
+                            strings.previewFile,
+                            style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: fluent.Button(
-                style: fluent.ButtonStyle(
-                  foregroundColor: WidgetStateProperty.resolveWith((_) => theme.error),
-                ),
-                onPressed: () {
-                  Navigator.pop(dialogCtx);
-                  _confirmDeleteFile(context, file, TargetPlatform.windows);
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(fluent.FluentIcons.delete, size: 16, color: theme.error, semanticLabel: strings.deleteFile),
-                    SizedBox(width: theme.sm),
-                    Text(strings.deleteFile),
-                  ],
+
+              // In Standard-App öffnen
+              fluent.Tooltip(
+                message: strings.openInDefaultApp,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.Button(
+                      onPressed: () async {
+                        Navigator.pop(dialogCtx);
+                        _showNotification(strings.openingFile, isError: false);
+                        await ref.read(fileViewerServiceProvider).openInDefaultApp(
+                          remoteName: _selectedRemote ?? '',
+                          remotePath: fullFilePath,
+                          fileName: file.name,
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.open_in_new_window, size: 16, color: theme.textPrimary, semanticLabel: strings.openInDefaultApp),
+                          SizedBox(width: theme.sm),
+                          Text(strings.openInDefaultApp, style: TextStyle(color: theme.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: fluent.Button(
-                onPressed: () => Navigator.pop(dialogCtx),
-                child: Text(strings.close),
+
+              // Herunterladen
+              fluent.Tooltip(
+                message: strings.downloadFile,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.Button(
+                      onPressed: () {
+                        Navigator.pop(dialogCtx);
+                        _simulateDownload(file, strings);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.download, size: 16, color: theme.textPrimary, semanticLabel: strings.downloadFile),
+                          SizedBox(width: theme.sm),
+                          Text(strings.downloadFile, style: TextStyle(color: theme.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+
+              // Pfad kopieren
+              fluent.Tooltip(
+                message: strings.copyPath,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.Button(
+                      onPressed: () async {
+                        await ref.read(fileViewerServiceProvider).copyToClipboard('/$fullFilePath');
+                        _showNotification(strings.pathCopied, isError: false);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.copy, size: 16, color: theme.textPrimary, semanticLabel: strings.copyPath),
+                          SizedBox(width: theme.sm),
+                          Text(strings.copyPath, style: TextStyle(color: theme.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Löschen
+              fluent.Tooltip(
+                message: strings.deleteFile,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.Button(
+                      style: fluent.ButtonStyle(
+                        foregroundColor: WidgetStateProperty.resolveWith((_) => theme.error),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(dialogCtx);
+                        _confirmDeleteFile(context, file, TargetPlatform.windows);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.delete, size: 16, color: theme.error, semanticLabel: strings.deleteFile),
+                          SizedBox(width: theme.sm),
+                          Text(strings.deleteFile),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Schließen
+              fluent.Tooltip(
+                message: strings.close,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: fluent.Button(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      child: Text(strings.close, style: TextStyle(color: theme.textPrimary)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -411,6 +680,9 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
 
   void _showIOSFileDetails(BuildContext context, RcloneFileInfo file, AppThemeData theme, AppStrings strings) {
     final fullFilePath = _currentPath.isEmpty ? file.name : '$_currentPath/${file.name}';
+    final exactBytes = FileMetadataHelper.formatExactBytes(file.size);
+    final mimeType = FileMetadataHelper.getMimeType(file.name);
+
     cupertino.showCupertinoModalPopup<void>(
       context: context,
       builder: (modalCtx) => cupertino.CupertinoActionSheet(
@@ -419,12 +691,52 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
           children: [
             Text(file.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             const SizedBox(height: 6),
-            Text('${strings.fileSize} ${_formatBytes(file.size)} | ${strings.fileModTime} ${_formatDate(file.modTime)}'),
+            Text('${strings.fileSize} ${_formatBytes(file.size)} ($exactBytes)'),
             const SizedBox(height: 4),
-            Text('/$fullFilePath', style: const TextStyle(fontSize: 12)),
+            Text('MIME: $mimeType | /$fullFilePath', style: const TextStyle(fontSize: 12)),
           ],
         ),
         actions: [
+          cupertino.CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(modalCtx);
+              material.showDialog(
+                context: context,
+                builder: (_) => FilePreviewDialog(
+                  fileName: file.name,
+                  remoteName: _selectedRemote ?? '',
+                  remotePath: fullFilePath,
+                  fileSize: file.size,
+                ),
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(cupertino.CupertinoIcons.eye, size: 20, color: theme.accent, semanticLabel: strings.previewFile),
+                SizedBox(width: theme.sm),
+                Text(strings.previewFile, style: TextStyle(color: theme.accent)),
+              ],
+            ),
+          ),
+          cupertino.CupertinoActionSheetAction(
+            onPressed: () async {
+              Navigator.pop(modalCtx);
+              await ref.read(fileViewerServiceProvider).openInDefaultApp(
+                remoteName: _selectedRemote ?? '',
+                remotePath: fullFilePath,
+                fileName: file.name,
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(cupertino.CupertinoIcons.arrow_up_right_square, size: 20, color: theme.accent, semanticLabel: strings.openInDefaultApp),
+                SizedBox(width: theme.sm),
+                Text(strings.openInDefaultApp, style: TextStyle(color: theme.accent)),
+              ],
+            ),
+          ),
           cupertino.CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(modalCtx);
@@ -457,7 +769,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
         ],
         cancelButton: cupertino.CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(modalCtx),
-          child: Text(strings.cancel),
+          child: Text(strings.close),
         ),
       ),
     );
@@ -465,9 +777,13 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
 
   void _showAndroidFileDetails(BuildContext context, RcloneFileInfo file, AppThemeData theme, AppStrings strings) {
     final fullFilePath = _currentPath.isEmpty ? file.name : '$_currentPath/${file.name}';
+    final exactBytes = FileMetadataHelper.formatExactBytes(file.size);
+    final mimeType = FileMetadataHelper.getMimeType(file.name);
+
     material.showModalBottomSheet<void>(
       context: context,
       backgroundColor: theme.surface,
+      isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(theme.radiusLg)),
       ),
@@ -494,13 +810,49 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                 ],
               ),
               SizedBox(height: theme.md),
-              _buildDetailRow(strings.fileSize, _formatBytes(file.size), theme),
+              _buildDetailRow(strings.metadataMimeType, mimeType, theme),
+              SizedBox(height: theme.xs),
+              _buildDetailRow(strings.fileSize, '${_formatBytes(file.size)} ($exactBytes)', theme),
               SizedBox(height: theme.xs),
               _buildDetailRow(strings.fileModTime, _formatDate(file.modTime), theme),
               SizedBox(height: theme.lg),
-              Row(
+              Wrap(
+                spacing: theme.md,
+                runSpacing: theme.sm,
+                alignment: WrapAlignment.end,
                 children: [
-                  Expanded(
+                  material.Tooltip(
+                    message: strings.previewFile,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: material.FilledButton.icon(
+                          style: material.FilledButton.styleFrom(
+                            backgroundColor: theme.accent,
+                            foregroundColor: material.Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(sheetCtx);
+                            material.showDialog(
+                              context: context,
+                              builder: (_) => FilePreviewDialog(
+                                fileName: file.name,
+                                remoteName: _selectedRemote ?? '',
+                                remotePath: fullFilePath,
+                                fileSize: file.size,
+                              ),
+                            );
+                          },
+                          icon: const Icon(material.Icons.visibility, color: material.Colors.white, semanticLabel: 'Preview'),
+                          label: Text(strings.previewFile, style: const TextStyle(color: material.Colors.white, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  material.Tooltip(
+                    message: strings.deleteFile,
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: ConstrainedBox(
@@ -521,8 +873,8 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(width: theme.md),
-                  Expanded(
+                  material.Tooltip(
+                    message: strings.downloadFile,
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: ConstrainedBox(
@@ -530,14 +882,15 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                         child: material.FilledButton.icon(
                           style: material.FilledButton.styleFrom(
                             backgroundColor: theme.accent,
+                            foregroundColor: material.Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
                           ),
                           onPressed: () {
                             Navigator.pop(sheetCtx);
                             _simulateDownload(file, strings);
                           },
-                          icon: Icon(material.Icons.download, color: theme.surface, semanticLabel: strings.downloadFile),
-                          label: Text(strings.downloadFile, style: TextStyle(color: theme.surface)),
+                          icon: const Icon(material.Icons.download, color: material.Colors.white, semanticLabel: 'Download'),
+                          label: Text(strings.downloadFile, style: const TextStyle(color: material.Colors.white, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ),
@@ -619,13 +972,16 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
     return fluent.ScaffoldPage(
       header: fluent.PageHeader(
         title: fluent.Text(strings.cloudExplorerTitle),
-        leading: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            child: fluent.IconButton(
-              icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
-              onPressed: () => Navigator.pop(context),
+        leading: fluent.Tooltip(
+          message: strings.back,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: fluent.IconButton(
+                icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
           ),
         ),
@@ -642,25 +998,36 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                   style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 SizedBox(width: theme.sm),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44, minWidth: 160),
-                  child: fluent.ComboBox<String>(
-                    value: _selectedRemote,
-                    items: remotes.map((r) => fluent.ComboBoxItem(
-                      value: r,
-                      child: Text(r, style: TextStyle(color: theme.textPrimary)),
-                    )).toList(),
-                    onChanged: _changeRemote,
+                fluent.Tooltip(
+                  message: strings.remoteDriveSelectorLabel,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44, minWidth: 160),
+                    child: fluent.ComboBox<String>(
+                      value: _selectedRemote,
+                      items: remotes.map((r) => fluent.ComboBoxItem(
+                        value: r,
+                        child: Text(r, style: TextStyle(color: theme.textPrimary)),
+                      )).toList(),
+                      onChanged: _changeRemote,
+                    ),
                   ),
                 ),
                 const Spacer(),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                    child: fluent.IconButton(
-                      icon: Icon(fluent.FluentIcons.refresh, size: 18, color: theme.textPrimary, semanticLabel: strings.refresh),
-                      onPressed: _loadFiles,
+                fluent.Tooltip(
+                  message: strings.refresh,
+                  child: MouseRegion(
+                    cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                      child: fluent.IconButton(
+                        icon: _isRefreshing
+                            ? RotationTransition(
+                                turns: _rotationController,
+                                child: Icon(fluent.FluentIcons.refresh, size: 18, color: theme.accent, semanticLabel: strings.refresh),
+                              )
+                            : Icon(fluent.FluentIcons.refresh, size: 18, color: theme.textPrimary, semanticLabel: strings.refresh),
+                        onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
+                      ),
                     ),
                   ),
                 ),
@@ -669,7 +1036,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
             SizedBox(height: theme.md),
             _buildBreadcrumbBar(theme, TargetPlatform.windows, strings),
             SizedBox(height: theme.xs),
-            if (_isLoading)
+            if (_isLoading || _isRefreshing)
               const fluent.ProgressBar(value: null)
             else
               const SizedBox(height: 4),
@@ -698,14 +1065,22 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudExplorerTitle),
         previousPageTitle: strings.back,
-        trailing: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            child: cupertino.CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _loadFiles,
-              child: Icon(cupertino.CupertinoIcons.refresh, semanticLabel: strings.refresh),
+        trailing: material.Tooltip(
+          message: strings.refresh,
+          child: MouseRegion(
+            cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: cupertino.CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
+                child: _isRefreshing
+                    ? RotationTransition(
+                        turns: _rotationController,
+                        child: Icon(cupertino.CupertinoIcons.refresh, color: theme.accent, semanticLabel: strings.refresh),
+                      )
+                    : Icon(cupertino.CupertinoIcons.refresh, semanticLabel: strings.refresh),
+              ),
             ),
           ),
         ),
@@ -729,45 +1104,48 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                   onValueChanged: _changeRemote,
                 )
               else
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: cupertino.CupertinoButton(
-                      padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
-                      color: theme.textSecondary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                      onPressed: () {
-                        cupertino.showCupertinoModalPopup<void>(
-                          context: context,
-                          builder: (actionCtx) => cupertino.CupertinoActionSheet(
-                            title: Text(strings.remoteDriveSelectorLabel),
-                            actions: remotes.map((r) => cupertino.CupertinoActionSheetAction(
-                              onPressed: () {
-                                Navigator.pop(actionCtx);
-                                _changeRemote(r);
-                              },
-                              child: Text(
-                                r,
-                                style: TextStyle(
-                                  fontWeight: r == _selectedRemote ? FontWeight.bold : FontWeight.normal,
-                                  color: r == _selectedRemote ? theme.accent : theme.textPrimary,
+                material.Tooltip(
+                  message: strings.remoteDriveSelectorLabel,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: cupertino.CupertinoButton(
+                        padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+                        color: theme.textSecondary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(theme.radiusSm),
+                        onPressed: () {
+                          cupertino.showCupertinoModalPopup<void>(
+                            context: context,
+                            builder: (actionCtx) => cupertino.CupertinoActionSheet(
+                              title: Text(strings.remoteDriveSelectorLabel),
+                              actions: remotes.map((r) => cupertino.CupertinoActionSheetAction(
+                                onPressed: () {
+                                  Navigator.pop(actionCtx);
+                                  _changeRemote(r);
+                                },
+                                child: Text(
+                                  r,
+                                  style: TextStyle(
+                                    fontWeight: r == _selectedRemote ? FontWeight.bold : FontWeight.normal,
+                                    color: r == _selectedRemote ? theme.accent : theme.textPrimary,
+                                  ),
                                 ),
+                              )).toList(),
+                              cancelButton: cupertino.CupertinoActionSheetAction(
+                                onPressed: () => Navigator.pop(actionCtx),
+                                child: Text(strings.cancel),
                               ),
-                            )).toList(),
-                            cancelButton: cupertino.CupertinoActionSheetAction(
-                              onPressed: () => Navigator.pop(actionCtx),
-                              child: Text(strings.cancel),
                             ),
-                          ),
-                        );
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(_selectedRemote ?? '', style: TextStyle(color: theme.textPrimary, fontSize: 14)),
-                          Icon(cupertino.CupertinoIcons.chevron_down, size: 16, color: theme.textSecondary, semanticLabel: strings.remoteDriveSelectorLabel),
-                        ],
+                          );
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_selectedRemote ?? '', style: TextStyle(color: theme.textPrimary, fontSize: 14)),
+                            Icon(cupertino.CupertinoIcons.chevron_down, size: 16, color: theme.textSecondary, semanticLabel: strings.remoteDriveSelectorLabel),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -775,7 +1153,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
               SizedBox(height: theme.md),
               _buildBreadcrumbBar(theme, TargetPlatform.iOS, strings),
               SizedBox(height: theme.xs),
-              if (_isLoading)
+              if (_isLoading || _isRefreshing)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 2.0),
                   child: Center(child: cupertino.CupertinoActivityIndicator()),
@@ -803,13 +1181,21 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       appBar: material.AppBar(
         title: Text(strings.cloudExplorerTitle),
         actions: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: material.IconButton(
-                icon: Icon(material.Icons.refresh, semanticLabel: strings.refresh),
-                onPressed: _loadFiles,
+          material.Tooltip(
+            message: strings.refresh,
+            child: MouseRegion(
+              cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: material.IconButton(
+                  icon: _isRefreshing
+                      ? RotationTransition(
+                          turns: _rotationController,
+                          child: Icon(material.Icons.refresh, color: theme.accent, semanticLabel: strings.refresh),
+                        )
+                      : Icon(material.Icons.refresh, semanticLabel: strings.refresh),
+                  onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
+                ),
               ),
             ),
           ),
@@ -823,22 +1209,25 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
             Row(
               children: [
                 Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: material.DropdownButtonFormField<String>(
-                      initialValue: _selectedRemote,
-                      decoration: material.InputDecoration(
-                        labelText: strings.remoteDriveSelectorLabel,
-                        contentPadding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.xs),
-                        border: material.OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(theme.radiusSm),
+                  child: material.Tooltip(
+                    message: strings.remoteDriveSelectorLabel,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: material.DropdownButtonFormField<String>(
+                        initialValue: _selectedRemote,
+                        decoration: material.InputDecoration(
+                          labelText: strings.remoteDriveSelectorLabel,
+                          contentPadding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.xs),
+                          border: material.OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(theme.radiusSm),
+                          ),
                         ),
+                        items: remotes.map((r) => material.DropdownMenuItem(
+                          value: r,
+                          child: Text(r, style: TextStyle(color: theme.textPrimary)),
+                        )).toList(),
+                        onChanged: _changeRemote,
                       ),
-                      items: remotes.map((r) => material.DropdownMenuItem(
-                        value: r,
-                        child: Text(r, style: TextStyle(color: theme.textPrimary)),
-                      )).toList(),
-                      onChanged: _changeRemote,
                     ),
                   ),
                 ),
@@ -847,7 +1236,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
             SizedBox(height: theme.md),
             _buildBreadcrumbBar(theme, TargetPlatform.android, strings),
             SizedBox(height: theme.xs),
-            if (_isLoading)
+            if (_isLoading || _isRefreshing)
               material.LinearProgressIndicator(
                 color: theme.accent,
                 backgroundColor: theme.textSecondary.withValues(alpha: 0.1),
@@ -882,6 +1271,43 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
 
     final canGoBack = _navigationHistory.isNotEmpty || _currentPath.isNotEmpty;
 
+    final backButton = MouseRegion(
+      cursor: canGoBack ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: platform == TargetPlatform.windows
+            ? fluent.IconButton(
+                icon: Icon(
+                  backIcon,
+                  color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
+                  size: 18,
+                  semanticLabel: strings.back,
+                ),
+                onPressed: canGoBack ? _navigateBack : null,
+              )
+            : (platform == TargetPlatform.iOS
+                ? cupertino.CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: canGoBack ? _navigateBack : null,
+                    child: Icon(
+                      backIcon,
+                      color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
+                      size: 20,
+                      semanticLabel: strings.back,
+                    ),
+                  )
+                : material.IconButton(
+                    icon: Icon(
+                      backIcon,
+                      color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
+                      size: 20,
+                      semanticLabel: strings.back,
+                    ),
+                    onPressed: canGoBack ? _navigateBack : null,
+                  )),
+      ),
+    );
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
       decoration: BoxDecoration(
@@ -893,43 +1319,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       ),
       child: Row(
         children: [
-          // Back button
-          MouseRegion(
-            cursor: canGoBack ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: platform == TargetPlatform.windows
-                  ? fluent.IconButton(
-                      icon: Icon(
-                        backIcon,
-                        color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
-                        size: 18,
-                        semanticLabel: strings.back,
-                      ),
-                      onPressed: canGoBack ? _navigateBack : null,
-                    )
-                  : (platform == TargetPlatform.iOS
-                      ? cupertino.CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: canGoBack ? _navigateBack : null,
-                          child: Icon(
-                            backIcon,
-                            color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
-                            size: 20,
-                            semanticLabel: strings.back,
-                          ),
-                        )
-                      : material.IconButton(
-                          icon: Icon(
-                            backIcon,
-                            color: canGoBack ? theme.accent : theme.textSecondary.withValues(alpha: 0.4),
-                            size: 20,
-                            semanticLabel: strings.back,
-                          ),
-                          onPressed: canGoBack ? _navigateBack : null,
-                        )),
-            ),
-          ),
+          // Back button with Tooltip
+          platform == TargetPlatform.windows
+              ? fluent.Tooltip(message: strings.back, child: backButton)
+              : material.Tooltip(message: strings.back, child: backButton),
           SizedBox(width: theme.xs),
           // Scrollable breadcrumb chips
           Expanded(
@@ -944,8 +1337,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                         : (platform == TargetPlatform.iOS ? cupertino.CupertinoIcons.cloud : material.Icons.cloud_outlined),
                     isCurrent: segments.isEmpty,
                     theme: theme,
+                    platform: platform,
                     onTap: () => _navigateToBreadcrumb(-1),
                     semanticLabel: 'Root /',
+                    tooltipMessage: strings.isGerman ? 'Hauptverzeichnis (/)' : 'Root folder (/)',
                   ),
                   for (int i = 0; i < segments.length; i++) ...[
                     Padding(
@@ -961,8 +1356,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                       label: segments[i],
                       isCurrent: i == segments.length - 1,
                       theme: theme,
+                      platform: platform,
                       onTap: () => _navigateToBreadcrumb(i),
                       semanticLabel: segments[i],
+                      tooltipMessage: '${strings.isGerman ? 'Ordner' : 'Folder'}: ${segments[i]}',
                     ),
                   ],
                 ],
@@ -979,10 +1376,12 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
     IconData? icon,
     required bool isCurrent,
     required AppThemeData theme,
+    required TargetPlatform platform,
     required VoidCallback onTap,
     required String semanticLabel,
+    required String tooltipMessage,
   }) {
-    return MouseRegion(
+    final chipContent = MouseRegion(
       cursor: isCurrent ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
         onTap: isCurrent ? null : onTap,
@@ -1027,6 +1426,18 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
         ),
       ),
     );
+
+    if (platform == TargetPlatform.windows) {
+      return fluent.Tooltip(
+        message: tooltipMessage,
+        child: chipContent,
+      );
+    } else {
+      return material.Tooltip(
+        message: tooltipMessage,
+        child: chipContent,
+      );
+    }
   }
 
   Widget _buildFeedbackBanner(AppThemeData theme, TargetPlatform platform, AppStrings strings) {
@@ -1105,17 +1516,17 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
                 constraints: const BoxConstraints(minHeight: 44, minWidth: 100),
                 child: platform == TargetPlatform.windows
                     ? fluent.Button(
-                        onPressed: _loadFiles,
+                        onPressed: () => _handleRefresh(showSuccessBanner: false),
                         child: Text(strings.retry),
                       )
                     : (platform == TargetPlatform.iOS
                         ? cupertino.CupertinoButton(
                             padding: EdgeInsets.symmetric(horizontal: theme.md),
-                            onPressed: _loadFiles,
+                            onPressed: () => _handleRefresh(showSuccessBanner: false),
                             child: Text(strings.retry),
                           )
                         : material.OutlinedButton(
-                            onPressed: _loadFiles,
+                            onPressed: () => _handleRefresh(showSuccessBanner: false),
                             child: Text(strings.retry),
                           )),
               ),
@@ -1125,11 +1536,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       );
     }
 
-    if (_files.isEmpty && !_isLoading) {
+    if (_files.isEmpty && !_isLoading && !_isRefreshing) {
       return _buildEmptyFolderState(theme, platform, strings);
     }
 
-    if (_files.isEmpty && _isLoading) {
+    if (_files.isEmpty && (_isLoading || _isRefreshing)) {
       return Center(
         child: platform == TargetPlatform.windows
             ? const fluent.ProgressRing()
@@ -1160,7 +1571,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
             : (platform == TargetPlatform.iOS ? cupertino.CupertinoIcons.info_circle : material.Icons.info_outline);
 
         if (file.isDir) {
-          return MouseRegion(
+          final folderItem = MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => _navigateToFolder(file.name),
@@ -1203,8 +1614,20 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
               ),
             ),
           );
+
+          if (platform == TargetPlatform.windows) {
+            return fluent.Tooltip(
+              message: '${strings.isGerman ? 'Ordner öffnen' : 'Open folder'}: ${file.name}',
+              child: folderItem,
+            );
+          } else {
+            return material.Tooltip(
+              message: '${strings.isGerman ? 'Ordner öffnen' : 'Open folder'}: ${file.name}',
+              child: folderItem,
+            );
+          }
         } else {
-          return MouseRegion(
+          final fileItem = MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => _showFileDetails(context, file, platform, theme, strings),
@@ -1249,6 +1672,18 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
               ),
             ),
           );
+
+          if (platform == TargetPlatform.windows) {
+            return fluent.Tooltip(
+              message: '${strings.fileDetailsTitle}: ${file.name}',
+              child: fileItem,
+            );
+          } else {
+            return material.Tooltip(
+              message: '${strings.fileDetailsTitle}: ${file.name}',
+              child: fileItem,
+            );
+          }
         }
       },
     );
@@ -1358,13 +1793,16 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       return fluent.ScaffoldPage(
         header: fluent.PageHeader(
           title: fluent.Text(strings.cloudExplorerTitle),
-          leading: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: fluent.IconButton(
-                icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
-                onPressed: () => Navigator.pop(context),
+          leading: fluent.Tooltip(
+            message: strings.back,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
             ),
           ),
@@ -1425,13 +1863,16 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen> {
       return fluent.ScaffoldPage(
         header: fluent.PageHeader(
           title: fluent.Text(strings.cloudExplorerTitle),
-          leading: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: fluent.IconButton(
-                icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
-                onPressed: () => Navigator.pop(context),
+          leading: fluent.Tooltip(
+            message: strings.back,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: fluent.IconButton(
+                  icon: Icon(fluent.FluentIcons.back, semanticLabel: strings.back),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
             ),
           ),

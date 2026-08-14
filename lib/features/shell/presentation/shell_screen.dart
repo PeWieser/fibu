@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
 import 'shell_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
@@ -13,7 +14,7 @@ import '../../settings/presentation/settings_screen.dart';
 
 /// Platform-adaptive root navigation shell for Fibu.
 /// Automatically renders NavigationView on Windows, CupertinoTabScaffold on iOS,
-/// and material NavigationBar on Android/fallback.
+/// and material NavigationBar on Android/fallback with active Sanzo Wada theme styling.
 class ShellScreen extends ConsumerWidget {
   const ShellScreen({super.key});
 
@@ -34,15 +35,28 @@ class ShellScreen extends ConsumerWidget {
 
   // --- Windows (Fluent NavigationView) ---
   Widget _buildWindows(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
+    final theme = context.theme;
+
     return fluent.NavigationView(
-      titleBar: const fluent.TitleBar(
-        title: fluent.Text('Fibu Backup Manager'),
+      titleBar: fluent.TitleBar(
+        title: Text(
+          'Fibu Backup Manager',
+          style: TextStyle(
+            color: theme.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
         isBackButtonVisible: false,
       ),
       pane: fluent.NavigationPane(
         selected: activeIndex,
         onChanged: (index) => ref.read(shellIndexProvider.notifier).state = index,
         displayMode: fluent.PaneDisplayMode.auto,
+        indicator: fluent.StickyNavigationIndicator(
+          color: theme.accent,
+          curve: Curves.easeInOut,
+        ),
         items: [
           fluent.PaneItem(
             icon: Icon(fluent.FluentIcons.view_dashboard, semanticLabel: strings.navDashboard),
@@ -66,10 +80,15 @@ class ShellScreen extends ConsumerWidget {
 
   // --- iOS (Cupertino Tab Scaffold) ---
   Widget _buildIOS(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
+    final theme = context.theme;
+
     return cupertino.CupertinoTabScaffold(
       controller: cupertino.CupertinoTabController(initialIndex: activeIndex),
       tabBar: cupertino.CupertinoTabBar(
         currentIndex: activeIndex,
+        activeColor: theme.accent,
+        inactiveColor: theme.textSecondary,
+        backgroundColor: theme.surface,
         onTap: (index) => ref.read(shellIndexProvider.notifier).state = index,
         items: [
           BottomNavigationBarItem(
@@ -106,6 +125,8 @@ class ShellScreen extends ConsumerWidget {
 
   // --- Android (Material 3 Scaffold + Bottom Navigation) ---
   Widget _buildAndroid(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
+    final theme = context.theme;
+
     return material.Scaffold(
       body: IndexedStack(
         index: activeIndex,
@@ -117,6 +138,8 @@ class ShellScreen extends ConsumerWidget {
       ),
       bottomNavigationBar: material.NavigationBar(
         selectedIndex: activeIndex,
+        backgroundColor: theme.surface,
+        indicatorColor: theme.accent.withValues(alpha: 0.22),
         onDestinationSelected: (index) => ref.read(shellIndexProvider.notifier).state = index,
         destinations: [
           material.NavigationDestination(

@@ -3,31 +3,69 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Backup synchronization mode.
+enum SyncMode {
+  incremental, // Only upload new/modified files; preserve cloud-only files.
+  mirror,      // Exact 2-way mirror; deletes in cloud and downloads new cloud files locally.
+}
+
+/// Distribution strategy when multiple cloud drives are selected for a task.
+enum DistributionStrategy {
+  mirrorAll, // Full redundancy: every file is uploaded to all selected remotes.
+  balance,   // Space balancing: files are distributed across remotes based on available free space.
+}
+
+/// Mode for specifying where files are stored in the cloud remote.
+enum TargetFolderMode {
+  root,      // Root directory (/)
+  custom,    // Existing folder (e.g. backup/media)
+  newFolder, // Create and use a new folder
+}
+
 /// Model representing a user-configured backup job/task.
 class BackupTask {
   final String id;
   final String name;
   final String sourcePath;
-  final String targetRemote;
+  final List<String> _targetRemotes;
+  final String _targetRemote;
   final String schedule; // Formatted description string, e.g. "Daily at 02:00"
   final String scheduleDay; // "Daily", "Monday", "Tuesday", etc.
   final String scheduleTime; // "HH:MM" (e.g. "02:00")
   final bool isActive;
   final bool runMissedOnStartup; // Catch-up task flag
   final List<String> excludedFiles; // Files excluded from backup (e.g. deleted from cloud)
+  final SyncMode syncMode; // Incremental vs Mirror (2-Way Echo)
+  final DistributionStrategy distributionStrategy; // Mirror all vs Balance
+  final TargetFolderMode targetFolderMode; // Root vs Custom vs New Folder
+  final String targetFolderName; // Subfolder path (e.g. "backup/pictures")
 
   const BackupTask({
     required this.id,
     required this.name,
     required this.sourcePath,
-    required this.targetRemote,
+    List<String> targetRemotes = const [],
+    String targetRemote = '',
     required this.schedule,
     this.scheduleDay = 'Daily',
     this.scheduleTime = '02:00',
     required this.isActive,
     this.runMissedOnStartup = true,
     this.excludedFiles = const [],
-  });
+    this.syncMode = SyncMode.incremental,
+    this.distributionStrategy = DistributionStrategy.mirrorAll,
+    this.targetFolderMode = TargetFolderMode.custom,
+    this.targetFolderName = 'backup/media',
+  })  : _targetRemotes = targetRemotes,
+        _targetRemote = targetRemote;
+
+  List<String> get targetRemotes => _targetRemotes.isNotEmpty
+      ? _targetRemotes
+      : (_targetRemote.isNotEmpty ? [_targetRemote] : const []);
+
+  String get targetRemote => _targetRemote.isNotEmpty
+      ? _targetRemote
+      : (_targetRemotes.isNotEmpty ? _targetRemotes.first : '');
 
   String get scheduleDescription {
     if (scheduleDay == 'Daily') {
@@ -42,68 +80,41 @@ class BackupTask {
   BackupTask copyWith({
     String? name,
     String? sourcePath,
-    String? targetRemote,
+    List<String>? targetRemotes,
     String? schedule,
     String? scheduleDay,
     String? scheduleTime,
     bool? isActive,
     bool? runMissedOnStartup,
     List<String>? excludedFiles,
+    SyncMode? syncMode,
+    DistributionStrategy? distributionStrategy,
+    TargetFolderMode? targetFolderMode,
+    String? targetFolderName,
   }) {
     return BackupTask(
       id: id,
       name: name ?? this.name,
       sourcePath: sourcePath ?? this.sourcePath,
-      targetRemote: targetRemote ?? this.targetRemote,
+      targetRemotes: targetRemotes ?? this.targetRemotes,
       schedule: schedule ?? this.schedule,
       scheduleDay: scheduleDay ?? this.scheduleDay,
       scheduleTime: scheduleTime ?? this.scheduleTime,
       isActive: isActive ?? this.isActive,
       runMissedOnStartup: runMissedOnStartup ?? this.runMissedOnStartup,
       excludedFiles: excludedFiles ?? this.excludedFiles,
+      syncMode: syncMode ?? this.syncMode,
+      distributionStrategy: distributionStrategy ?? this.distributionStrategy,
+      targetFolderMode: targetFolderMode ?? this.targetFolderMode,
+      targetFolderName: targetFolderName ?? this.targetFolderName,
     );
   }
 }
 
 /// State notifier managing the list of user-configured backup tasks.
-/// Persists tasks locally to a JSON file.
+/// Persists tasks locally to a JSON file with NO mock dummy data.
 class TasksListNotifier extends StateNotifier<List<BackupTask>> {
-  TasksListNotifier()
-      : super(const [
-          BackupTask(
-            id: 'task_1',
-            name: 'Camera Photos Backup',
-            sourcePath: 'C:\\Users\\User\\Pictures\\Camera',
-            targetRemote: 'GoogleDrive_Backup:backup/pictures',
-            schedule: 'Daily at 02:00',
-            scheduleDay: 'Daily',
-            scheduleTime: '02:00',
-            isActive: true,
-            runMissedOnStartup: true,
-          ),
-          BackupTask(
-            id: 'task_2',
-            name: 'GoPro Videos Archive',
-            sourcePath: 'D:\\Videos\\GoPro',
-            targetRemote: 'OneDrive_Backup:backup/videos',
-            schedule: 'Weekly on Sundays at 04:00',
-            scheduleDay: 'Sunday',
-            scheduleTime: '04:00',
-            isActive: true,
-            runMissedOnStartup: true,
-          ),
-          BackupTask(
-            id: 'task_3',
-            name: 'Work Documents Sync',
-            sourcePath: 'C:\\Users\\User\\Documents\\Work',
-            targetRemote: 'Dropbox_Backup:backup/documents',
-            schedule: 'Manual',
-            scheduleDay: 'Manual',
-            scheduleTime: '12:00',
-            isActive: false,
-            runMissedOnStartup: true,
-          ),
-        ]) {
+  TasksListNotifier() : super(const []) {
     _loadTasks();
   }
 
@@ -118,20 +129,49 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       if (file.existsSync()) {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
-        state = jsonList.map((j) => BackupTask(
-          id: j['id'] as String,
-          name: j['name'] as String,
-          sourcePath: j['sourcePath'] as String,
-          targetRemote: j['targetRemote'] as String,
-          schedule: j['schedule'] as String,
-          scheduleDay: j['scheduleDay'] as String? ?? 'Daily',
-          scheduleTime: j['scheduleTime'] as String? ?? '02:00',
-          isActive: j['isActive'] as bool? ?? true,
-          runMissedOnStartup: j['runMissedOnStartup'] as bool? ?? true,
-          excludedFiles: (j['excludedFiles'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
-        )).toList();
-      } else {
-        await _saveTasks();
+        state = jsonList.map((j) {
+          SyncMode mode = SyncMode.incremental;
+          if (j['syncMode'] == 'mirror') {
+            mode = SyncMode.mirror;
+          }
+
+          DistributionStrategy dist = DistributionStrategy.mirrorAll;
+          if (j['distributionStrategy'] == 'balance') {
+            dist = DistributionStrategy.balance;
+          }
+
+          TargetFolderMode folderMode = TargetFolderMode.custom;
+          if (j['targetFolderMode'] == 'root') {
+            folderMode = TargetFolderMode.root;
+          } else if (j['targetFolderMode'] == 'newFolder') {
+            folderMode = TargetFolderMode.newFolder;
+          }
+
+          List<String> remotes = [];
+          if (j['targetRemotes'] != null) {
+            remotes = (j['targetRemotes'] as List<dynamic>).map((e) => e.toString()).toList();
+          } else if (j['targetRemote'] != null) {
+            final tr = j['targetRemote'].toString().split(':').first;
+            if (tr.isNotEmpty) remotes = [tr];
+          }
+
+          return BackupTask(
+            id: j['id'] as String,
+            name: j['name'] as String,
+            sourcePath: j['sourcePath'] as String,
+            targetRemotes: remotes,
+            schedule: j['schedule'] as String,
+            scheduleDay: j['scheduleDay'] as String? ?? 'Daily',
+            scheduleTime: j['scheduleTime'] as String? ?? '02:00',
+            isActive: j['isActive'] as bool? ?? true,
+            runMissedOnStartup: j['runMissedOnStartup'] as bool? ?? true,
+            excludedFiles: (j['excludedFiles'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+            syncMode: mode,
+            distributionStrategy: dist,
+            targetFolderMode: folderMode,
+            targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
+          );
+        }).toList();
       }
     } catch (_) {
       // Catch exceptions silently in unit tests (e.g. MissingPluginException for path_provider)
@@ -145,6 +185,7 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
         'id': t.id,
         'name': t.name,
         'sourcePath': t.sourcePath,
+        'targetRemotes': t.targetRemotes,
         'targetRemote': t.targetRemote,
         'schedule': t.schedule,
         'scheduleDay': t.scheduleDay,
@@ -152,6 +193,12 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
         'isActive': t.isActive,
         'runMissedOnStartup': t.runMissedOnStartup,
         'excludedFiles': t.excludedFiles,
+        'syncMode': t.syncMode == SyncMode.mirror ? 'mirror' : 'incremental',
+        'distributionStrategy': t.distributionStrategy == DistributionStrategy.balance ? 'balance' : 'mirrorAll',
+        'targetFolderMode': t.targetFolderMode == TargetFolderMode.root
+            ? 'root'
+            : (t.targetFolderMode == TargetFolderMode.newFolder ? 'newFolder' : 'custom'),
+        'targetFolderName': t.targetFolderName,
       }).toList();
       await file.writeAsString(json.encode(jsonList));
     } catch (_) {
@@ -189,7 +236,7 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
   void addExcludeRule(String remote, String filePath) {
     state = [
       for (final t in state)
-        if (t.targetRemote.startsWith('$remote:') || t.targetRemote.contains(remote))
+        if (t.targetRemotes.contains(remote) || t.targetRemote.contains(remote))
           t.copyWith(
             excludedFiles: {...t.excludedFiles, filePath}.toList(),
           )

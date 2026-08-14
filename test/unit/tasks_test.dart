@@ -15,72 +15,104 @@ void main() {
       container.dispose();
     });
 
-    test('TasksListNotifier is initialized with 3 default tasks', () {
+    test('TasksListNotifier is initialized with empty list (no mock tasks)', () {
       final tasks = container.read(tasksListProvider);
-      expect(tasks, hasLength(3));
-      expect(tasks[0].name, equals('Camera Photos Backup'));
-      expect(tasks[1].name, equals('GoPro Videos Archive'));
-      expect(tasks[2].name, equals('Work Documents Sync'));
+      expect(tasks, isEmpty);
     });
 
-    test('addTask appends a new task to the state', () {
+    test('addTask appends a new task to the state with default incremental SyncMode', () {
       const newTask = BackupTask(
-        id: 'task_new',
-        name: 'New Custom Sync',
-        sourcePath: 'D:\\MyFolder',
-        targetRemote: 'MyDrive:backup',
-        schedule: 'Manual',
+        id: 'task_1',
+        name: 'My Photos Backup',
+        sourcePath: 'D:\\Pictures',
+        targetRemote: 'OneDrive_Backup:backup',
+        schedule: 'Daily at 02:00',
         isActive: true,
       );
 
       container.read(tasksListProvider.notifier).addTask(newTask);
 
       final tasks = container.read(tasksListProvider);
-      expect(tasks, hasLength(4));
-      expect(tasks.last.id, equals('task_new'));
-      expect(tasks.last.name, equals('New Custom Sync'));
+      expect(tasks, hasLength(1));
+      expect(tasks.first.id, equals('task_1'));
+      expect(tasks.first.name, equals('My Photos Backup'));
+      expect(tasks.first.syncMode, equals(SyncMode.incremental));
+    });
+
+    test('addTask supports mirror (Echo) SyncMode', () {
+      const mirrorTask = BackupTask(
+        id: 'task_mirror',
+        name: 'Work Mirror Archive',
+        sourcePath: 'D:\\Work',
+        targetRemote: 'GoogleDrive_Backup:backup',
+        schedule: 'Manual',
+        isActive: true,
+        syncMode: SyncMode.mirror,
+      );
+
+      container.read(tasksListProvider.notifier).addTask(mirrorTask);
+
+      final tasks = container.read(tasksListProvider);
+      expect(tasks.any((t) => t.id == 'task_mirror' && t.syncMode == SyncMode.mirror), isTrue);
     });
 
     test('updateTask modifies the target task in place', () {
-      final initialTasks = container.read(tasksListProvider);
-      final firstTask = initialTasks.first;
+      const task1 = BackupTask(
+        id: 'task_1',
+        name: 'Initial Name',
+        sourcePath: 'C:\\Folder',
+        targetRemote: 'Drive:backup',
+        schedule: 'Daily at 02:00',
+        isActive: true,
+      );
+      container.read(tasksListProvider.notifier).addTask(task1);
 
-      final updatedTask = firstTask.copyWith(
+      final updatedTask = task1.copyWith(
         name: 'Updated Photos Backup',
         sourcePath: 'C:\\Updated\\Path',
+        syncMode: SyncMode.mirror,
       );
 
-      container.read(tasksListProvider.notifier).updateTask(firstTask.id, updatedTask);
+      container.read(tasksListProvider.notifier).updateTask('task_1', updatedTask);
 
       final tasks = container.read(tasksListProvider);
-      expect(tasks, hasLength(3));
       expect(tasks.first.name, equals('Updated Photos Backup'));
       expect(tasks.first.sourcePath, equals('C:\\Updated\\Path'));
+      expect(tasks.first.syncMode, equals(SyncMode.mirror));
     });
 
     test('toggleTaskActive flips the active state of the task', () {
-      final initialTasks = container.read(tasksListProvider);
-      final task = initialTasks.first; // initially true
-      expect(task.isActive, isTrue);
+      const task1 = BackupTask(
+        id: 'task_1',
+        name: 'Task 1',
+        sourcePath: 'C:\\Folder',
+        targetRemote: 'Drive:backup',
+        schedule: 'Manual',
+        isActive: true,
+      );
+      container.read(tasksListProvider.notifier).addTask(task1);
 
-      container.read(tasksListProvider.notifier).toggleTaskActive(task.id);
+      container.read(tasksListProvider.notifier).toggleTaskActive('task_1');
+      expect(container.read(tasksListProvider).first.isActive, isFalse);
 
-      final tasks = container.read(tasksListProvider);
-      expect(tasks.first.isActive, isFalse);
-
-      container.read(tasksListProvider.notifier).toggleTaskActive(task.id);
+      container.read(tasksListProvider.notifier).toggleTaskActive('task_1');
       expect(container.read(tasksListProvider).first.isActive, isTrue);
     });
 
     test('removeTask deletes the selected task', () {
-      final initialTasks = container.read(tasksListProvider);
-      final firstTaskId = initialTasks.first.id;
+      const task1 = BackupTask(
+        id: 'task_1',
+        name: 'Task 1',
+        sourcePath: 'C:\\Folder',
+        targetRemote: 'Drive:backup',
+        schedule: 'Manual',
+        isActive: true,
+      );
+      container.read(tasksListProvider.notifier).addTask(task1);
+      expect(container.read(tasksListProvider), hasLength(1));
 
-      container.read(tasksListProvider.notifier).removeTask(firstTaskId);
-
-      final tasks = container.read(tasksListProvider);
-      expect(tasks, hasLength(2));
-      expect(tasks.any((t) => t.id == firstTaskId), isFalse);
+      container.read(tasksListProvider.notifier).removeTask('task_1');
+      expect(container.read(tasksListProvider), isEmpty);
     });
   });
 }

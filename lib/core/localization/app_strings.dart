@@ -35,6 +35,9 @@ class AppStrings {
   String get name => isGerman ? 'Name' : 'Name';
   String get active => isGerman ? 'Aktiv' : 'Active';
   String get paused => isGerman ? 'Pausiert' : 'Paused';
+  String get refreshedSuccess => isGerman ? 'Aktualisiert' : 'Refreshed';
+  String get drivesRefreshed => isGerman ? 'Cloud-Laufwerke & Speicherplatz wurden aktualisiert.' : 'Cloud drives and quota refreshed.';
+  String get filesRefreshed => isGerman ? 'Dateiliste aktualisiert.' : 'File listing refreshed.';
 
   // --- Dashboard ---
   String get dashboardTitle => isGerman ? 'Backup Übersicht' : 'Backup Dashboard';
@@ -53,8 +56,10 @@ class AppStrings {
   String get activeTaskProgress => isGerman ? 'Aktueller Fortschritt' : 'Active Task Progress';
   String get currentFile => isGerman ? 'Aktuelle Datei:' : 'Current File:';
   String get preparing => isGerman ? 'Wird vorbereitet...' : 'Preparing...';
+  String get tooltipStorageCard => isGerman ? 'Klicke hier für die detaillierte Speicherbelegung nach Dateitypen.' : 'Click here for detailed storage breakdown by file type.';
+  String get tooltipSyncBanner => isGerman ? 'Klicke hier, um das vollständige Aktivitätsprotokoll anzuzeigen.' : 'Click here to view activity logs.';
 
-  // --- Cloud Drives ---
+  // --- Cloud Drives & Wizard ---
   String get cloudDrivesTitle => isGerman ? 'Cloud-Laufwerke verwalten' : 'Manage Cloud Drives';
   String get addCloudDrive => isGerman ? 'Laufwerk hinzufügen' : 'Add Cloud Drive';
   String get connectedDrives => isGerman ? 'Verbundene Laufwerke' : 'Connected Drives';
@@ -65,8 +70,8 @@ class AppStrings {
   String get wizardStep1Title => isGerman ? 'Schritt 1: Anbieter auswählen' : 'Step 1: Choose Provider';
   String get wizardStep2Title => isGerman ? 'Schritt 2: Zugangsdaten' : 'Step 2: Credentials & Config';
   String get connectionNameLabel => isGerman ? 'Verbindungsname' : 'Connection Name';
-  String get connectionNameHint => isGerman ? 'z.B. GoogleDrive_Backup' : 'e.g. GoogleDrive_Backup';
-  String get searchProviderHint => isGerman ? 'Anbieter suchen (z.B. mega, google, onedrive)...' : 'Search provider (e.g. mega, google, onedrive)...';
+  String get connectionNameHint => isGerman ? 'z.B. Mein_Cloud_Backup' : 'e.g. My_Cloud_Backup';
+  String get searchProviderHint => isGerman ? 'Anbieter suchen (z.B. google, onedrive, s3, webdav, mega)...' : 'Search provider (e.g. google, onedrive, s3, webdav, mega)...';
   String get emailOrUserLabel => isGerman ? 'E-Mail / Benutzername' : 'Email / Username';
   String get passwordLabel => isGerman ? 'Passwort / API-Key' : 'Password / API Key';
   String get hostLabel => isGerman ? 'Host / Server-Adresse' : 'Host / Server Address';
@@ -75,7 +80,7 @@ class AppStrings {
   String get connectionSuccess => isGerman ? 'Verbindung erfolgreich hergestellt!' : 'Connection established successfully!';
   String get connectionFailed => isGerman ? 'Verbindungstest fehlgeschlagen' : 'Connection test failed';
   String get nameRequiredError => isGerman ? 'Bitte gib einen Verbindungsnamen ein.' : 'Please enter a connection name.';
-  String get providerRequiredError => isGerman ? 'Bitte wähle einen Anbieter aus.' : 'Please select a provider.';
+  String get providerRequiredError => isGerman ? 'Bitte wähle einen Anbieter aus der Liste aus.' : 'Please select a provider from the list.';
   String get credentialsRequiredError => isGerman ? 'Bitte fülle alle Pflichtfelder aus.' : 'Please fill in all required credentials.';
   String get deleteDriveConfirmTitle => isGerman ? 'Cloud-Laufwerk trennen' : 'Disconnect Cloud Remote';
   String get deleteDriveRule6Notice => isGerman
@@ -85,8 +90,11 @@ class AppStrings {
       ? 'Möchtest du die Verbindung zu "$name" wirklich trennen?'
       : 'Do you really want to disconnect from "$name"?';
   String get oauthInfoNotice => isGerman
-      ? 'Dieser Anbieter nutzt Web-Authentifizierung (OAuth). Nach dem Hinzufügen öffnet sich bei Bedarf ein Browser-Fenster zur Autorisierung.'
-      : 'This provider uses browser-based OAuth authentication. A browser window will open if authorization is needed.';
+      ? 'Dieser Anbieter nutzt sichere Web-Authentifizierung (OAuth 2.0). Kein Passwort nötig — du wirst zur Anmeldung im Browser weitergeleitet.'
+      : 'This provider uses secure OAuth 2.0. No password needed — you will be redirected to your browser to authenticate.';
+  String get oauthGenericTooltip => isGerman
+      ? 'OAuth 2.0 ermöglicht eine sichere Anmeldung direkt beim Anbieter ohne Speicherung deines Passworts.'
+      : 'OAuth 2.0 enables secure login directly with the provider without storing your password.';
   String get authorizeInBrowser => isGerman ? 'In Browser autorisieren' : 'Authorize in Browser';
   String get authorizedSuccess => isGerman ? 'Autorisierung erfolgreich verifiziert' : 'Authorization verified successfully';
   String get testingConnection => isGerman ? 'Verbindung wird getestet...' : 'Testing connection...';
@@ -101,9 +109,55 @@ class AppStrings {
   String get noMatchingProviders => isGerman ? 'Keine passenden Anbieter gefunden.' : 'No matching providers found.';
   String get showPassword => isGerman ? 'Passwort anzeigen' : 'Show password';
   String get hidePassword => isGerman ? 'Passwort verbergen' : 'Hide password';
+  String get connectionNameTooltip => isGerman
+      ? 'Ein eindeutiger Name zur Identifikation dieses Cloud-Laufwerks (z.B. Mein_Cloud_Drive).'
+      : 'A unique display name to identify this cloud drive (e.g. My_Cloud_Drive).';
+  String get searchProviderTooltip => isGerman
+      ? 'Suche nach Cloud-Speicher-Anbietern wie Google Drive, OneDrive, Dropbox, Mega, S3, WebDAV, SFTP etc.'
+      : 'Search for cloud storage providers such as Google Drive, OneDrive, Dropbox, Mega, S3, WebDAV, SFTP etc.';
+  String get emailOrUserTooltip => isGerman
+      ? 'Deine E-Mail-Adresse oder dein Benutzername für diesen Cloud-Dienst.'
+      : 'Your email address or username for this cloud service.';
+  String get passwordTooltip => isGerman
+      ? 'Dein Passwort oder API-Token. Wird vor dem Speichern sicher verschlüsselt.'
+      : 'Your password or API token. Encrypted securely before saving.';
+  String get hostTooltip => isGerman
+      ? 'Die Server-Adresse, URL oder Hostname (z.B. sftp.example.com oder 192.168.1.10).'
+      : 'The server address, URL, or hostname (e.g. sftp.example.com or 192.168.1.10).';
+  String get portTooltip => isGerman
+      ? 'Der Netzwerk-Port des Dienstes (Standard: SFTP 22, FTP 21).'
+      : 'The network port of the service (Default: SFTP 22, FTP 21).';
 
+  // --- Provider-Specific Strings & Tooltips ---
+  String get megaUserLabel => isGerman ? 'Mega E-Mail' : 'Mega Email';
+  String get megaUserTooltip => isGerman ? 'Die E-Mail-Adresse deines Mega.nz-Kontos.' : 'The email address of your Mega.nz account.';
+  String get megaPassLabel => isGerman ? 'Mega Passwort' : 'Mega Password';
+  String get megaPassTooltip => isGerman ? 'Dein Passwort für Mega.nz. Es wird vor dem Speichern sicher verschlüsselt.' : 'Your password for Mega.nz. Encrypted before saving.';
+  
+  String get s3AccessKeyLabel => isGerman ? 'Access Key ID' : 'Access Key ID';
+  String get s3AccessKeyTooltip => isGerman ? 'Dein S3 Access Key ID (z.B. aus der AWS IAM Konsole, Backblaze B2 Application Keys oder MinIO Dashboard).' : 'Your S3 Access Key ID (e.g. from AWS IAM, Backblaze B2, or MinIO dashboard).';
+  String get s3SecretKeyLabel => isGerman ? 'Secret Access Key' : 'Secret Access Key';
+  String get s3SecretKeyTooltip => isGerman ? 'Dein geheimer S3 Secret Access Key.' : 'Your secret S3 Secret Access Key.';
+  String get s3EndpointLabel => isGerman ? 'S3 Endpoint / Host URL' : 'S3 Endpoint / Host URL';
+  String get s3EndpointTooltip => isGerman ? 'Der Endpunkt des S3-kompatiblen Dienstes (z.B. s3.eu-central-1.amazonaws.com oder s3.us-west-004.backblazeb2.com).' : 'The endpoint URL for your S3-compatible service.';
+  
+  String get webdavUrlLabel => isGerman ? 'WebDAV Server-Adresse / URL' : 'WebDAV Server Address / URL';
+  String get webdavUrlTooltip => isGerman ? 'Die vollständige WebDAV-URL deines Cloud-Servers (z.B. Nextcloud/ownCloud: https://cloud.example.com/remote.php/dav/files/user/).' : 'The full WebDAV URL of your cloud server (e.g. Nextcloud/ownCloud).';
+  String get webdavUserLabel => isGerman ? 'WebDAV Benutzername / E-Mail' : 'WebDAV Username / Email';
+  String get webdavUserTooltip => isGerman ? 'Dein Benutzername auf dem WebDAV-Server.' : 'Your username on the WebDAV server.';
+  String get webdavPassLabel => isGerman ? 'WebDAV Passwort / App-Token' : 'WebDAV Password / App Token';
+  String get webdavPassTooltip => isGerman ? 'Dein Passwort oder generiertes App-Token (empfohlen für Nextcloud/ownCloud).' : 'Your password or generated app token.';
+  
+  String get sftpHostLabel => isGerman ? 'SFTP Host / Server' : 'SFTP Host / Server';
+  String get sftpHostTooltip => isGerman ? 'Die IP-Adresse oder Hostname deines SSH/SFTP-Servers.' : 'The IP or hostname of your SSH/SFTP server.';
+  String get sftpPortLabel => isGerman ? 'Port' : 'Port';
+  String get sftpPortTooltip => isGerman ? 'Standard: 22 für SFTP, 21 für FTP.' : 'Default: 22 for SFTP, 21 for FTP.';
+  String get sftpUserLabel => isGerman ? 'SSH / SFTP Benutzername' : 'SSH / SFTP Username';
+  String get sftpUserTooltip => isGerman ? 'Der Benutzername für den SSH/SFTP-Zugang.' : 'The username for SSH/SFTP access.';
+  String get sftpPassLabel => isGerman ? 'Passwort / Key-Passphrase' : 'Password / Key Passphrase';
+  String get sftpPassTooltip => isGerman ? 'Das Passwort für den Benutzer oder die Passphrase für den SSH-Schlüssel.' : 'Password or SSH key passphrase.';
 
-  // --- Tasks ---
+  // --- Tasks & Backup Modes ---
   String get tasksTitle => isGerman ? 'Backup-Aufgaben' : 'Tasks & Backup Jobs';
   String get addTask => isGerman ? 'Aufgabe erstellen' : 'Add Task';
   String get editTask => isGerman ? 'Aufgabe bearbeiten' : 'Edit Task';
@@ -113,7 +167,8 @@ class AppStrings {
   String get sourcePathLabel => isGerman ? 'Quellordner (Lokal)' : 'Source Folder (Local)';
   String get sourcePathHint => isGerman ? 'z.B. C:\\Bilder' : 'e.g. C:\\Pictures';
   String get selectFolder => isGerman ? 'Ordner wählen' : 'Select Folder';
-  String get destinationRemoteLabel => isGerman ? 'Ziel (Cloud-Laufwerk)' : 'Destination (Cloud Remote)';
+  String get destinationRemoteLabel => isGerman ? 'Ziel-Cloud-Laufwerke' : 'Destination Cloud Drives';
+  String get selectAtLeastOneRemote => isGerman ? 'Bitte wähle mindestens ein Cloud-Laufwerk als Ziel aus.' : 'Please select at least one cloud drive as destination.';
   String get scheduleLabel => isGerman ? 'Zeitplan' : 'Schedule';
   String get scheduleDayLabel => isGerman ? 'Wiederholung' : 'Repeat Frequency';
   String get scheduleTimeLabel => isGerman ? 'Uhrzeit' : 'Time';
@@ -147,6 +202,53 @@ class AppStrings {
   String get specificFoldersShort => isGerman ? 'Ordner' : 'Folders';
   String get specificFoldersHint => isGerman ? 'z.B. WhatsApp Images' : 'e.g. WhatsApp Images';
   String get backupJobsHeader => isGerman ? 'BACKUP-AUFGABEN' : 'BACKUP JOBS';
+
+  // --- Multi-Remote Distribution Strategy ---
+  String get distributionStrategyLabel => isGerman ? 'Verteilungs-Strategie' : 'Distribution Strategy';
+  String get distributionMirrorAll => isGerman ? 'Vollständige Redundanz (Alle Drives)' : 'Full Redundancy (All Drives)';
+  String get distributionMirrorAllDesc => isGerman
+      ? 'Jede Datei wird auf alle ausgewählten Cloud-Laufwerke gesichert (maximale Sicherheit).'
+      : 'Every file is backed up to all selected cloud drives (maximum safety).';
+  String get distributionBalance => isGerman ? 'Automatische Speicherplatz-Aufteilung' : 'Automatic Space Balancing';
+  String get distributionBalanceDesc => isGerman
+      ? 'Dateien werden intelligent und proportional nach verfügbarem Speicherplatz auf die Drives aufgeteilt.'
+      : 'Files are distributed intelligently across drives based on available storage capacity.';
+  String get distributionBadgeMirrorAll => isGerman ? 'Redundant (Alle Drives)' : 'Redundant (All Drives)';
+  String get distributionBadgeBalance => isGerman ? 'Aufgeteilt (Balanciert)' : 'Space Balanced';
+  String get distributionTooltip => isGerman
+      ? 'Bestimmt, wie Backups bei mehreren ausgewählten Cloud-Laufwerken abgelegt werden.'
+      : 'Determines how files are stored when multiple cloud drives are selected.';
+
+  // --- Cloud Target Folder Mode ---
+  String get targetFolderModeLabel => isGerman ? 'Speicherort in der Cloud' : 'Cloud Destination Folder';
+  String get targetFolderRoot => isGerman ? 'Hauptverzeichnis (Root /)' : 'Root Directory (/)';
+  String get targetFolderCustom => isGerman ? 'Bestehender Ordner' : 'Existing Folder';
+  String get targetFolderNew => isGerman ? 'Neuen Ordner anlegen' : 'Create New Folder';
+  String get newFolderNameLabel => isGerman ? 'Neuer Ordnername' : 'New Folder Name';
+  String get newFolderNameHint => isGerman ? 'z.B. backup_fotos_2026' : 'e.g. backup_photos_2026';
+  String get targetFolderTooltip => isGerman
+      ? 'Wähle, ob die Dateien direkt im Stammverzeichnis oder in einem Unterordner in der Cloud gespeichert werden sollen.'
+      : 'Choose whether files should be stored in the root directory or a subfolder in the cloud.';
+
+  // --- Sync Modes (Incremental vs Echo / Mirror with Two-Way Sync) ---
+  String get syncModeLabel => isGerman ? 'Synchronisations-Modus' : 'Sync Mode';
+  String get syncModeIncremental => isGerman ? 'Inkrementell' : 'Incremental';
+  String get syncModeIncrementalDescription => isGerman
+      ? 'Nur neue und geänderte Dateien hochladen. In der Cloud vorhandene Dateien bleiben immer erhalten (sicher).'
+      : 'Upload only new and modified files. Remote cloud files are always preserved (safe).';
+  String get syncModeMirror => isGerman ? 'Echo-Modus (2-Wege-Spiegelung)' : 'Mirror Mode (2-Way Echo)';
+  String get syncModeMirrorDescription => isGerman
+      ? 'Exakte 2-Wege-Spiegelung: Neue Dateien aus der Cloud werden auch lokal heruntergeladen. Dateien, die du lokal löschst, werden auch in der Cloud gelöscht!'
+      : 'Exact 2-way mirror: New files from cloud are downloaded locally. Files deleted locally will also be deleted in the cloud!';
+  String get syncModeBadgeIncremental => isGerman ? 'Inkrementell' : 'Incremental';
+  String get syncModeBadgeMirror => isGerman ? 'Echo (2-Wege)' : 'Echo (2-Way)';
+  String get syncModeTooltipIncremental => isGerman
+      ? 'Modus Inkrementell: Neue Dateien hochladen, gelöschte Dateien in der Cloud behalten'
+      : 'Incremental mode: Uploads new files, preserves deleted files in cloud';
+  String get syncModeTooltipMirror => isGerman
+      ? 'Echo-Modus (2-Wege): Vollständiger Abgleich zwischen lokalem Ordner und Cloud inkl. Download neuer Cloud-Dateien und Löschabgleich'
+      : 'Echo mode (2-Way): Full synchronization between local and cloud including cloud downloads and delete mirroring';
+
   String excludedFilesBadge(int count) => isGerman
       ? (count == 1 ? '1 Datei ausgeschlossen' : '$count Dateien ausgeschlossen')
       : (count == 1 ? '1 file excluded' : '$count files excluded');
@@ -168,13 +270,19 @@ class AppStrings {
     return isGerman ? 'Wöchentlich ($day) um $time' : 'Weekly on ${day}s at $time';
   }
 
-  // --- Cloud Explorer ---
+  // --- Tooltips for Tasks ---
+  String get tooltipSourcePath => isGerman ? 'Lokaler Ordner auf deinem Computer, dessen Inhalt gesichert wird.' : 'Local folder on your PC that will be backed up.';
+  String get tooltipDestinationRemote => isGerman ? 'Ziel-Cloud-Laufwerke und Remote-Ordner.' : 'Destination cloud drives and target folder.';
+  String get tooltipCatchUp => isGerman ? 'Wenn dein PC zur geplanten Zeit aus war, wird das Backup beim nächsten Systemstart automatisch nachgeholt.' : 'If PC was offline during scheduled time, backup runs on next startup.';
+  String get tooltipSchedule => isGerman ? 'Intervall und Uhrzeit für die automatische Ausführung des Backups.' : 'Interval and time for automatic backup execution.';
+
+  // --- Cloud Explorer & File Details ---
   String get cloudExplorerTitle => isGerman ? 'Cloud-Dateiexplorer' : 'Cloud File Explorer';
   String get remoteDriveSelectorLabel => isGerman ? 'Cloud-Laufwerk' : 'Remote Drive';
   String get emptyFolder => isGerman ? 'Dieser Ordner ist leer.' : 'This folder is empty.';
   String get noRemotesInExplorer => isGerman ? 'Keine Cloud-Laufwerke verbunden.' : 'No cloud drives connected.';
   String get addRemoteCTA => isGerman ? 'Laufwerk hinzufügen' : 'Add Cloud Drive';
-  String get fileDetailsTitle => isGerman ? 'Datei-Informationen' : 'File Information';
+  String get fileDetailsTitle => isGerman ? 'Datei-Informationen & Metadaten' : 'File Information & Metadata';
   String get fileName => isGerman ? 'Dateiname:' : 'File Name:';
   String get fileSize => isGerman ? 'Dateigröße:' : 'File Size:';
   String get fileModTime => isGerman ? 'Zuletzt geändert:' : 'Last Modified:';
@@ -189,6 +297,48 @@ class AppStrings {
       ? 'Möchtest du "$name" wirklich aus dem Cloud-Speicher löschen?'
       : 'Do you really want to delete "$name" from cloud storage?';
   String get excludeRuleCreated => isGerman ? 'Ausschlussregel erfolgreich erstellt.' : 'Exclusion rule created successfully.';
+  String get previewFile => isGerman ? 'Vorschau' : 'Preview';
+  String get quickLook => isGerman ? 'Schnellübersicht' : 'Quick Look';
+  String get openInDefaultApp => isGerman ? 'In Standard-App öffnen' : 'Open in Default App';
+  String get copyPath => isGerman ? 'Pfad kopieren' : 'Copy Path';
+  String get pathCopied => isGerman ? 'Pfad in die Zwischenablage kopiert' : 'Path copied to clipboard';
+  String get openingFile => isGerman ? 'Datei wird geöffnet...' : 'Opening file...';
+  String get downloadingForPreview => isGerman ? 'Wird für Vorschau geladen...' : 'Loading for preview...';
+  String get copy => isGerman ? 'Kopieren' : 'Copy';
+  String get copied => isGerman ? 'Kopiert!' : 'Copied!';
+  String get zoomIn => isGerman ? 'Vergrößern' : 'Zoom In';
+  String get zoomOut => isGerman ? 'Verkleinern' : 'Zoom Out';
+  String get resetZoom => isGerman ? 'Originalgröße' : 'Reset Zoom';
+  String get playAudio => isGerman ? 'Abspielen' : 'Play';
+  String get pauseAudio => isGerman ? 'Pausieren' : 'Pause';
+  String get linesLabel => isGerman ? 'Zeilen' : 'Lines';
+  String get wordsLabel => isGerman ? 'Wörter' : 'Words';
+  String get charactersLabel => isGerman ? 'Zeichen' : 'Characters';
+  String get cloudRemote => isGerman ? 'Cloud-Remote:' : 'Cloud Remote:';
+
+  // --- File Metadata Inspector Attributes ---
+  String get metadataSectionGeneral => isGerman ? 'Allgemeine Informationen' : 'General Information';
+  String get metadataSectionDetails => isGerman ? 'Spezifische Metadaten' : 'Detailed Metadata';
+  String get metadataFileType => isGerman ? 'Dateiformat:' : 'File Format:';
+  String get metadataMimeType => isGerman ? 'MIME-Typ:' : 'MIME Type:';
+  String get metadataExactBytes => isGerman ? 'Genaue Größe:' : 'Exact Size:';
+  String get metadataDimensions => isGerman ? 'Abmessungen:' : 'Dimensions:';
+  String get metadataMegapixels => isGerman ? 'Auflösung:' : 'Resolution:';
+  String get metadataColorSpace => isGerman ? 'Farbraum:' : 'Color Space:';
+  String get metadataCamera => isGerman ? 'Kamera-Modell:' : 'Camera:';
+  String get metadataLens => isGerman ? 'Objektiv:' : 'Lens:';
+  String get metadataExposure => isGerman ? 'Belichtung:' : 'Exposure:';
+  String get metadataIso => isGerman ? 'ISO-Wert:' : 'ISO:';
+  String get metadataAperture => isGerman ? 'Blende:' : 'Aperture:';
+  String get metadataCodec => isGerman ? 'Video-Codec:' : 'Video Codec:';
+  String get metadataFramerate => isGerman ? 'Bildrate:' : 'Framerate:';
+  String get metadataAudioFormat => isGerman ? 'Audio-Format:' : 'Audio Format:';
+  String get metadataBitrate => isGerman ? 'Bitrate:' : 'Bitrate:';
+  String get metadataDuration => isGerman ? 'Dauer:' : 'Duration:';
+  String get metadataLineCount => isGerman ? 'Zeilenanzahl:' : 'Line Count:';
+  String get metadataCharCount => isGerman ? 'Zeichenanzahl:' : 'Character Count:';
+  String get metadataEncoding => isGerman ? 'Zeichenkodierung:' : 'Encoding:';
+  String get metadataCompression => isGerman ? 'Komprimierung:' : 'Compression:';
 
   // --- Settings ---
   String get settingsTitle => isGerman ? 'Einstellungen' : 'Settings';
@@ -210,6 +360,9 @@ class AppStrings {
   String get manageDrivesSubtitle => isGerman ? 'Remotes verbinden, bearbeiten und trennen' : 'Connect, edit, and disconnect cloud remotes';
   String get aboutSection => isGerman ? 'Über Fibu' : 'About Fibu';
   String get version => isGerman ? 'Version 1.0.0 (Fibu Desktop)' : 'Version 1.0.0 (Fibu Desktop)';
+  String get tooltipThemeMode => isGerman ? 'Schaltet zwischen automatischer System-Synchronisierung und manuellem Hell-/Dunkelmodus um.' : 'Toggles between automatic system sync and manual light/dark mode.';
+  String get tooltipWadaPalette => isGerman ? 'Sanzo Wada Farbharmonie: Klicke auf ein Farbfeld, um die Palette auszuwählen.' : 'Sanzo Wada color harmony: Click a swatch to select the palette.';
+  String get tooltipLanguage => isGerman ? 'Wähle die Sprache der Benutzeroberfläche.' : 'Choose the interface language.';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

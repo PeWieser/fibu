@@ -10,6 +10,7 @@ import 'package:fibu/core/localization/app_strings.dart';
 import 'package:fibu/core/localization/locale_provider.dart';
 import 'package:fibu/core/services/rclone_provider.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
+import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fibu/features/dashboard/presentation/widgets/storage_card.dart';
 
@@ -126,7 +127,30 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
-        await tester.pumpWidget(createWidgetUnderTest());
+        final container = ProviderContainer(
+          overrides: [
+            rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          ],
+        );
+        container.read(tasksListProvider.notifier).addTask(
+          const BackupTask(
+            id: 'task_sync_test',
+            name: 'Active Backup Task',
+            sourcePath: 'D:\\TestFolder',
+            targetRemote: 'OneDrive_Backup:backup',
+            schedule: 'Manual',
+            isActive: true,
+          ),
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const fluent.FluentApp(
+              home: DashboardScreen(),
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
 
         // Identify and tap the Sync All button

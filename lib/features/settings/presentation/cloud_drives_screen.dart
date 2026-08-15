@@ -10,7 +10,6 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
-import '../../../core/widgets/adaptive_widgets.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 
 /// Platform-adaptive screen to view, add, and remove configured cloud drives (remotes).
@@ -733,6 +732,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           builder: (_) => AddRemoteWizardDialog(platform: platform),
         ),
       );
+    } else if (platform == TargetPlatform.android) {
+      addedRemoteName = await Navigator.of(context).push<String>(
+        material.MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => AddRemoteWizardDialog(platform: platform),
+        ),
+      );
     } else {
       addedRemoteName = await showGeneralDialog<String>(
         context: context,
@@ -765,6 +771,18 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       if (config != null) {
         final tasks = ref.read(syncConfigServiceProvider).convertConfigToTasks(config, remoteName);
         ref.read(tasksListProvider.notifier).importTasks(tasks);
+        
+        // Download existing cloud files to local task directory
+        for (final task in tasks) {
+          try {
+            await ref.read(syncConfigServiceProvider).downloadRemoteFiles(
+              remoteName,
+              task.targetFolderName,
+              task.sourcePath,
+            );
+          } catch (_) {}
+        }
+
         if (mounted) {
           _showNotification(strings.configImportSuccess, isError: false);
         }
@@ -1205,76 +1223,83 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
     final theme = context.theme;
+    final strings = context.strings;
 
     if (widget.platform == TargetPlatform.iOS) {
-      return cupertino.CupertinoPageScaffold(
-        navigationBar: cupertino.CupertinoNavigationBar(
-          middle: Text(_currentStep == 0 ? context.strings.wizardStep1Title : context.strings.wizardStep2Title),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.all(theme.xl),
-                  child: _currentStep == 0 ? _buildStep1Content(theme) : _buildStep2Content(theme),
-                ),
-              ),
-              _buildWizardFooter(theme),
-            ],
-          ),
-        ),
-      );
+      return _buildIOSLayout(context, theme, strings);
+    } else if (widget.platform == TargetPlatform.android) {
+      return _buildAndroidLayout(context, theme, strings);
+    } else {
+      return _buildWindowsLayout(context, theme, strings);
     }
+  }
 
-    return Center(
-      child: material.Material(
-        color: material.Colors.transparent,
-        child: Container(
-          width: 540,
-          constraints: const BoxConstraints(maxHeight: 660),
-          margin: EdgeInsets.all(theme.lg),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(theme.radiusLg),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 20,
-                offset: Offset(0, 8),
-              ),
-            ],
-            border: Border.all(
-              color: theme.textSecondary.withValues(alpha: 0.15),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildWizardHeader(theme),
-              const material.Divider(height: 1),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.all(theme.xl),
-                  child: _currentStep == 0 ? _buildStep1Content(theme) : _buildStep2Content(theme),
+  // =========================================================================
+  // WINDOWS (Fluent UI Layout)
+  // =========================================================================
+  Widget _buildWindowsLayout(BuildContext context, AppThemeData theme, AppStrings strings) {
+    return fluent.FluentTheme(
+      data: fluent.FluentThemeData(
+        scaffoldBackgroundColor: theme.canvas,
+        cardColor: theme.surface,
+        accentColor: fluent.AccentColor.swatch({
+          'normal': theme.accent,
+          'dark': theme.accent,
+          'light': theme.accent,
+          'darkest': theme.accent,
+          'darker': theme.accent,
+          'lighter': theme.accent,
+          'lightest': theme.accent,
+        }),
+      ),
+      child: Center(
+        child: material.Material(
+          color: material.Colors.transparent,
+          child: Container(
+            width: 540,
+            constraints: const BoxConstraints(maxHeight: 660),
+            margin: EdgeInsets.all(theme.lg),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(theme.radiusLg),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
                 ),
+              ],
+              border: Border.all(
+                color: theme.textSecondary.withValues(alpha: 0.15),
+                width: 1,
               ),
-              const material.Divider(height: 1),
-              _buildWizardFooter(theme),
-            ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildWindowsHeader(theme, strings),
+                const material.Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(theme.xl),
+                    child: _currentStep == 0
+                        ? _buildWindowsStep1(theme, strings)
+                        : _buildWindowsStep2(theme, strings),
+                  ),
+                ),
+                const material.Divider(height: 1),
+                _buildWindowsFooter(theme, strings),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-
-  Widget _buildWizardHeader(AppThemeData theme) {
-    final strings = context.strings;
+  Widget _buildWindowsHeader(AppThemeData theme, AppStrings strings) {
     final isStep1 = _currentStep == 0;
-
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.lg),
       child: Row(
@@ -1298,74 +1323,25 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           Expanded(
             child: Text(
               isStep1 ? strings.wizardStep1Title : strings.wizardStep2Title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: fluent.IconButton(
-                icon: Icon(fluent.FluentIcons.chrome_close, size: 14, color: theme.textSecondary, semanticLabel: strings.close),
-                onPressed: _isAdding ? null : () => Navigator.pop(context),
-              ),
-            ),
+          fluent.IconButton(
+            icon: Icon(fluent.FluentIcons.chrome_close, size: 14, color: theme.textSecondary, semanticLabel: strings.close),
+            onPressed: _isAdding ? null : () => Navigator.pop(context),
           ),
         ],
       ),
     );
   }
 
-  // --- Contextual Info-Tooltip Helper ---
-  Widget _buildFieldLabelWithTooltip({
-    required AppThemeData theme,
-    required String label,
-    required String tooltipMessage,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        ),
-        SizedBox(width: theme.xs),
-        fluent.Tooltip(
-          message: tooltipMessage,
-          useMousePosition: false,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.help,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: 2),
-              child: Icon(
-                fluent.FluentIcons.info,
-                size: 13,
-                color: theme.accent,
-                semanticLabel: '$label Info',
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- Step 1: Name & Searchable Provider Selection ---
-  Widget _buildStep1Content(AppThemeData theme) {
-    final strings = context.strings;
+  Widget _buildWindowsStep1(AppThemeData theme, AppStrings strings) {
     final providersAsync = ref.watch(providersProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildFieldLabelWithTooltip(
-          theme: theme,
-          label: strings.connectionNameLabel,
-          tooltipMessage: strings.connectionNameTooltip,
-        ),
+        Text(strings.connectionNameLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         SizedBox(height: theme.xs),
         fluent.TextBox(
           controller: _nameController,
@@ -1376,30 +1352,19 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         ),
         if (_nameError != null) ...[
           SizedBox(height: theme.xs),
-          Text(
-            _nameError!,
-            style: TextStyle(color: theme.error, fontSize: 12, fontWeight: FontWeight.w500),
-          ),
+          Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 12)),
         ],
         SizedBox(height: theme.lg),
-        _buildFieldLabelWithTooltip(
-          theme: theme,
-          label: strings.searchProviderHint,
-          tooltipMessage: strings.searchProviderTooltip,
-        ),
+        Text(strings.searchProviderHint, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         SizedBox(height: theme.xs),
         fluent.TextBox(
           controller: _searchController,
           placeholder: strings.searchProviderHint,
           prefix: Padding(
             padding: EdgeInsets.only(left: theme.sm),
-            child: Icon(fluent.FluentIcons.search, size: 14, color: theme.textSecondary, semanticLabel: 'Search'),
+            child: Icon(fluent.FluentIcons.search, size: 14, color: theme.textSecondary),
           ),
-          onChanged: (val) {
-            setState(() {
-              _searchQuery = val;
-            });
-          },
+          onChanged: (val) => setState(() => _searchQuery = val),
         ),
         SizedBox(height: theme.md),
         providersAsync.when(
@@ -1411,13 +1376,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             ).toList();
 
             if (filtered.isEmpty) {
-              return Container(
+              return Padding(
                 padding: EdgeInsets.all(theme.xl),
-                alignment: Alignment.center,
-                child: Text(
-                  strings.noMatchingProviders,
-                  style: TextStyle(color: theme.textSecondary, fontStyle: FontStyle.italic),
-                ),
+                child: Center(child: Text(strings.noMatchingProviders, style: TextStyle(color: theme.textSecondary))),
               );
             }
 
@@ -1433,60 +1394,32 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   final provider = filtered[index];
                   final isSelected = _selectedProvider == provider.name;
 
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedProvider = provider.name;
-                          _providerError = null;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
-                        color: isSelected
-                            ? theme.accent.withValues(alpha: 0.15)
-                            : (index % 2 == 0 ? theme.textSecondary.withValues(alpha: 0.04) : null),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isSelected
-                                  ? fluent.FluentIcons.checkbox_composite
-                                  : fluent.FluentIcons.checkbox,
-                              color: isSelected ? theme.accent : theme.textSecondary,
-                              size: 16,
-                              semanticLabel: isSelected ? 'Selected' : 'Unselected',
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedProvider = provider.name;
+                      _providerError = null;
+                    }),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+                      color: isSelected ? theme.accent.withValues(alpha: 0.15) : null,
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? fluent.FluentIcons.checkbox_composite : fluent.FluentIcons.checkbox,
+                            color: isSelected ? theme.accent : theme.textSecondary,
+                            size: 16,
+                          ),
+                          SizedBox(width: theme.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(provider.description, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+                                Text(provider.name, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                              ],
                             ),
-                            SizedBox(width: theme.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    provider.description,
-                                    style: TextStyle(
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  Text(
-                                    provider.name,
-                                    style: TextStyle(color: theme.textSecondary, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: theme.accent,
-                                  borderRadius: BorderRadius.circular(theme.radiusSm),
-                                ),
-                                child: const Icon(fluent.FluentIcons.check_mark, size: 10, color: Color(0xffffffff), semanticLabel: 'Check'),
-                              ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -1494,34 +1427,21 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
               ),
             );
           },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: fluent.ProgressRing(strokeWidth: 2)),
-          ),
-          error: (err, _) => Padding(
-            padding: EdgeInsets.symmetric(vertical: theme.md),
-            child: Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
-          ),
+          loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: fluent.ProgressRing(strokeWidth: 2))),
+          error: (err, _) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
         ),
         if (_providerError != null) ...[
           SizedBox(height: theme.xs),
-          Text(
-            _providerError!,
-            style: TextStyle(color: theme.error, fontSize: 12, fontWeight: FontWeight.w500),
-          ),
+          Text(_providerError!, style: TextStyle(color: theme.error, fontSize: 12)),
         ],
       ],
     );
   }
 
-  // --- Step 2: Equal First-Class Support for All Provider Configurations ---
-  Widget _buildStep2Content(AppThemeData theme) {
-    final strings = context.strings;
-
+  Widget _buildWindowsStep2(AppThemeData theme, AppStrings strings) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Provider info banner
         Container(
           padding: EdgeInsets.all(theme.md),
           decoration: BoxDecoration(
@@ -1531,20 +1451,14 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ),
           child: Row(
             children: [
-              Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 24, semanticLabel: 'Selected Provider'),
+              Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 24),
               SizedBox(width: theme.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _nameController.text.trim(),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    Text(
-                      'Provider: ${_selectedProvider.toUpperCase()}',
-                      style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                    ),
+                    Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1552,318 +1466,322 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ),
         ),
         SizedBox(height: theme.lg),
-
-        // 1. Dedicated OAuth Providers Support (Drive, Photos, OneDrive, Dropbox, Box, pCloud, Yandex, etc.)
         if (_isOAuthProvider) ...[
-          Container(
-            padding: EdgeInsets.all(theme.md),
-            decoration: BoxDecoration(
-              color: theme.textSecondary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
+          Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+          SizedBox(height: theme.md),
+          fluent.Button(
+            child: Text(strings.authorizeInBrowser),
+            onPressed: () => setState(() => _isOAuthAuthorized = true),
+          ),
+          if (_isOAuthAuthorized) ...[
+            SizedBox(height: theme.sm),
+            Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+        ] else ...[
+          Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(controller: _userController, placeholder: 'user@example.com / username'),
+          SizedBox(height: theme.md),
+          Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••',
+            suffix: fluent.IconButton(
+              icon: Icon(_obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide, size: 16),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          if (_requiresHostPort) ...[
+            SizedBox(height: theme.md),
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(fluent.FluentIcons.shield, color: theme.accent, size: 16, semanticLabel: 'OAuth Shield'),
-                    SizedBox(width: theme.sm),
-                    Text(
-                      'OAuth 2.0 Authentifizierung',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary),
-                    ),
-                    SizedBox(width: theme.xs),
-                    fluent.Tooltip(
-                      message: strings.oauthGenericTooltip,
-                      useMousePosition: false,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.help,
-                        child: Padding(
-                          padding: EdgeInsets.all(theme.xs),
-                          child: Icon(
-                            fluent.FluentIcons.info,
-                            size: 13,
-                            color: theme.accent,
-                            semanticLabel: 'OAuth Info',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                Text(
-                  strings.oauthInfoNotice,
-                  style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.4),
-                ),
-                SizedBox(height: theme.md),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
-                    child: fluent.Button(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(fluent.FluentIcons.open_in_new_window, size: 14, semanticLabel: strings.authorizeInBrowser),
-                          SizedBox(width: theme.sm),
-                          Text(strings.authorizeInBrowser),
-                        ],
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isOAuthAuthorized = true;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                if (_isOAuthAuthorized) ...[
-                  SizedBox(height: theme.sm),
-                  Row(
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(fluent.FluentIcons.completed, color: theme.success, size: 16, semanticLabel: 'Authorized'),
-                      SizedBox(width: theme.xs),
-                      Text(
-                        strings.authorizedSuccess,
-                        style: TextStyle(color: theme.success, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
+                      Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      SizedBox(height: theme.xs),
+                      fluent.TextBox(controller: _hostController, placeholder: 'server.example.com'),
                     ],
                   ),
-                ],
+                ),
+                SizedBox(width: theme.md),
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      SizedBox(height: theme.xs),
+                      fluent.TextBox(controller: _portController, placeholder: '443'),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ]
-        // 2. Mega.nz Specific Fields
-        else if (_isMegaProvider) ...[
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.megaUserLabel,
-            tooltipMessage: strings.megaUserTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'user@mega.nz'),
+          ],
+        ],
+        if (_step2Error != null) ...[
           SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.megaPassLabel,
-            tooltipMessage: strings.megaPassTooltip,
+          Text(_step2Error!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+        SizedBox(height: theme.lg),
+        fluent.FilledButton(
+          onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
+          child: _isTesting
+              ? const SizedBox(width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
+              : Text(strings.testConnection, style: const TextStyle(color: Color(0xFFFFFFFF))),
+        ),
+        if (_testStatus != null) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            _testMessage ?? '',
+            style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
           ),
-          SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _passController,
-            obscureText: _obscurePassword,
-            placeholder: '••••••••',
-            suffix: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: fluent.IconButton(
-                  icon: Icon(
-                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
-                    size: 16,
-                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
-                  ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWindowsFooter(AppThemeData theme, AppStrings strings) {
+    final isStep1 = _currentStep == 0;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.md),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (isStep1) ...[
+            fluent.Button(onPressed: () => Navigator.pop(context), child: Text(strings.cancel)),
+            SizedBox(width: theme.md),
+            fluent.FilledButton(onPressed: _goToStep2, child: Text(strings.next, style: const TextStyle(color: Color(0xFFFFFFFF)))),
+          ] else ...[
+            fluent.Button(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
+            SizedBox(width: theme.md),
+            fluent.FilledButton(
+              onPressed: _isAdding ? null : _handleAddRemote,
+              child: _isAdding
+                  ? const SizedBox(width: 14, height: 14, child: fluent.ProgressRing(strokeWidth: 2))
+                  : Text(strings.add, style: const TextStyle(color: Color(0xFFFFFFFF))),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // ANDROID (Material 3 Layout)
+  // =========================================================================
+  Widget _buildAndroidLayout(BuildContext context, AppThemeData theme, AppStrings strings) {
+    return material.Scaffold(
+      backgroundColor: theme.canvas,
+      appBar: material.AppBar(
+        backgroundColor: theme.surface,
+        elevation: 0,
+        title: Text(
+          _currentStep == 0 ? strings.wizardStep1Title : strings.wizardStep2Title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        leading: material.IconButton(
+          icon: const Icon(material.Icons.close),
+          onPressed: _isAdding ? null : () => Navigator.pop(context),
+          tooltip: strings.close,
+        ),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(theme.lg),
+                child: _currentStep == 0
+                    ? _buildAndroidStep1(theme, strings)
+                    : _buildAndroidStep2(theme, strings),
               ),
             ),
+            const material.Divider(height: 1),
+            _buildAndroidFooter(theme, strings),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAndroidStep1(AppThemeData theme, AppStrings strings) {
+    final providersAsync = ref.watch(providersProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(strings.connectionNameLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        SizedBox(height: theme.xs),
+        material.TextField(
+          controller: _nameController,
+          decoration: material.InputDecoration(
+            hintText: strings.connectionNameHint,
+            border: const material.OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
-        ]
-        // 3. S3 / MinIO / Backblaze B2 / Wasabi Specific Fields
-        else if (_isS3Provider) ...[
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.s3EndpointLabel,
-            tooltipMessage: strings.s3EndpointTooltip,
-          ),
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+        ),
+        if (_nameError != null) ...[
           SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'https://s3.eu-central-1.amazonaws.com / s3.us-west-004.backblazeb2.com'),
-          SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.s3AccessKeyLabel,
-            tooltipMessage: strings.s3AccessKeyTooltip,
+          Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+        SizedBox(height: theme.lg),
+        Text(strings.searchProviderHint, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        SizedBox(height: theme.xs),
+        material.TextField(
+          controller: _searchController,
+          decoration: material.InputDecoration(
+            hintText: strings.searchProviderHint,
+            prefixIcon: const Icon(material.Icons.search, size: 20),
+            border: const material.OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
-          SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'AKIAIOSFODNN7EXAMPLE'),
-          SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.s3SecretKeyLabel,
-            tooltipMessage: strings.s3SecretKeyTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _passController,
-            obscureText: _obscurePassword,
-            placeholder: '••••••••••••••••••••••••••••••••••••••••',
-            suffix: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: fluent.IconButton(
-                  icon: Icon(
-                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
-                    size: 16,
-                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
-                  ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
+          onChanged: (val) => setState(() => _searchQuery = val),
+        ),
+        SizedBox(height: theme.md),
+        providersAsync.when(
+          data: (providers) {
+            final query = _searchQuery.toLowerCase().trim();
+            final filtered = providers.where((p) =>
+              p.name.toLowerCase().contains(query) ||
+              p.description.toLowerCase().contains(query)
+            ).toList();
+
+            if (filtered.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.all(theme.xl),
+                child: Center(child: Text(strings.noMatchingProviders, style: TextStyle(color: theme.textSecondary))),
+              );
+            }
+
+            return Container(
+              height: 220,
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.textSecondary.withValues(alpha: 0.2)),
+                borderRadius: BorderRadius.circular(theme.radiusSm),
               ),
-            ),
-          ),
-        ]
-        // 4. WebDAV / Nextcloud / ownCloud Specific Fields
-        else if (_isWebDavProvider) ...[
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.webdavUrlLabel,
-            tooltipMessage: strings.webdavUrlTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'https://cloud.example.com/remote.php/dav/files/user/'),
-          SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.webdavUserLabel,
-            tooltipMessage: strings.webdavUserTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'username / user@example.com'),
-          SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.webdavPassLabel,
-            tooltipMessage: strings.webdavPassTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _passController,
-            obscureText: _obscurePassword,
-            placeholder: '••••••••',
-            suffix: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: fluent.IconButton(
-                  icon: Icon(
-                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
-                    size: 16,
-                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
-                  ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
-            ),
-          ),
-        ]
-        // 5. SFTP / FTP Specific Fields
-        else if (_isSftpOrFtpProvider) ...[
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFieldLabelWithTooltip(
-                      theme: theme,
-                      label: strings.sftpHostLabel,
-                      tooltipMessage: strings.sftpHostTooltip,
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final provider = filtered[index];
+                  final isSelected = _selectedProvider == provider.name;
+
+                  return material.InkWell(
+                    onTap: () => setState(() {
+                      _selectedProvider = provider.name;
+                      _providerError = null;
+                    }),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+                      color: isSelected ? theme.accent.withValues(alpha: 0.15) : null,
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? material.Icons.check_box : material.Icons.check_box_outline_blank,
+                            color: isSelected ? theme.accent : theme.textSecondary,
+                            size: 20,
+                          ),
+                          SizedBox(width: theme.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(provider.description, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+                                Text(provider.name, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    SizedBox(height: theme.xs),
-                    buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'sftp.example.com / 192.168.1.100'),
-                  ],
-                ),
+                  );
+                },
               ),
+            );
+          },
+          loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: material.CircularProgressIndicator())),
+          error: (err, _) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+        ),
+        if (_providerError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(_providerError!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAndroidStep2(AppThemeData theme, AppStrings strings) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: EdgeInsets.all(theme.md),
+          decoration: BoxDecoration(
+            color: theme.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(material.Icons.cloud_outlined, color: theme.accent, size: 24),
               SizedBox(width: theme.md),
               Expanded(
-                flex: 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFieldLabelWithTooltip(
-                      theme: theme,
-                      label: strings.sftpPortLabel,
-                      tooltipMessage: strings.sftpPortTooltip,
-                    ),
-                    SizedBox(height: theme.xs),
-                    buildAdaptiveTextField(platform: widget.platform, controller: _portController, placeholder: _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22'),
+                    Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
             ],
           ),
+        ),
+        SizedBox(height: theme.lg),
+        if (_isOAuthProvider) ...[
+          Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.sftpUserLabel,
-            tooltipMessage: strings.sftpUserTooltip,
+          material.FilledButton.icon(
+            icon: const Icon(material.Icons.open_in_browser, size: 18),
+            label: Text(strings.authorizeInBrowser),
+            onPressed: () => setState(() => _isOAuthAuthorized = true),
           ),
+          if (_isOAuthAuthorized) ...[
+            SizedBox(height: theme.sm),
+            Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+        ] else ...[
+          Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'root / username'),
-          SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.sftpPassLabel,
-            tooltipMessage: strings.sftpPassTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _passController,
-            obscureText: _obscurePassword,
-            placeholder: '••••••••',
-            suffix: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: fluent.IconButton(
-                  icon: Icon(
-                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
-                    size: 16,
-                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
-                  ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
+          material.TextField(
+            controller: _userController,
+            decoration: const material.InputDecoration(
+              hintText: 'user@example.com / username',
+              border: material.OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
           ),
-        ]
-        // 6. Generic / Other Provider Fields
-        else ...[
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.emailOrUserLabel,
-            tooltipMessage: strings.emailOrUserTooltip,
-          ),
-          SizedBox(height: theme.xs),
-          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'user@example.com / username'),
           SizedBox(height: theme.md),
-          _buildFieldLabelWithTooltip(
-            theme: theme,
-            label: strings.passwordLabel,
-            tooltipMessage: strings.passwordTooltip,
-          ),
+          Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
+          material.TextField(
             controller: _passController,
             obscureText: _obscurePassword,
-            placeholder: '••••••••',
-            suffix: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: fluent.IconButton(
-                  icon: Icon(
-                    _obscurePassword ? fluent.FluentIcons.view : fluent.FluentIcons.hide,
-                    size: 16,
-                    semanticLabel: _obscurePassword ? strings.showPassword : strings.hidePassword,
-                  ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
+            decoration: material.InputDecoration(
+              hintText: '••••••••',
+              border: const material.OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              suffixIcon: material.IconButton(
+                icon: Icon(_obscurePassword ? material.Icons.visibility : material.Icons.visibility_off, size: 20),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
           ),
@@ -1876,13 +1794,16 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFieldLabelWithTooltip(
-                        theme: theme,
-                        label: strings.hostLabel,
-                        tooltipMessage: strings.hostTooltip,
-                      ),
+                      Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: theme.xs),
-                      buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'server.example.com'),
+                      material.TextField(
+                        controller: _hostController,
+                        decoration: const material.InputDecoration(
+                          hintText: 'server.example.com',
+                          border: material.OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1892,13 +1813,16 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFieldLabelWithTooltip(
-                        theme: theme,
-                        label: strings.portLabel,
-                        tooltipMessage: strings.portTooltip,
-                      ),
+                      Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: theme.xs),
-                      buildAdaptiveTextField(platform: widget.platform, controller: _portController, placeholder: '443'),
+                      material.TextField(
+                        controller: _portController,
+                        decoration: const material.InputDecoration(
+                          hintText: '443',
+                          border: material.OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1906,206 +1830,345 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             ),
           ],
         ],
-
         if (_step2Error != null) ...[
           SizedBox(height: theme.md),
-          Text(
-            _step2Error!,
-            style: TextStyle(color: theme.error, fontSize: 12, fontWeight: FontWeight.w500),
-          ),
+          Text(_step2Error!, style: TextStyle(color: theme.error, fontSize: 12)),
         ],
         SizedBox(height: theme.lg),
-        const material.Divider(),
-        SizedBox(height: theme.md),
-        Row(
-          children: [
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 140, minHeight: 44),
-                child: fluent.FilledButton(
-                  onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
-                  child: _isTesting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: fluent.ProgressRing(activeColor: Color(0xFFFFFFFF), strokeWidth: 2),
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              fluent.FluentIcons.plug_connected,
-                              size: 14,
-                              color: Color(0xFFFFFFFF),
-                              semanticLabel: 'Test Connection',
-                            ),
-                            SizedBox(width: theme.xs),
-                            Text(
-                              strings.testConnection,
-                              style: const TextStyle(
-                                color: Color(0xFFFFFFFF),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ),
-            SizedBox(width: theme.md),
-            Expanded(
-              child: _testStatus == 'success'
-                  ? Row(
-                      children: [
-                        Icon(fluent.FluentIcons.completed, color: theme.success, size: 16, semanticLabel: 'Success'),
-                        SizedBox(width: theme.xs),
-                        Expanded(
-                          child: Text(
-                            _testMessage ?? strings.connectionSuccess,
-                            style: TextStyle(color: theme.success, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    )
-                  : _testStatus == 'error'
-                      ? Row(
-                          children: [
-                            Icon(fluent.FluentIcons.error_badge, color: theme.error, size: 16, semanticLabel: 'Error'),
-                            SizedBox(width: theme.xs),
-                            Expanded(
-                              child: Text(
-                                _testMessage ?? strings.connectionFailed,
-                                style: TextStyle(color: theme.error, fontSize: 12),
-                              ),
-                            ),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-            ),
-          ],
+        material.FilledButton.icon(
+          onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
+          icon: _isTesting
+              ? const SizedBox(width: 16, height: 16, child: material.CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFFFFF)))
+              : const Icon(material.Icons.sync, size: 18),
+          label: Text(strings.testConnection),
         ),
+        if (_testStatus != null) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            _testMessage ?? '',
+            style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
+          ),
+        ],
         if (_addError != null) ...[
           SizedBox(height: theme.md),
-          fluent.InfoBar(
-            title: Text(strings.error),
-            content: Text(_addError!),
-            severity: fluent.InfoBarSeverity.error,
+          Text(
+            _addError!,
+            style: TextStyle(color: theme.error, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ],
       ],
     );
   }
 
-  // --- Wizard Footer Action Buttons ---
-  Widget _buildWizardFooter(AppThemeData theme) {
-    final strings = context.strings;
+  Widget _buildAndroidFooter(AppThemeData theme, AppStrings strings) {
     final isStep1 = _currentStep == 0;
-
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.md),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (isStep1) ...[
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 90, minHeight: 44),
-                child: fluent.Button(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(strings.cancel),
-                ),
-              ),
-            ),
+            material.TextButton(onPressed: () => Navigator.pop(context), child: Text(strings.cancel)),
             SizedBox(width: theme.md),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 100, minHeight: 44),
-                child: fluent.FilledButton(
-                  onPressed: _goToStep2,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        strings.next,
-                        style: const TextStyle(
-                          color: Color(0xFFFFFFFF),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(width: theme.xs),
-                      const Icon(
-                        fluent.FluentIcons.chevron_right,
-                        size: 12,
-                        color: Color(0xFFFFFFFF),
-                        semanticLabel: 'Next',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            material.FilledButton(onPressed: _goToStep2, child: Text(strings.next)),
           ] else ...[
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 90, minHeight: 44),
-                child: fluent.Button(
-                  onPressed: _isAdding
-                      ? null
-                      : () {
-                          setState(() {
-                            _currentStep = 0;
-                          });
-                        },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+            material.OutlinedButton(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
+            SizedBox(width: theme.md),
+            material.FilledButton(
+              onPressed: _isAdding ? null : _handleAddRemote,
+              child: _isAdding
+                  ? const SizedBox(width: 16, height: 16, child: material.CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFFFFF)))
+                  : Text(strings.add),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // IOS (Cupertino Layout)
+  // =========================================================================
+  Widget _buildIOSLayout(BuildContext context, AppThemeData theme, AppStrings strings) {
+    return cupertino.CupertinoPageScaffold(
+      navigationBar: cupertino.CupertinoNavigationBar(
+        middle: Text(_currentStep == 0 ? strings.wizardStep1Title : strings.wizardStep2Title),
+        trailing: _isAdding
+            ? const cupertino.CupertinoActivityIndicator()
+            : cupertino.CupertinoButton(
+                padding: EdgeInsets.zero,
+                child: Text(strings.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(theme.lg),
+                child: _currentStep == 0
+                    ? _buildIOSStep1(theme, strings)
+                    : _buildIOSStep2(theme, strings),
+              ),
+            ),
+            _buildIOSFooter(theme, strings),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIOSStep1(AppThemeData theme, AppStrings strings) {
+    final providersAsync = ref.watch(providersProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(strings.connectionNameLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        SizedBox(height: theme.xs),
+        cupertino.CupertinoTextField(
+          controller: _nameController,
+          placeholder: strings.connectionNameHint,
+          padding: const EdgeInsets.all(12),
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+        ),
+        if (_nameError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+        SizedBox(height: theme.lg),
+        Text(strings.searchProviderHint, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        SizedBox(height: theme.xs),
+        cupertino.CupertinoSearchTextField(
+          controller: _searchController,
+          placeholder: strings.searchProviderHint,
+          onChanged: (val) => setState(() => _searchQuery = val),
+        ),
+        SizedBox(height: theme.md),
+        providersAsync.when(
+          data: (providers) {
+            final query = _searchQuery.toLowerCase().trim();
+            final filtered = providers.where((p) =>
+              p.name.toLowerCase().contains(query) ||
+              p.description.toLowerCase().contains(query)
+            ).toList();
+
+            if (filtered.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.all(theme.xl),
+                child: Center(child: Text(strings.noMatchingProviders, style: TextStyle(color: theme.textSecondary))),
+              );
+            }
+
+            return Container(
+              height: 220,
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+                border: Border.all(color: theme.textSecondary.withValues(alpha: 0.2)),
+              ),
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final provider = filtered[index];
+                  final isSelected = _selectedProvider == provider.name;
+
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedProvider = provider.name;
+                      _providerError = null;
+                    }),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+                      color: isSelected ? theme.accent.withValues(alpha: 0.15) : null,
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? cupertino.CupertinoIcons.checkmark_circle_fill : cupertino.CupertinoIcons.circle,
+                            color: isSelected ? theme.accent : theme.textSecondary,
+                            size: 20,
+                          ),
+                          SizedBox(width: theme.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(provider.description, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+                                Text(provider.name, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+          loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: cupertino.CupertinoActivityIndicator())),
+          error: (err, _) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+        ),
+        if (_providerError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(_providerError!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildIOSStep2(AppThemeData theme, AppStrings strings) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: EdgeInsets.all(theme.md),
+          decoration: BoxDecoration(
+            color: theme.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, size: 24),
+              SizedBox(width: theme.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: theme.lg),
+        if (_isOAuthProvider) ...[
+          Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+          SizedBox(height: theme.md),
+          cupertino.CupertinoButton.filled(
+            child: Text(strings.authorizeInBrowser),
+            onPressed: () => setState(() => _isOAuthAuthorized = true),
+          ),
+          if (_isOAuthAuthorized) ...[
+            SizedBox(height: theme.sm),
+            Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+        ] else ...[
+          Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoTextField(
+            controller: _userController,
+            placeholder: 'user@example.com / username',
+            padding: const EdgeInsets.all(12),
+          ),
+          SizedBox(height: theme.md),
+          Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoTextField(
+            controller: _passController,
+            obscureText: _obscurePassword,
+            placeholder: '••••••••',
+            padding: const EdgeInsets.all(12),
+            suffix: cupertino.CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(_obscurePassword ? cupertino.CupertinoIcons.eye : cupertino.CupertinoIcons.eye_slash, size: 20),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
+          if (_requiresHostPort) ...[
+            SizedBox(height: theme.md),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(fluent.FluentIcons.chevron_left, size: 12, semanticLabel: 'Back'),
-                      SizedBox(width: theme.xs),
-                      Text(strings.back),
+                      Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      SizedBox(height: theme.xs),
+                      cupertino.CupertinoTextField(
+                        controller: _hostController,
+                        placeholder: 'server.example.com',
+                        padding: const EdgeInsets.all(12),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ),
-            SizedBox(width: theme.md),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 110, minHeight: 44),
-                child: fluent.FilledButton(
-                  onPressed: _isAdding ? null : _handleAddRemote,
-                  child: _isAdding
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: fluent.ProgressRing(activeColor: Color(0xFFFFFFFF), strokeWidth: 2),
-                            ),
-                            SizedBox(width: theme.sm),
-                            Text(
-                              strings.addingRemote,
-                              style: const TextStyle(
-                                color: Color(0xFFFFFFFF),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Text(
-                          strings.add,
-                          style: const TextStyle(
-                            color: Color(0xFFFFFFFF),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                SizedBox(width: theme.md),
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      SizedBox(height: theme.xs),
+                      cupertino.CupertinoTextField(
+                        controller: _portController,
+                        placeholder: '443',
+                        padding: const EdgeInsets.all(12),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+          ],
+        ],
+        if (_step2Error != null) ...[
+          SizedBox(height: theme.md),
+          Text(_step2Error!, style: TextStyle(color: theme.error, fontSize: 12)),
+        ],
+        SizedBox(height: theme.lg),
+        cupertino.CupertinoButton(
+          color: theme.accent,
+          onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
+          child: _isTesting
+              ? const cupertino.CupertinoActivityIndicator()
+              : Text(strings.testConnection, style: const TextStyle(color: Color(0xFFFFFFFF))),
+        ),
+        if (_testStatus != null) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            _testMessage ?? '',
+            style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
+          ),
+        ],
+        if (_addError != null) ...[
+          SizedBox(height: theme.md),
+          Text(
+            _addError!,
+            style: TextStyle(color: theme.error, fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildIOSFooter(AppThemeData theme, AppStrings strings) {
+    final isStep1 = _currentStep == 0;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.md),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (isStep1) ...[
+            cupertino.CupertinoButton(onPressed: () => Navigator.pop(context), child: Text(strings.cancel)),
+            SizedBox(width: theme.md),
+            cupertino.CupertinoButton.filled(onPressed: _goToStep2, child: Text(strings.next)),
+          ] else ...[
+            cupertino.CupertinoButton(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
+            SizedBox(width: theme.md),
+            cupertino.CupertinoButton.filled(
+              onPressed: _isAdding ? null : _handleAddRemote,
+              child: _isAdding
+                  ? const cupertino.CupertinoActivityIndicator()
+                  : Text(strings.add),
             ),
           ],
         ],

@@ -2,8 +2,15 @@ appId: com.example.fibu
 ---
 - launchApp:
     clearState: false
-- tapOn: ".*(Aufgaben|Tasks).*"
-- tapOn: ".*(Erstellen|Create|Hinzufügen|Add).*"
-- tapOn: ".*(Weiter|Next).*"
-- tapOn: ".*(Weiter|Next).*"
-- tapOn: ".*(Speichern|Save).*"
+- tapOn:
+    text: ".*(Aufgaben|Tasks).*"
+- tapOn:
+    text: ".*(Aufgabe erstellen|Erstellen|Hinzufügen|Add).*"
+- inputText: "Daily Photo Backup"
+- tapOn:
+    text: ".*(Weiter|Next).*"
+- tapOn:
+    text: ".*(Weiter|Next).*"
+- tapOn:
+    text: ".*(Abbrechen|Cancel|Speichern|Save).*"
+    optional: true

@@ -304,5 +304,45 @@ class WindowsRcloneService implements RcloneService {
       throw Exception('Failed to delete file: $e');
     }
   }
+
+  @override
+  Future<String?> catFile(String remoteName, String path) async {
+    try {
+      final target = path.isEmpty ? '$remoteName:' : '$remoteName:$path';
+      final result = await Process.run(_executablePath, ['cat', target]);
+      if (result.exitCode == 0) {
+        return result.stdout as String;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> copyFileToRemote(String localFilePath, String remoteName, String remotePath) async {
+    try {
+      final target = remotePath.isEmpty ? '$remoteName:' : '$remoteName:$remotePath';
+      final result = await Process.run(_executablePath, ['copyto', localFilePath, target]);
+      if (result.exitCode != 0) {
+        throw Exception('Rclone failed to copy file: ${result.stderr}');
+      }
+    } catch (e) {
+      throw Exception('Failed to copy file to remote: $e');
+    }
+  }
+
+  @override
+  Future<void> downloadDirectory(String remoteName, String remotePath, String localPath) async {
+    try {
+      final target = remotePath.isEmpty ? '$remoteName:' : '$remoteName:$remotePath';
+      final result = await Process.run(_executablePath, ['copy', target, localPath]);
+      if (result.exitCode != 0) {
+        throw Exception('Rclone failed to download directory: ${result.stderr}');
+      }
+    } catch (e) {
+      throw Exception('Failed to download directory: $e');
+    }
+  }
 }
 

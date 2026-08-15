@@ -148,5 +148,14 @@ abstract class RcloneService {
 
   /// Deletes a file from the remote storage.
   Future<void> deleteFile(String remoteName, String path);
+
+  /// Reads a file from remote storage and returns its string content, or null if not found.
+  Future<String?> catFile(String remoteName, String path);
+
+  /// Uploads a single file to the remote destination.
+  Future<void> copyFileToRemote(String localFilePath, String remoteName, String remotePath);
+
+  /// Downloads files from a remote path to a local directory.
+  Future<void> downloadDirectory(String remoteName, String remotePath, String localPath);
 }
 

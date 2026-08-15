@@ -1,20 +1,25 @@
 appId: com.example.fibu
 ---
 - launchApp:
-    clearState: true
-- tapOn: ".*(Weiter|Next).*"
-- tapOn: ".*(Später einrichten|Set Up Later).*"
-- tapOn: ".*(Später einrichten|Set Up Later).*"
-- tapOn: ".*(Jetzt loslegen|Get Started).*"
+    clearState: false
 - tapOn:
-    id: "Dashboard"
+    text: ".*(Weiter|Next).*"
     optional: true
 - tapOn:
-    id: "Tasks"
+    text: ".*(Später einrichten|Set Up Later|Weiter|Next).*"
     optional: true
 - tapOn:
-    id: "Cloud Explorer"
+    text: ".*(Jetzt loslegen|Get Started).*"
     optional: true
 - tapOn:
-    id: "Settings"
+    text: ".*(Übersicht|Overview).*"
+    optional: true
+- tapOn:
+    text: ".*(Aufgaben|Tasks).*"
+    optional: true
+- tapOn:
+    text: ".*(Einstellungen|Settings).*"
+    optional: true
+- tapOn:
+    text: ".*(Übersicht|Overview).*"
     optional: true

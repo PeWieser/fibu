@@ -152,4 +152,19 @@ class MobileRcloneService implements RcloneService {
   Future<void> deleteFile(String remoteName, String path) async {
     throw Exception('Cloud credentials are not reachable');
   }
+
+  @override
+  Future<String?> catFile(String remoteName, String path) async {
+    return null;
+  }
+
+  @override
+  Future<void> copyFileToRemote(String localFilePath, String remoteName, String remotePath) async {
+    throw Exception('Cloud credentials are not reachable');
+  }
+
+  @override
+  Future<void> downloadDirectory(String remoteName, String remotePath, String localPath) async {
+    throw Exception('Cloud credentials are not reachable');
+  }
 }

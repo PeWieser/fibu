@@ -90,9 +90,24 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
 
       final parts = task.targetRemote.split(':');
       final remoteName = parts[0];
-      final remotePath = parts.length > 1 ? parts[1] : '';
+      final targetFolder = task.targetFolderMode == TargetFolderMode.root
+          ? ''
+          : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');
+      final remotePath = parts.length > 1 && parts[1].isNotEmpty
+          ? (targetFolder.isNotEmpty ? '${parts[1]}/$targetFolder' : parts[1])
+          : targetFolder;
 
-      final startMsg = '${_timestamp()} Task "${task.name}": starting copy to ${task.targetRemote}...';
+      final List<String> includeFilters = [];
+      final srcLower = task.sourcePath.toLowerCase();
+      if (srcLower == 'photos' || srcLower == 'alle fotos') {
+        includeFilters.addAll(['*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef']);
+      } else if (srcLower == 'videos' || srcLower == 'alle videos') {
+        includeFilters.addAll(['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']);
+      }
+
+      final isEcho = task.syncMode == SyncMode.mirror;
+      final modeLabel = isEcho ? 'Echo (2-Way Mirror)' : 'Incremental';
+      final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
       state = state.copyWith(
         logs: [...state.logs, startMsg],
       );
@@ -102,7 +117,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
           localPath: task.sourcePath,
           remoteName: remoteName,
           remotePath: remotePath,
-          options: const SyncOptions(isEchoMode: false),
+          options: SyncOptions(
+            isEchoMode: isEcho,
+            includeFilters: includeFilters,
+            excludeFilters: task.excludedFiles,
+          ),
         );
 
         if (!mounted) return;

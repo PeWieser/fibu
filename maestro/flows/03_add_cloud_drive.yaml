@@ -2,8 +2,19 @@ appId: com.example.fibu
 ---
 - launchApp:
     clearState: false
-- tapOn: ".*(Cloud).*"
-- tapOn: ".*(Hinzufügen|Add).*"
-- tapOn: ".*(Mega).*"
-- tapOn: ".*(Verbindung testen|Test).*"
-- tapOn: ".*(Speichern|Save).*"
+- tapOn:
+    text: ".*(Einstellungen|Settings).*"
+    optional: true
+- tapOn:
+    text: ".*(Cloud-Laufwerke|Cloud).*"
+- tapOn:
+    text: ".*(Hinzufügen|Add).*"
+- inputText: "My Cloud Drive"
+- hideKeyboard
+- tapOn:
+    text: ".*(Google Drive|Dropbox|OneDrive|Mega|MEGA).*"
+- tapOn:
+    text: ".*(Weiter|Next).*"
+- tapOn:
+    text: ".*(Abbrechen|Cancel|Zurück|Back).*"
+    optional: true

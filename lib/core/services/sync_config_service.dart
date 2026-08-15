@@ -99,12 +99,20 @@ class SyncConfigService {
 
   /// Returns local log directory `<documents>/fibu-logs/`.
   Future<Directory> getLocalLogDirectory() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final logDir = Directory('${dir.path}/fibu-logs');
-    if (!logDir.existsSync()) {
-      await logDir.create(recursive: true);
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final logDir = Directory('${dir.path}/fibu-logs');
+      if (!logDir.existsSync()) {
+        await logDir.create(recursive: true);
+      }
+      return logDir;
+    } catch (_) {
+      final logDir = Directory('${Directory.systemTemp.path}/fibu-logs');
+      if (!logDir.existsSync()) {
+        await logDir.create(recursive: true);
+      }
+      return logDir;
     }
-    return logDir;
   }
 
   /// Appends an event to the local task log.
@@ -118,14 +126,18 @@ class SyncConfigService {
   }
 
   /// Checks if a remote contains an existing `.fibu/config.json`.
-  Future<bool> checkRemoteForConfig(String remoteName) async {
+  Future<bool> checkRemoteForConfig(String remoteName, [String targetFolder = defaultRemoteFolder]) async {
     try {
-      // In rclone mock / real service, check root .fibu and fibu-backup/.fibu
-      final files = await _rcloneService.listFiles(remoteName, '');
-      final hasFibuDir = files.any((f) => f.name == '.fibu' || f.name == defaultRemoteFolder);
-      if (hasFibuDir) {
-        final subFiles = await _rcloneService.listFiles(remoteName, defaultRemoteFolder);
-        return subFiles.any((f) => f.name == '.fibu' || f.name == 'config.json');
+      final pathsToCheck = [
+        '$targetFolder/.fibu/config.json',
+        '.fibu/config.json',
+        '$targetFolder/config.json',
+      ];
+      for (final p in pathsToCheck) {
+        final content = await _rcloneService.catFile(remoteName, p);
+        if (content != null && content.trim().isNotEmpty) {
+          return true;
+        }
       }
       return false;
     } catch (_) {
@@ -134,12 +146,24 @@ class SyncConfigService {
   }
 
   /// Reads and parses `.fibu/config.json` from a remote.
-  Future<FibuRemoteConfig?> readRemoteConfig(String remoteName) async {
+  Future<FibuRemoteConfig?> readRemoteConfig(String remoteName, [String targetFolder = defaultRemoteFolder]) async {
     try {
-      final files = await _rcloneService.listFiles(remoteName, defaultRemoteFolder);
-      final hasConfig = files.any((f) => f.name == 'config.json');
-      if (!hasConfig) return null;
-      // Actual reading requires downloading the file which might not be implemented in RcloneService yet.
+      final pathsToCheck = [
+        '$targetFolder/.fibu/config.json',
+        '.fibu/config.json',
+        '$targetFolder/config.json',
+      ];
+      for (final p in pathsToCheck) {
+        final content = await _rcloneService.catFile(remoteName, p);
+        if (content != null && content.trim().isNotEmpty) {
+          try {
+            final data = json.decode(content);
+            if (data is Map<String, dynamic>) {
+              return FibuRemoteConfig.fromJson(data);
+            }
+          } catch (_) {}
+        }
+      }
       return null;
     } catch (_) {
       return null;
@@ -147,7 +171,7 @@ class SyncConfigService {
   }
 
   /// Converts remote task configs into local `BackupTask` instances.
-  List<BackupTask> convertConfigToTasks(FibuRemoteConfig config, String remoteName) {
+  List<BackupTask> convertConfigToTasks(FibuRemoteConfig config, String remoteName, [String? localDestinationPath]) {
     return config.tasks.map((t) {
       final syncMode = t.syncMode == 'mirror' ? SyncMode.mirror : SyncMode.incremental;
       final dist = t.distributionStrategy == 'balance'
@@ -157,7 +181,7 @@ class SyncConfigService {
       return BackupTask(
         id: t.taskId.isNotEmpty ? t.taskId : 'imported_${DateTime.now().millisecondsSinceEpoch}',
         name: t.name,
-        sourcePath: t.sourcePath.isNotEmpty ? t.sourcePath : 'C:\\fibu-backup',
+        sourcePath: localDestinationPath ?? (t.sourcePath.isNotEmpty ? t.sourcePath : 'C:\\fibu-backup'),
         targetRemotes: t.linkedRemotes.isNotEmpty ? t.linkedRemotes : [remoteName],
         schedule: 'Daily at 02:00',
         scheduleDay: 'Daily',
@@ -173,7 +197,7 @@ class SyncConfigService {
   }
 
   /// Writes/syncs task configuration to the remote storage.
-  Future<void> writeConfigToRemote(String remoteName, List<BackupTask> tasks) async {
+  Future<void> writeConfigToRemote(String remoteName, List<BackupTask> tasks, [String targetFolder = defaultRemoteFolder]) async {
     try {
       final config = FibuRemoteConfig(
         version: 1,
@@ -191,9 +215,26 @@ class SyncConfigService {
       );
 
       final jsonString = json.encode(config.toJson());
-      // Log local update
-      await appendLocalLog('global', 'Remote config updated for $remoteName: $jsonString');
-    } catch (_) {}
+      final tempConfigFile = File('${Directory.systemTemp.path}/fibu_remote_config.json');
+      await tempConfigFile.writeAsString(jsonString);
+
+      final remoteDest = targetFolder.isNotEmpty ? '$targetFolder/.fibu/config.json' : '.fibu/config.json';
+      await _rcloneService.copyFileToRemote(tempConfigFile.path, remoteName, remoteDest);
+
+      await appendLocalLog('global', 'Remote config successfully written to $remoteName:$remoteDest');
+    } catch (e) {
+      await appendLocalLog('global', 'Failed to write remote config to $remoteName: $e');
+    }
+  }
+
+  /// Downloads all files from a remote path to a local directory.
+  Future<void> downloadRemoteFiles(String remoteName, String remotePath, String localPath) async {
+    final dir = Directory(localPath);
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+    await _rcloneService.downloadDirectory(remoteName, remotePath, localPath);
+    await appendLocalLog('global', 'Downloaded files from $remoteName:$remotePath to $localPath');
   }
 }
 

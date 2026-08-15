@@ -359,10 +359,66 @@ class AppStrings {
   String get drivesSection => isGerman ? 'Cloud-Verbindungen' : 'Cloud Connections';
   String get manageDrivesSubtitle => isGerman ? 'Remotes verbinden, bearbeiten und trennen' : 'Connect, edit, and disconnect cloud remotes';
   String get aboutSection => isGerman ? 'Über Fibu' : 'About Fibu';
-  String get version => isGerman ? 'Version 1.0.0 (Fibu Desktop)' : 'Version 1.0.0 (Fibu Desktop)';
-  String get tooltipThemeMode => isGerman ? 'Schaltet zwischen automatischer System-Synchronisierung und manuellem Hell-/Dunkelmodus um.' : 'Toggles between automatic system sync and manual light/dark mode.';
-  String get tooltipWadaPalette => isGerman ? 'Sanzo Wada Farbharmonie: Klicke auf ein Farbfeld, um die Palette auszuwählen.' : 'Sanzo Wada color harmony: Click a swatch to select the palette.';
   String get tooltipLanguage => isGerman ? 'Wähle die Sprache der Benutzeroberfläche.' : 'Choose the interface language.';
+  String get tooltipThemeMode => isGerman
+      ? 'Wähle zwischen automatischem System-Modus oder manuellem Dunkel-/Hellmodus.'
+      : 'Choose between automatic system mode or manual dark/light mode.';
+  String get tooltipWadaPalette => isGerman
+      ? 'Wähle eine traditionelle japanische Sanzo Wada Farbpalette für ein harmonisches Design.'
+      : 'Choose a traditional Japanese Sanzo Wada color palette for balanced styling.';
+
+  // --- Onboarding ---
+  String get onboardingWelcomeTitle => isGerman ? 'Willkommen bei Fibu' : 'Welcome to Fibu';
+  String get onboardingWelcomeSubtitle => isGerman ? 'Deine persönliche Multi-Cloud Backup-Zentrale' : 'Your Personal Multi-Cloud Backup Hub';
+  String get onboardingFeature1Title => isGerman ? 'Multi-Cloud Backup' : 'Multi-Cloud Backup';
+  String get onboardingFeature1Desc => isGerman
+      ? 'Verbinde beliebige Cloud-Speicher (Google Drive, OneDrive, S3, Mega, WebDAV etc.) und sichere deine Dateien flexibel.'
+      : 'Connect any cloud storage (Google Drive, OneDrive, S3, Mega, WebDAV etc.) and backup files with full flexibility.';
+  String get onboardingFeature2Title => isGerman ? 'Automatische Synchronisation' : 'Automated Synchronization';
+  String get onboardingFeature2Desc => isGerman
+      ? 'Automatische Zeitpläne, intelligentes Splitting und 2-Wege Echo-Spiegelung.'
+      : 'Automated schedules, smart storage balancing, and 2-way mirror synchronization.';
+  String get onboardingFeature3Title => isGerman ? 'Volle Kontrolle & Datenschutz' : 'Full Control & Privacy';
+  String get onboardingFeature3Desc => isGerman
+      ? 'Keine Cloud-Abhängigkeit. Alle Daten und Konfigurationen gehören dir.'
+      : 'No vendor lock-in. Your files and configs stay entirely in your control.';
+  String get onboardingStep1ConnectTitle => isGerman ? 'Schritt 1: Cloud-Speicher verbinden' : 'Step 1: Connect Cloud Storage';
+  String get onboardingStep1ConnectDesc => isGerman
+      ? 'Verbinde dein erstes Cloud-Laufwerk, um deine Backups sicher in der Cloud zu speichern.'
+      : 'Connect your first cloud account to start storing backups securely in the cloud.';
+  String get onboardingConnectDriveButton => isGerman ? 'Cloud-Laufwerk hinzufügen' : 'Add Cloud Drive';
+  String get onboardingStep2TaskTitle => isGerman ? 'Schritt 2: Erste Backup-Aufgabe' : 'Step 2: First Backup Task';
+  String get onboardingStep2TaskDesc => isGerman
+      ? 'Wähle einen lokalen Ordner auf deinem Computer und starte dein erstes Backup.'
+      : 'Choose a local folder on your computer to automate your first backup.';
+  String get onboardingCreateTaskButton => isGerman ? 'Erste Aufgabe erstellen' : 'Create First Task';
+  String get onboardingSkip => isGerman ? 'Später einrichten' : 'Set Up Later';
+  String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
+  String get onboardingDoneTitle => isGerman ? 'Du bist startklar!' : 'You are all set!';
+  String get onboardingDoneSubtitle => isGerman
+      ? 'Fibu ist eingerichtet und bereit für deine Backups.'
+      : 'Fibu is configured and ready for your backups.';
+
+  // --- Task 3-Step Wizard ---
+  String get taskWizardStep1Title => isGerman ? 'Schritt 1: Grundlagen' : 'Step 1: Basics';
+  String get taskWizardStep1Subtitle => isGerman ? 'Aufgabenname & Quellverzeichnis' : 'Task name & source directory';
+  String get taskWizardStep2Title => isGerman ? 'Schritt 2: Cloud-Ziel' : 'Step 2: Cloud Destination';
+  String get taskWizardStep2Subtitle => isGerman ? 'Ziel-Laufwerke & Cloud-Ordner' : 'Destination drives & remote folder';
+  String get taskWizardStep3Title => isGerman ? 'Schritt 3: Zeitplan & Modus' : 'Step 3: Schedule & Mode';
+  String get taskWizardStep3Subtitle => isGerman ? 'Synchronisationsart & Wiederholung' : 'Sync type & recurrence';
+  String get stepIndicator => isGerman ? 'Schritt' : 'Step';
+
+  // --- Config Detection & Sync Logs ---
+  String get existingConfigDetectedTitle => isGerman ? 'Bestehende Fibu-Konfiguration gefunden' : 'Existing Fibu Configuration Found';
+  String existingConfigDetectedMessage(String remoteName) => isGerman
+      ? 'Auf dem Cloud-Laufwerk "$remoteName" wurde eine bestehende Fibu-Konfiguration (.fibu/config.json) gefunden.\n\nMöchtest du diese Konfiguration importieren und eine lokale Kopie samt Spiegel-Task anlegen?'
+      : 'An existing Fibu configuration (.fibu/config.json) was found on cloud remote "$remoteName".\n\nWould you like to import this configuration and create a local mirror sync task?';
+  String get importConfigAndSync => isGerman ? 'Importieren & Spiegeln' : 'Import & Mirror';
+  String get skipConfigImport => isGerman ? 'Überspringen' : 'Skip';
+  String get configImportSuccess => isGerman ? 'Konfiguration erfolgreich importiert!' : 'Configuration imported successfully!';
+  String get localLog => isGerman ? 'Lokales Protokoll' : 'Local Log';
+  String get remoteLog => isGerman ? 'Remote-Protokoll' : 'Remote Log';
+  String get defaultBackupFolder => isGerman ? 'fibu-backup' : 'fibu-backup';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

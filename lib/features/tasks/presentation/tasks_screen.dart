@@ -14,7 +14,7 @@ import 'tasks_controller.dart';
 /// Platform-adaptive Tasks and Backup Jobs screen.
 /// Renders layout dynamically based on current platform:
 /// - Windows (Fluent Design)
-/// - iOS (Cupertino with modal CupertinoPageScaffold sheet)
+/// - iOS (Cupertino)
 /// - Android (Material 3)
 /// Allows viewing, adding, editing, and deleting backup tasks with multi-remote targets,
 /// distribution strategy, target folder mode, and Rule 6 compliance.
@@ -61,7 +61,7 @@ class TasksScreen extends ConsumerWidget {
       content: tasks.isEmpty
           ? _buildEmptyState(context, ref, TargetPlatform.windows, theme, strings)
           : ListView.separated(
-              padding: EdgeInsets.all(theme.lg),
+              padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.md),
               itemBuilder: (context, index) {
@@ -222,6 +222,7 @@ class TasksScreen extends ConsumerWidget {
         child: tasks.isEmpty
             ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
             : SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(0, 0, 16, theme.lg),
                 child: cupertino.CupertinoListSection.insetGrouped(
                   header: Text(strings.backupJobsHeader),
                   children: tasks.map((task) {
@@ -342,7 +343,7 @@ class TasksScreen extends ConsumerWidget {
       body: tasks.isEmpty
           ? _buildEmptyState(context, ref, TargetPlatform.android, theme, strings)
           : ListView.separated(
-              padding: EdgeInsets.all(theme.lg),
+              padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
@@ -486,7 +487,7 @@ class TasksScreen extends ConsumerWidget {
               SizedBox(width: theme.sm),
               Text(
                 strings.addTask,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -505,7 +506,7 @@ class TasksScreen extends ConsumerWidget {
               SizedBox(width: theme.sm),
               Text(
                 strings.addTask,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -519,7 +520,7 @@ class TasksScreen extends ConsumerWidget {
           icon: const Icon(material.Icons.add, size: 18, color: Color(0xFFFFFFFF)),
           label: Text(
             strings.addTask,
-            style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
+            style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -821,7 +822,7 @@ class TasksScreen extends ConsumerWidget {
   // =========================================================================
   // CONTEXTUAL INFO TOOLTIP (ℹ️)
   // =========================================================================
-  Widget _buildInfoTooltip(
+  static Widget _buildInfoTooltip(
     BuildContext context,
     AppThemeData theme,
     String tooltipText,
@@ -970,7 +971,7 @@ class TasksScreen extends ConsumerWidget {
               },
               child: Text(
                 strings.delete,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
               ),
             ),
             fluent.Button(
@@ -1026,7 +1027,7 @@ class TasksScreen extends ConsumerWidget {
               },
               child: Text(
                 strings.delete,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -1036,7 +1037,7 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // MAIN ADD/EDIT DIALOG DISPATCHER
+  // MAIN ADD/EDIT DIALOG DISPATCHER (3-Step Wizard)
   // =========================================================================
   void _showAddEditTaskDialog(
     BuildContext context,
@@ -1045,2048 +1046,40 @@ class TasksScreen extends ConsumerWidget {
     TargetPlatform platform,
   ) {
     if (platform == TargetPlatform.windows) {
-      _showWindowsAddEditDialog(context, ref, existingTask);
+      fluent.showDialog(
+        context: context,
+        builder: (dialogCtx) => TaskWizardDialog(
+          existingTask: existingTask,
+          platform: TargetPlatform.windows,
+        ),
+      );
     } else if (platform == TargetPlatform.iOS) {
-      _showIOSAddEditModalSheet(context, ref, existingTask);
+      cupertino.showCupertinoModalPopup(
+        context: context,
+        barrierDismissible: true,
+        builder: (sheetCtx) => TaskWizardDialog(
+          existingTask: existingTask,
+          platform: TargetPlatform.iOS,
+        ),
+      );
     } else {
-      _showAndroidAddEditDialog(context, ref, existingTask);
-    }
-  }
-
-  // =========================================================================
-  // WINDOWS ADD / EDIT FORM
-  // =========================================================================
-  void _showWindowsAddEditDialog(BuildContext context, WidgetRef ref, BackupTask? existingTask) {
-    final theme = context.theme;
-    final strings = ref.read(stringsProvider);
-    final remotesList = _resolveRemotesList(ref);
-
-    final nameController = TextEditingController(text: existingTask?.name ?? '');
-    final srcController = TextEditingController(text: existingTask?.sourcePath ?? '');
-    final targetFolderController = TextEditingController(text: existingTask?.targetFolderName ?? 'backup/media');
-
-    final List<String> selectedRemotes = existingTask != null && existingTask.targetRemotes.isNotEmpty
-        ? List<String>.from(existingTask.targetRemotes)
-        : (remotesList.isNotEmpty ? [remotesList.first] : ['GoogleDrive_Backup']);
-
-    DistributionStrategy selectedDistribution = existingTask?.distributionStrategy ?? DistributionStrategy.mirrorAll;
-    TargetFolderMode selectedTargetFolderMode = existingTask?.targetFolderMode ?? TargetFolderMode.custom;
-    SyncMode selectedSyncMode = existingTask?.syncMode ?? SyncMode.incremental;
-
-    String selectedScheduleDay = existingTask?.scheduleDay ?? 'Daily';
-    String selectedHour = '02';
-    String selectedMinute = '00';
-    if (existingTask != null && existingTask.scheduleTime.contains(':')) {
-      final parts = existingTask.scheduleTime.split(':');
-      if (parts.length == 2) {
-        selectedHour = parts[0];
-        selectedMinute = parts[1];
-      }
-    }
-    bool isActive = existingTask?.isActive ?? true;
-
-    String? nameError;
-    String? sourceError;
-    String? remotesError;
-
-    const scheduleDayOptions = _scheduleDayKeys;
-    final hours = List.generate(24, (i) => i.toString().padLeft(2, '0'));
-    final minutes = List.generate(12, (i) => (i * 5).toString().padLeft(2, '0'));
-
-    fluent.showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          void handleSave() {
-            final name = nameController.text.trim();
-            final sourcePath = srcController.text.trim();
-
-            bool hasError = false;
-            String? newNameError;
-            String? newSourceError;
-            String? newRemotesError;
-
-            if (name.isEmpty) {
-              newNameError = strings.taskNameRequiredError;
-              hasError = true;
-            }
-            if (sourcePath.isEmpty) {
-              newSourceError = strings.sourcePathRequiredError;
-              hasError = true;
-            }
-            if (selectedRemotes.isEmpty) {
-              newRemotesError = strings.selectAtLeastOneRemote;
-              hasError = true;
-            }
-
-            if (hasError) {
-              setState(() {
-                nameError = newNameError;
-                sourceError = newSourceError;
-                remotesError = newRemotesError;
-              });
-              return;
-            }
-
-            final String finalTime = selectedScheduleDay == 'Manual' ? '12:00' : '$selectedHour:$selectedMinute';
-            final String finalSchedule = selectedScheduleDay == 'Daily'
-                ? 'Daily at $finalTime'
-                : (selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${selectedScheduleDay}s at $finalTime');
-
-            String finalTargetFolder = targetFolderController.text.trim();
-            if (selectedTargetFolderMode == TargetFolderMode.root) {
-              finalTargetFolder = '/';
-            } else if (finalTargetFolder.isEmpty) {
-              finalTargetFolder = selectedTargetFolderMode == TargetFolderMode.newFolder ? 'new_backup' : 'backup/media';
-            }
-
-            final task = BackupTask(
-              id: existingTask?.id ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
-              name: name,
-              sourcePath: sourcePath,
-              targetRemotes: List<String>.from(selectedRemotes),
-              schedule: finalSchedule,
-              scheduleDay: selectedScheduleDay,
-              scheduleTime: finalTime,
-              isActive: isActive,
-              runMissedOnStartup: true,
-              excludedFiles: existingTask?.excludedFiles ?? const [],
-              syncMode: selectedSyncMode,
-              distributionStrategy: selectedRemotes.length > 1 ? selectedDistribution : DistributionStrategy.mirrorAll,
-              targetFolderMode: selectedTargetFolderMode,
-              targetFolderName: finalTargetFolder,
-            );
-
-            if (existingTask == null) {
-              ref.read(tasksListProvider.notifier).addTask(task);
-            } else {
-              ref.read(tasksListProvider.notifier).updateTask(existingTask.id, task);
-            }
-            Navigator.pop(dialogContext);
-          }
-
-          return fluent.ContentDialog(
-            title: fluent.Text(existingTask == null ? strings.addTask : strings.editTask),
-            content: _buildWindowsFormFields(
-              context: context,
-              theme: theme,
-              strings: strings,
-              nameController: nameController,
-              srcController: srcController,
-              targetFolderController: targetFolderController,
-              nameError: nameError,
-              sourceError: sourceError,
-              remotesError: remotesError,
-              selectedRemotes: selectedRemotes,
-              remotesList: remotesList,
-              onToggleRemote: (remote, checked) {
-                setState(() {
-                  if (checked == true) {
-                    if (!selectedRemotes.contains(remote)) selectedRemotes.add(remote);
-                  } else {
-                    selectedRemotes.remove(remote);
-                  }
-                  if (selectedRemotes.isNotEmpty) remotesError = null;
-                });
-              },
-              selectedDistribution: selectedDistribution,
-              onDistributionChanged: (val) => setState(() => selectedDistribution = val),
-              selectedTargetFolderMode: selectedTargetFolderMode,
-              onTargetFolderModeChanged: (val) => setState(() => selectedTargetFolderMode = val),
-              selectedSyncMode: selectedSyncMode,
-              onSyncModeChanged: (val) => setState(() => selectedSyncMode = val),
-              selectedScheduleDay: selectedScheduleDay,
-              scheduleDayOptions: scheduleDayOptions,
-              onScheduleDayChanged: (val) {
-                if (val != null) setState(() => selectedScheduleDay = val);
-              },
-              selectedHour: selectedHour,
-              hours: hours,
-              onHourChanged: (val) {
-                if (val != null) setState(() => selectedHour = val);
-              },
-              selectedMinute: selectedMinute,
-              minutes: minutes,
-              onMinuteChanged: (val) {
-                if (val != null) setState(() => selectedMinute = val);
-              },
-              isActive: isActive,
-              onActiveChanged: (val) => setState(() => isActive = val),
-              onPickSourceFolder: () async {
-                final path = await FilePicker.getDirectoryPath();
-                if (path != null) {
-                  setState(() {
-                    srcController.text = path;
-                    sourceError = null;
-                  });
-                }
-              },
-              onNameChanged: () {
-                if (nameError != null) setState(() => nameError = null);
-              },
-              onSourceChanged: () {
-                if (sourceError != null) setState(() => sourceError = null);
-              },
-            ),
-            actions: [
-              fluent.FilledButton(
-                onPressed: handleSave,
-                child: Text(
-                  strings.save,
-                  style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
-                ),
-              ),
-              fluent.Button(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(strings.cancel),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildWindowsFormFields({
-    required BuildContext context,
-    required AppThemeData theme,
-    required AppStrings strings,
-    required TextEditingController nameController,
-    required TextEditingController srcController,
-    required TextEditingController targetFolderController,
-    required String? nameError,
-    required String? sourceError,
-    required String? remotesError,
-    required List<String> selectedRemotes,
-    required List<String> remotesList,
-    required void Function(String remote, bool? checked) onToggleRemote,
-    required DistributionStrategy selectedDistribution,
-    required ValueChanged<DistributionStrategy> onDistributionChanged,
-    required TargetFolderMode selectedTargetFolderMode,
-    required ValueChanged<TargetFolderMode> onTargetFolderModeChanged,
-    required SyncMode selectedSyncMode,
-    required ValueChanged<SyncMode> onSyncModeChanged,
-    required String selectedScheduleDay,
-    required List<String> scheduleDayOptions,
-    required ValueChanged<String?> onScheduleDayChanged,
-    required String selectedHour,
-    required List<String> hours,
-    required ValueChanged<String?> onHourChanged,
-    required String selectedMinute,
-    required List<String> minutes,
-    required ValueChanged<String?> onMinuteChanged,
-    required bool isActive,
-    required ValueChanged<bool> onActiveChanged,
-    required VoidCallback onPickSourceFolder,
-    required VoidCallback onNameChanged,
-    required VoidCallback onSourceChanged,
-  }) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(strings.taskNameLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-          SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: nameController,
-            placeholder: strings.taskNameHint,
-            decoration: nameError != null
-                ? WidgetStatePropertyAll(
-                    BoxDecoration(
-                      color: theme.surface,
-                      border: Border.all(color: theme.error, width: 1.5),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                    ),
-                  )
-                : null,
-            onChanged: (_) => onNameChanged(),
-          ),
-          if (nameError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(
-              nameError,
-              style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-            ),
-          ],
-          SizedBox(height: theme.md),
-          Row(
-            children: [
-              Text(strings.sourcePathLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipSourcePath),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          Row(
-            children: [
-              Expanded(
-                child: fluent.TextBox(
-                  controller: srcController,
-                  placeholder: strings.sourcePathHint,
-                  decoration: sourceError != null
-                      ? WidgetStatePropertyAll(
-                          BoxDecoration(
-                            color: theme.surface,
-                            border: Border.all(color: theme.error, width: 1.5),
-                            borderRadius: BorderRadius.circular(theme.radiusSm),
-                          ),
-                        )
-                      : null,
-                  onChanged: (_) => onSourceChanged(),
-                ),
-              ),
-              SizedBox(width: theme.sm),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: fluent.IconButton(
-                    icon: Icon(fluent.FluentIcons.folder_open, semanticLabel: strings.selectFolder),
-                    onPressed: onPickSourceFolder,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (sourceError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(
-              sourceError,
-              style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-            ),
-          ],
-          SizedBox(height: theme.md),
-
-          // --- Destination Cloud Remotes Multi-Select ---
-          Row(
-            children: [
-              Text(strings.destinationRemoteLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          Container(
-            decoration: BoxDecoration(
-              color: theme.surface,
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              border: Border.all(
-                color: remotesError != null ? theme.error : theme.textSecondary.withValues(alpha: 0.25),
-                width: remotesError != null ? 1.5 : 1,
-              ),
-            ),
-            padding: EdgeInsets.all(theme.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: remotesList.map((remote) {
-                final isChecked = selectedRemotes.contains(remote);
-                return Padding(
-                  padding: EdgeInsets.symmetric(vertical: theme.xs / 2),
-                  child: fluent.Checkbox(
-                    checked: isChecked,
-                    content: Text(remote),
-                    onChanged: (val) => onToggleRemote(remote, val),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          if (remotesError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(
-              remotesError,
-              style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-            ),
-          ],
-
-          // --- Distribution Strategy (If > 1 remote selected) ---
-          if (selectedRemotes.length > 1) ...[
-            SizedBox(height: theme.md),
-            Row(
-              children: [
-                Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(width: theme.xs),
-                _buildInfoTooltip(context, theme, strings.distributionTooltip),
-              ],
-            ),
-            SizedBox(height: theme.xs),
-            fluent.Card(
-              padding: EdgeInsets.all(theme.sm),
-              backgroundColor: selectedDistribution == DistributionStrategy.mirrorAll
-                  ? theme.accent.withValues(alpha: 0.08)
-                  : theme.surface,
-              borderColor: selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : null,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onDistributionChanged(DistributionStrategy.mirrorAll),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        selectedDistribution == DistributionStrategy.mirrorAll
-                            ? fluent.FluentIcons.radio_bullet
-                            : fluent.FluentIcons.radio_btn_off,
-                        color: selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
-                        size: 18,
-                        semanticLabel: strings.distributionMirrorAll,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.distributionMirrorAll,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            SizedBox(height: theme.xs / 2),
-                            Text(
-                              strings.distributionMirrorAllDesc,
-                              style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: theme.xs),
-            fluent.Card(
-              padding: EdgeInsets.all(theme.sm),
-              backgroundColor: selectedDistribution == DistributionStrategy.balance
-                  ? theme.accent.withValues(alpha: 0.08)
-                  : theme.surface,
-              borderColor: selectedDistribution == DistributionStrategy.balance ? theme.accent : null,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onDistributionChanged(DistributionStrategy.balance),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        selectedDistribution == DistributionStrategy.balance
-                            ? fluent.FluentIcons.radio_bullet
-                            : fluent.FluentIcons.radio_btn_off,
-                        color: selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
-                        size: 18,
-                        semanticLabel: strings.distributionBalance,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.distributionBalance,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            SizedBox(height: theme.xs / 2),
-                            Text(
-                              strings.distributionBalanceDesc,
-                              style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-
-          SizedBox(height: theme.md),
-
-          // --- Cloud Target Folder Mode ---
-          Row(
-            children: [
-              Text(strings.targetFolderModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.targetFolderTooltip),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          fluent.ComboBox<TargetFolderMode>(
-            value: selectedTargetFolderMode,
-            items: [
-              fluent.ComboBoxItem(
-                value: TargetFolderMode.root,
-                child: Text(strings.targetFolderRoot),
-              ),
-              fluent.ComboBoxItem(
-                value: TargetFolderMode.custom,
-                child: Text(strings.targetFolderCustom),
-              ),
-              fluent.ComboBoxItem(
-                value: TargetFolderMode.newFolder,
-                child: Text(strings.targetFolderNew),
-              ),
-            ],
-            onChanged: (val) {
-              if (val != null) onTargetFolderModeChanged(val);
-            },
-          ),
-          if (selectedTargetFolderMode == TargetFolderMode.custom || selectedTargetFolderMode == TargetFolderMode.newFolder) ...[
-            SizedBox(height: theme.xs),
-            fluent.TextBox(
-              controller: targetFolderController,
-              placeholder: selectedTargetFolderMode == TargetFolderMode.newFolder
-                  ? strings.newFolderNameHint
-                  : 'backup/media',
-            ),
-          ],
-
-          SizedBox(height: theme.md),
-
-          // --- Sync Mode Selection ---
-          Row(
-            children: [
-              Text(strings.syncModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(
-                context,
-                theme,
-                selectedSyncMode == SyncMode.incremental
-                    ? strings.syncModeTooltipIncremental
-                    : strings.syncModeTooltipMirror,
-              ),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          fluent.Card(
-            padding: EdgeInsets.all(theme.sm),
-            backgroundColor: selectedSyncMode == SyncMode.incremental
-                ? theme.accent.withValues(alpha: 0.08)
-                : theme.surface,
-            borderColor: selectedSyncMode == SyncMode.incremental ? theme.accent : null,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSyncModeChanged(SyncMode.incremental),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      selectedSyncMode == SyncMode.incremental
-                          ? fluent.FluentIcons.radio_bullet
-                          : fluent.FluentIcons.radio_btn_off,
-                      color: selectedSyncMode == SyncMode.incremental ? theme.accent : theme.textSecondary,
-                      size: 18,
-                      semanticLabel: strings.syncModeIncremental,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            strings.syncModeIncremental,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.syncModeIncrementalDescription,
-                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.xs),
-          fluent.Card(
-            padding: EdgeInsets.all(theme.sm),
-            backgroundColor: selectedSyncMode == SyncMode.mirror
-                ? theme.warning.withValues(alpha: 0.1)
-                : theme.surface,
-            borderColor: selectedSyncMode == SyncMode.mirror ? theme.warning : null,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSyncModeChanged(SyncMode.mirror),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      selectedSyncMode == SyncMode.mirror
-                          ? fluent.FluentIcons.radio_bullet
-                          : fluent.FluentIcons.radio_btn_off,
-                      color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
-                      size: 18,
-                      semanticLabel: strings.syncModeMirror,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                strings.syncModeMirror,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: selectedSyncMode == SyncMode.mirror ? theme.warning : null,
-                                ),
-                              ),
-                              SizedBox(width: theme.xs),
-                              Icon(
-                                fluent.FluentIcons.warning,
-                                size: 14,
-                                color: theme.warning,
-                                semanticLabel: strings.syncModeMirror,
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.syncModeMirrorDescription,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
-                              fontWeight: selectedSyncMode == SyncMode.mirror ? FontWeight.w500 : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.md),
-
-          // --- Schedule Selection ---
-          Row(
-            children: [
-              Text(strings.scheduleDayLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipSchedule),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          fluent.ComboBox<String>(
-            value: selectedScheduleDay,
-            items: scheduleDayOptions.map((sched) {
-              return fluent.ComboBoxItem(value: sched, child: Text(_getDayLabel(strings, sched)));
-            }).toList(),
-            onChanged: onScheduleDayChanged,
-          ),
-          if (selectedScheduleDay != 'Manual') ...[
-            SizedBox(height: theme.sm),
-            Row(
-              children: [
-                Text('${strings.scheduleTimeLabel}:'),
-                SizedBox(width: theme.sm),
-                fluent.ComboBox<String>(
-                  value: selectedHour,
-                  items: hours.map((h) => fluent.ComboBoxItem(value: h, child: Text(h))).toList(),
-                  onChanged: onHourChanged,
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: theme.xs),
-                  child: const Text(':'),
-                ),
-                fluent.ComboBox<String>(
-                  value: selectedMinute,
-                  items: minutes.map((m) => fluent.ComboBoxItem(value: m, child: Text(m))).toList(),
-                  onChanged: onMinuteChanged,
-                ),
-              ],
-            ),
-          ],
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text('${strings.activeSyncJob}:'),
-              const Spacer(),
-              fluent.ToggleSwitch(
-                checked: isActive,
-                onChanged: onActiveChanged,
-              ),
-            ],
-          ),
-          SizedBox(height: theme.md),
-          Row(
-            children: [
-              Icon(fluent.FluentIcons.completed, size: 14, color: theme.success, semanticLabel: strings.catchUpNotice),
-              SizedBox(width: theme.xs),
-              Expanded(
-                child: Text(
-                  strings.catchUpNotice,
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipCatchUp),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =========================================================================
-  // IOS MODAL SHEET (Prevents keyboard overflow via CupertinoPageScaffold)
-  // =========================================================================
-  void _showIOSAddEditModalSheet(BuildContext context, WidgetRef ref, BackupTask? existingTask) {
-    final theme = context.theme;
-    final strings = ref.read(stringsProvider);
-    final remotesList = _resolveRemotesList(ref);
-
-    final nameController = TextEditingController(text: existingTask?.name ?? '');
-    final srcController = TextEditingController(text: existingTask?.sourcePath ?? '');
-    final targetFolderController = TextEditingController(text: existingTask?.targetFolderName ?? 'backup/media');
-
-    final List<String> selectedRemotes = existingTask != null && existingTask.targetRemotes.isNotEmpty
-        ? List<String>.from(existingTask.targetRemotes)
-        : (remotesList.isNotEmpty ? [remotesList.first] : ['GoogleDrive_Backup']);
-
-    DistributionStrategy selectedDistribution = existingTask?.distributionStrategy ?? DistributionStrategy.mirrorAll;
-    TargetFolderMode selectedTargetFolderMode = existingTask?.targetFolderMode ?? TargetFolderMode.custom;
-    SyncMode selectedSyncMode = existingTask?.syncMode ?? SyncMode.incremental;
-
-    String selectedScheduleDay = existingTask?.scheduleDay ?? 'Daily';
-    String selectedHour = '02';
-    String selectedMinute = '00';
-    if (existingTask != null && existingTask.scheduleTime.contains(':')) {
-      final parts = existingTask.scheduleTime.split(':');
-      if (parts.length == 2) {
-        selectedHour = parts[0];
-        selectedMinute = parts[1];
-      }
-    }
-    bool isActive = existingTask?.isActive ?? true;
-
-    final mobileCategories = ['all', 'photos', 'videos', 'folders'];
-    String selectedSourceCategory = 'all';
-    if (existingTask != null) {
-      if (existingTask.sourcePath == 'all' || existingTask.sourcePath == 'Alles') {
-        selectedSourceCategory = 'all';
-      } else if (existingTask.sourcePath == 'photos' || existingTask.sourcePath == 'Alle Fotos') {
-        selectedSourceCategory = 'photos';
-      } else if (existingTask.sourcePath == 'videos' || existingTask.sourcePath == 'Alle Videos') {
-        selectedSourceCategory = 'videos';
-      } else {
-        selectedSourceCategory = 'folders';
-      }
-    }
-
-    String? nameError;
-    String? sourceError;
-    String? remotesError;
-
-    const scheduleDayOptions = ['Daily', 'Monday', 'Sunday', 'Manual'];
-    final hours = List.generate(24, (i) => i.toString().padLeft(2, '0'));
-    final minutes = List.generate(12, (i) => (i * 5).toString().padLeft(2, '0'));
-
-    cupertino.showCupertinoModalPopup(
-      context: context,
-      barrierDismissible: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setState) {
-          void handleSave() {
-            final name = nameController.text.trim();
-            String finalSourcePath = srcController.text.trim();
-
-            bool hasError = false;
-            String? newNameError;
-            String? newSourceError;
-            String? newRemotesError;
-
-            if (name.isEmpty) {
-              newNameError = strings.taskNameRequiredError;
-              hasError = true;
-            }
-
-            if (selectedSourceCategory == 'folders') {
-              if (finalSourcePath.isEmpty) {
-                newSourceError = strings.sourcePathRequiredError;
-                hasError = true;
-              }
-            } else {
-              finalSourcePath = selectedSourceCategory;
-            }
-
-            if (selectedRemotes.isEmpty) {
-              newRemotesError = strings.selectAtLeastOneRemote;
-              hasError = true;
-            }
-
-            if (hasError) {
-              setState(() {
-                nameError = newNameError;
-                sourceError = newSourceError;
-                remotesError = newRemotesError;
-              });
-              return;
-            }
-
-            final String finalTime = selectedScheduleDay == 'Manual' ? '12:00' : '$selectedHour:$selectedMinute';
-            final String finalSchedule = selectedScheduleDay == 'Daily'
-                ? 'Daily at $finalTime'
-                : (selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${selectedScheduleDay}s at $finalTime');
-
-            String finalTargetFolder = targetFolderController.text.trim();
-            if (selectedTargetFolderMode == TargetFolderMode.root) {
-              finalTargetFolder = '/';
-            } else if (finalTargetFolder.isEmpty) {
-              finalTargetFolder = selectedTargetFolderMode == TargetFolderMode.newFolder ? 'new_backup' : 'backup/media';
-            }
-
-            final task = BackupTask(
-              id: existingTask?.id ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
-              name: name,
-              sourcePath: finalSourcePath,
-              targetRemotes: List<String>.from(selectedRemotes),
-              schedule: finalSchedule,
-              scheduleDay: selectedScheduleDay,
-              scheduleTime: finalTime,
-              isActive: isActive,
-              runMissedOnStartup: true,
-              excludedFiles: existingTask?.excludedFiles ?? const [],
-              syncMode: selectedSyncMode,
-              distributionStrategy: selectedRemotes.length > 1 ? selectedDistribution : DistributionStrategy.mirrorAll,
-              targetFolderMode: selectedTargetFolderMode,
-              targetFolderName: finalTargetFolder,
-            );
-
-            if (existingTask == null) {
-              ref.read(tasksListProvider.notifier).addTask(task);
-            } else {
-              ref.read(tasksListProvider.notifier).updateTask(existingTask.id, task);
-            }
-            Navigator.pop(sheetContext);
-          }
-
-          return _buildIOSModalSheet(
-            context: context,
-            theme: theme,
-            strings: strings,
-            existingTask: existingTask,
-            nameController: nameController,
-            srcController: srcController,
-            targetFolderController: targetFolderController,
-            nameError: nameError,
-            sourceError: sourceError,
-            remotesError: remotesError,
-            selectedSourceCategory: selectedSourceCategory,
-            mobileCategories: mobileCategories,
-            onSourceCategoryChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  selectedSourceCategory = val;
-                  if (val != 'folders') sourceError = null;
-                });
-              }
-            },
-            selectedRemotes: selectedRemotes,
-            remotesList: remotesList,
-            onToggleRemote: (remote) {
-              setState(() {
-                if (selectedRemotes.contains(remote)) {
-                  selectedRemotes.remove(remote);
-                } else {
-                  selectedRemotes.add(remote);
-                }
-                if (selectedRemotes.isNotEmpty) remotesError = null;
-              });
-            },
-            selectedDistribution: selectedDistribution,
-            onDistributionChanged: (val) => setState(() => selectedDistribution = val),
-            selectedTargetFolderMode: selectedTargetFolderMode,
-            onTargetFolderModeChanged: (val) => setState(() => selectedTargetFolderMode = val),
-            selectedSyncMode: selectedSyncMode,
-            onSyncModeChanged: (val) => setState(() => selectedSyncMode = val),
-            selectedScheduleDay: selectedScheduleDay,
-            scheduleDayOptions: scheduleDayOptions,
-            onScheduleDayChanged: (val) {
-              if (val != null) setState(() => selectedScheduleDay = val);
-            },
-            selectedHour: selectedHour,
-            hours: hours,
-            onHourChanged: (val) {
-              if (val != null) setState(() => selectedHour = val);
-            },
-            selectedMinute: selectedMinute,
-            minutes: minutes,
-            onMinuteChanged: (val) {
-              if (val != null) setState(() => selectedMinute = val);
-            },
-            isActive: isActive,
-            onActiveChanged: (val) => setState(() => isActive = val),
-            onNameChanged: () {
-              if (nameError != null) setState(() => nameError = null);
-            },
-            onSourceChanged: () {
-              if (sourceError != null) setState(() => sourceError = null);
-            },
-            onSave: handleSave,
-            onCancel: () => Navigator.pop(sheetContext),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildIOSModalSheet({
-    required BuildContext context,
-    required AppThemeData theme,
-    required AppStrings strings,
-    required BackupTask? existingTask,
-    required TextEditingController nameController,
-    required TextEditingController srcController,
-    required TextEditingController targetFolderController,
-    required String? nameError,
-    required String? sourceError,
-    required String? remotesError,
-    required String selectedSourceCategory,
-    required List<String> mobileCategories,
-    required ValueChanged<String?> onSourceCategoryChanged,
-    required List<String> selectedRemotes,
-    required List<String> remotesList,
-    required ValueChanged<String> onToggleRemote,
-    required DistributionStrategy selectedDistribution,
-    required ValueChanged<DistributionStrategy> onDistributionChanged,
-    required TargetFolderMode selectedTargetFolderMode,
-    required ValueChanged<TargetFolderMode> onTargetFolderModeChanged,
-    required SyncMode selectedSyncMode,
-    required ValueChanged<SyncMode> onSyncModeChanged,
-    required String selectedScheduleDay,
-    required List<String> scheduleDayOptions,
-    required ValueChanged<String?> onScheduleDayChanged,
-    required String selectedHour,
-    required List<String> hours,
-    required ValueChanged<String?> onHourChanged,
-    required String selectedMinute,
-    required List<String> minutes,
-    required ValueChanged<String?> onMinuteChanged,
-    required bool isActive,
-    required ValueChanged<bool> onActiveChanged,
-    required VoidCallback onNameChanged,
-    required VoidCallback onSourceChanged,
-    required VoidCallback onSave,
-    required VoidCallback onCancel,
-  }) {
-    final mediaQuery = MediaQuery.of(context);
-    final sheetHeight = mediaQuery.size.height * 0.85;
-
-    return Container(
-      height: sheetHeight,
-      decoration: BoxDecoration(
-        color: theme.canvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(theme.radiusLg)),
-      ),
-      child: cupertino.CupertinoPageScaffold(
-        backgroundColor: theme.canvas,
-        navigationBar: cupertino.CupertinoNavigationBar(
-          backgroundColor: theme.surface,
-          middle: Text(existingTask == null ? strings.addTask : strings.editTask),
-          leading: SizedBox(
-            width: 70,
-            height: 44,
-            child: cupertino.CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onCancel,
-              child: Text(strings.cancel),
-            ),
-          ),
-          trailing: SizedBox(
-            width: 80,
-            height: 44,
-            child: cupertino.CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onSave,
-              child: Text(
-                strings.save,
-                style: TextStyle(fontWeight: FontWeight.bold, color: theme.accent),
-              ),
-            ),
-          ),
+      material.showDialog(
+        context: context,
+        builder: (dialogCtx) => TaskWizardDialog(
+          existingTask: existingTask,
+          platform: TargetPlatform.android,
         ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(theme.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(strings.taskNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                SizedBox(height: theme.xs),
-                cupertino.CupertinoTextField(
-                  controller: nameController,
-                  placeholder: strings.taskNameHint,
-                  padding: EdgeInsets.all(theme.md),
-                  decoration: BoxDecoration(
-                    color: theme.surface,
-                    border: Border.all(
-                      color: nameError != null ? theme.error : cupertino.CupertinoColors.separator,
-                      width: nameError != null ? 1.5 : 0.5,
-                    ),
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                  ),
-                  onChanged: (_) => onNameChanged(),
-                ),
-                if (nameError != null) ...[
-                  SizedBox(height: theme.xs),
-                  Text(
-                    nameError,
-                    style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-                  ),
-                ],
-                SizedBox(height: theme.md),
-                Row(
-                  children: [
-                    Text(strings.sourceCategoryLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(context, theme, strings.tooltipSourcePath),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                cupertino.CupertinoSlidingSegmentedControl<String>(
-                  groupValue: selectedSourceCategory,
-                  children: {
-                    'all': Text(strings.allMedia, style: const TextStyle(fontSize: 11)),
-                    'photos': Text(strings.allPhotos, style: const TextStyle(fontSize: 11)),
-                    'videos': Text(strings.allVideos, style: const TextStyle(fontSize: 11)),
-                    'folders': Text(strings.specificFoldersShort, style: const TextStyle(fontSize: 11)),
-                  },
-                  onValueChanged: onSourceCategoryChanged,
-                ),
-                if (selectedSourceCategory == 'folders') ...[
-                  SizedBox(height: theme.sm),
-                  cupertino.CupertinoTextField(
-                    controller: srcController,
-                    placeholder: strings.specificFoldersHint,
-                    padding: EdgeInsets.all(theme.md),
-                    decoration: BoxDecoration(
-                      color: theme.surface,
-                      border: Border.all(
-                        color: sourceError != null ? theme.error : cupertino.CupertinoColors.separator,
-                        width: sourceError != null ? 1.5 : 0.5,
-                      ),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                    ),
-                    onChanged: (_) => onSourceChanged(),
-                  ),
-                  if (sourceError != null) ...[
-                    SizedBox(height: theme.xs),
-                    Text(
-                      sourceError,
-                      style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ],
-                SizedBox(height: theme.md),
-
-                // --- Destination Remotes Multi-Select ---
-                Row(
-                  children: [
-                    Text(strings.destinationRemoteLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.surface,
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                    border: Border.all(
-                      color: remotesError != null ? theme.error : cupertino.CupertinoColors.separator,
-                      width: remotesError != null ? 1.5 : 0.5,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      for (int i = 0; i < remotesList.length; i++) ...[
-                        if (i > 0)
-                          material.Divider(height: 1, indent: theme.md, color: theme.canvas),
-                        cupertino.CupertinoListTile(
-                          padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.xs),
-                          title: Text(remotesList[i], style: const TextStyle(fontSize: 13)),
-                          trailing: selectedRemotes.contains(remotesList[i])
-                              ? Icon(cupertino.CupertinoIcons.checkmark_alt_circle_fill, color: theme.accent, size: 22)
-                              : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
-                          onTap: () => onToggleRemote(remotesList[i]),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (remotesError != null) ...[
-                  SizedBox(height: theme.xs),
-                  Text(
-                    remotesError,
-                    style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-                  ),
-                ],
-
-                // --- Distribution Strategy (If > 1 remote selected) ---
-                if (selectedRemotes.length > 1) ...[
-                  SizedBox(height: theme.md),
-                  Row(
-                    children: [
-                      Text(strings.distributionStrategyLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      SizedBox(width: theme.xs),
-                      _buildInfoTooltip(context, theme, strings.distributionTooltip),
-                    ],
-                  ),
-                  SizedBox(height: theme.xs),
-                  cupertino.CupertinoSlidingSegmentedControl<DistributionStrategy>(
-                    groupValue: selectedDistribution,
-                    children: {
-                      DistributionStrategy.mirrorAll: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                        child: Text(strings.distributionBadgeMirrorAll, style: const TextStyle(fontSize: 11)),
-                      ),
-                      DistributionStrategy.balance: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                        child: Text(strings.distributionBadgeBalance, style: const TextStyle(fontSize: 11)),
-                      ),
-                    },
-                    onValueChanged: (val) {
-                      if (val != null) onDistributionChanged(val);
-                    },
-                  ),
-                  SizedBox(height: theme.xs),
-                  Container(
-                    padding: EdgeInsets.all(theme.sm),
-                    decoration: BoxDecoration(
-                      color: theme.accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                      border: Border.all(color: theme.accent.withValues(alpha: 0.25), width: 1),
-                    ),
-                    child: Text(
-                      selectedDistribution == DistributionStrategy.mirrorAll
-                          ? strings.distributionMirrorAllDesc
-                          : strings.distributionBalanceDesc,
-                      style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                    ),
-                  ),
-                ],
-
-                SizedBox(height: theme.md),
-
-                // --- Cloud Target Folder Mode ---
-                Row(
-                  children: [
-                    Text(strings.targetFolderModeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(context, theme, strings.targetFolderTooltip),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                cupertino.CupertinoSlidingSegmentedControl<TargetFolderMode>(
-                  groupValue: selectedTargetFolderMode,
-                  children: {
-                    TargetFolderMode.root: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                      child: Text(strings.targetFolderRoot, style: const TextStyle(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    TargetFolderMode.custom: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                      child: Text(strings.targetFolderCustom, style: const TextStyle(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    TargetFolderMode.newFolder: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                      child: Text(strings.targetFolderNew, style: const TextStyle(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  },
-                  onValueChanged: (val) {
-                    if (val != null) onTargetFolderModeChanged(val);
-                  },
-                ),
-                if (selectedTargetFolderMode == TargetFolderMode.custom || selectedTargetFolderMode == TargetFolderMode.newFolder) ...[
-                  SizedBox(height: theme.sm),
-                  cupertino.CupertinoTextField(
-                    controller: targetFolderController,
-                    placeholder: selectedTargetFolderMode == TargetFolderMode.newFolder
-                        ? strings.newFolderNameHint
-                        : 'backup/media',
-                    padding: EdgeInsets.all(theme.md),
-                    decoration: BoxDecoration(
-                      color: theme.surface,
-                      border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                    ),
-                  ),
-                ],
-
-                SizedBox(height: theme.md),
-
-                // --- Sync Mode Selection ---
-                Row(
-                  children: [
-                    Text(strings.syncModeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(
-                      context,
-                      theme,
-                      selectedSyncMode == SyncMode.incremental
-                          ? strings.syncModeTooltipIncremental
-                          : strings.syncModeTooltipMirror,
-                    ),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
-                  groupValue: selectedSyncMode,
-                  children: {
-                    SyncMode.incremental: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                      child: Text(strings.syncModeIncremental, style: const TextStyle(fontSize: 11)),
-                    ),
-                    SyncMode.mirror: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(cupertino.CupertinoIcons.exclamationmark_triangle_fill, size: 12, color: theme.warning),
-                          SizedBox(width: theme.xs / 2),
-                          Text(
-                            strings.syncModeBadgeMirror,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: selectedSyncMode == SyncMode.mirror ? theme.warning : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  },
-                  onValueChanged: (mode) {
-                    if (mode != null) onSyncModeChanged(mode);
-                  },
-                ),
-                SizedBox(height: theme.xs),
-                Container(
-                  padding: EdgeInsets.all(theme.sm),
-                  decoration: BoxDecoration(
-                    color: selectedSyncMode == SyncMode.mirror
-                        ? theme.warning.withValues(alpha: 0.12)
-                        : theme.accent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                    border: Border.all(
-                      color: selectedSyncMode == SyncMode.mirror
-                          ? theme.warning.withValues(alpha: 0.35)
-                          : theme.accent.withValues(alpha: 0.25),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        selectedSyncMode == SyncMode.mirror
-                            ? cupertino.CupertinoIcons.exclamationmark_triangle_fill
-                            : cupertino.CupertinoIcons.checkmark_shield_fill,
-                        size: 14,
-                        color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.accent,
-                      ),
-                      SizedBox(width: theme.xs),
-                      Expanded(
-                        child: Text(
-                          selectedSyncMode == SyncMode.mirror
-                              ? strings.syncModeMirrorDescription
-                              : strings.syncModeIncrementalDescription,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
-                            fontWeight: selectedSyncMode == SyncMode.mirror ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: theme.md),
-
-                // --- Schedule Selection ---
-                Row(
-                  children: [
-                    Text(strings.scheduleDayLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(context, theme, strings.tooltipSchedule),
-                  ],
-                ),
-                SizedBox(height: theme.xs),
-                cupertino.CupertinoSlidingSegmentedControl<String>(
-                  groupValue: selectedScheduleDay,
-                  children: {
-                    for (final sched in scheduleDayOptions)
-                      sched: Text(_getDayLabel(strings, sched), style: const TextStyle(fontSize: 10)),
-                  },
-                  onValueChanged: onScheduleDayChanged,
-                ),
-                if (selectedScheduleDay != 'Manual') ...[
-                  SizedBox(height: theme.md),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('${strings.scheduleTimeLabel}: ', style: const TextStyle(fontSize: 12)),
-                      material.DropdownButton<String>(
-                        value: selectedHour,
-                        items: hours.map((h) => material.DropdownMenuItem(value: h, child: Text(h, style: const TextStyle(fontSize: 12)))).toList(),
-                        onChanged: onHourChanged,
-                      ),
-                      const Text(' : ', style: TextStyle(fontSize: 12)),
-                      material.DropdownButton<String>(
-                        value: selectedMinute,
-                        items: minutes.map((m) => material.DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)))).toList(),
-                        onChanged: onMinuteChanged,
-                      ),
-                    ],
-                  ),
-                ],
-                SizedBox(height: theme.lg),
-                Row(
-                  children: [
-                    Text('${strings.activeSyncJob}:', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    cupertino.CupertinoSwitch(
-                      value: isActive,
-                      onChanged: onActiveChanged,
-                    ),
-                  ],
-                ),
-                SizedBox(height: theme.md),
-                Row(
-                  children: [
-                    Icon(
-                      cupertino.CupertinoIcons.check_mark_circled_solid,
-                      size: 14,
-                      color: theme.success,
-                      semanticLabel: strings.catchUpNotice,
-                    ),
-                    SizedBox(width: theme.xs),
-                    Expanded(
-                      child: Text(
-                        strings.catchUpNotice,
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    SizedBox(width: theme.xs),
-                    _buildInfoTooltip(context, theme, strings.tooltipCatchUp),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+      );
+    }
   }
 
-  // =========================================================================
-  // ANDROID ADD / EDIT FORM
-  // =========================================================================
-  void _showAndroidAddEditDialog(BuildContext context, WidgetRef ref, BackupTask? existingTask) {
-    final theme = context.theme;
-    final strings = ref.read(stringsProvider);
-    final remotesList = _resolveRemotesList(ref);
-
-    final nameController = TextEditingController(text: existingTask?.name ?? '');
-    final srcController = TextEditingController(text: existingTask?.sourcePath ?? '');
-    final targetFolderController = TextEditingController(text: existingTask?.targetFolderName ?? 'backup/media');
-
-    final List<String> selectedRemotes = existingTask != null && existingTask.targetRemotes.isNotEmpty
-        ? List<String>.from(existingTask.targetRemotes)
-        : (remotesList.isNotEmpty ? [remotesList.first] : ['GoogleDrive_Backup']);
-
-    DistributionStrategy selectedDistribution = existingTask?.distributionStrategy ?? DistributionStrategy.mirrorAll;
-    TargetFolderMode selectedTargetFolderMode = existingTask?.targetFolderMode ?? TargetFolderMode.custom;
-    SyncMode selectedSyncMode = existingTask?.syncMode ?? SyncMode.incremental;
-
-    String selectedScheduleDay = existingTask?.scheduleDay ?? 'Daily';
-    String selectedHour = '02';
-    String selectedMinute = '00';
-    if (existingTask != null && existingTask.scheduleTime.contains(':')) {
-      final parts = existingTask.scheduleTime.split(':');
-      if (parts.length == 2) {
-        selectedHour = parts[0];
-        selectedMinute = parts[1];
-      }
-    }
-    bool isActive = existingTask?.isActive ?? true;
-
-    final mobileCategories = ['all', 'photos', 'videos', 'folders'];
-    String selectedSourceCategory = 'all';
-    if (existingTask != null) {
-      if (existingTask.sourcePath == 'all' || existingTask.sourcePath == 'Alles') {
-        selectedSourceCategory = 'all';
-      } else if (existingTask.sourcePath == 'photos' || existingTask.sourcePath == 'Alle Fotos') {
-        selectedSourceCategory = 'photos';
-      } else if (existingTask.sourcePath == 'videos' || existingTask.sourcePath == 'Alle Videos') {
-        selectedSourceCategory = 'videos';
-      } else {
-        selectedSourceCategory = 'folders';
-      }
-    }
-
-    String? nameError;
-    String? sourceError;
-    String? remotesError;
-
-    const scheduleDayOptions = _scheduleDayKeys;
-    final hours = List.generate(24, (i) => i.toString().padLeft(2, '0'));
-    final minutes = List.generate(12, (i) => (i * 5).toString().padLeft(2, '0'));
-
-    material.showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          void handleSave() {
-            final name = nameController.text.trim();
-            String finalSourcePath = srcController.text.trim();
-
-            bool hasError = false;
-            String? newNameError;
-            String? newSourceError;
-            String? newRemotesError;
-
-            if (name.isEmpty) {
-              newNameError = strings.taskNameRequiredError;
-              hasError = true;
-            }
-
-            if (selectedSourceCategory == 'folders') {
-              if (finalSourcePath.isEmpty) {
-                newSourceError = strings.sourcePathRequiredError;
-                hasError = true;
-              }
-            } else {
-              finalSourcePath = selectedSourceCategory;
-            }
-
-            if (selectedRemotes.isEmpty) {
-              newRemotesError = strings.selectAtLeastOneRemote;
-              hasError = true;
-            }
-
-            if (hasError) {
-              setState(() {
-                nameError = newNameError;
-                sourceError = newSourceError;
-                remotesError = newRemotesError;
-              });
-              return;
-            }
-
-            final String finalTime = selectedScheduleDay == 'Manual' ? '12:00' : '$selectedHour:$selectedMinute';
-            final String finalSchedule = selectedScheduleDay == 'Daily'
-                ? 'Daily at $finalTime'
-                : (selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${selectedScheduleDay}s at $finalTime');
-
-            String finalTargetFolder = targetFolderController.text.trim();
-            if (selectedTargetFolderMode == TargetFolderMode.root) {
-              finalTargetFolder = '/';
-            } else if (finalTargetFolder.isEmpty) {
-              finalTargetFolder = selectedTargetFolderMode == TargetFolderMode.newFolder ? 'new_backup' : 'backup/media';
-            }
-
-            final task = BackupTask(
-              id: existingTask?.id ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
-              name: name,
-              sourcePath: finalSourcePath,
-              targetRemotes: List<String>.from(selectedRemotes),
-              schedule: finalSchedule,
-              scheduleDay: selectedScheduleDay,
-              scheduleTime: finalTime,
-              isActive: isActive,
-              runMissedOnStartup: true,
-              excludedFiles: existingTask?.excludedFiles ?? const [],
-              syncMode: selectedSyncMode,
-              distributionStrategy: selectedRemotes.length > 1 ? selectedDistribution : DistributionStrategy.mirrorAll,
-              targetFolderMode: selectedTargetFolderMode,
-              targetFolderName: finalTargetFolder,
-            );
-
-            if (existingTask == null) {
-              ref.read(tasksListProvider.notifier).addTask(task);
-            } else {
-              ref.read(tasksListProvider.notifier).updateTask(existingTask.id, task);
-            }
-            Navigator.pop(dialogContext);
-          }
-
-          return material.AlertDialog(
-            title: Text(existingTask == null ? strings.addTask : strings.editTask),
-            content: _buildAndroidFormFields(
-              context: context,
-              theme: theme,
-              strings: strings,
-              nameController: nameController,
-              srcController: srcController,
-              targetFolderController: targetFolderController,
-              nameError: nameError,
-              sourceError: sourceError,
-              remotesError: remotesError,
-              selectedSourceCategory: selectedSourceCategory,
-              mobileCategories: mobileCategories,
-              onSourceCategoryChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    selectedSourceCategory = val;
-                    if (val != 'folders') sourceError = null;
-                  });
-                }
-              },
-              selectedRemotes: selectedRemotes,
-              remotesList: remotesList,
-              onToggleRemote: (remote, checked) {
-                setState(() {
-                  if (checked == true) {
-                    if (!selectedRemotes.contains(remote)) selectedRemotes.add(remote);
-                  } else {
-                    selectedRemotes.remove(remote);
-                  }
-                  if (selectedRemotes.isNotEmpty) remotesError = null;
-                });
-              },
-              selectedDistribution: selectedDistribution,
-              onDistributionChanged: (val) => setState(() => selectedDistribution = val),
-              selectedTargetFolderMode: selectedTargetFolderMode,
-              onTargetFolderModeChanged: (val) => setState(() => selectedTargetFolderMode = val),
-              selectedSyncMode: selectedSyncMode,
-              onSyncModeChanged: (val) => setState(() => selectedSyncMode = val),
-              selectedScheduleDay: selectedScheduleDay,
-              scheduleDayOptions: scheduleDayOptions,
-              onScheduleDayChanged: (val) {
-                if (val != null) setState(() => selectedScheduleDay = val);
-              },
-              selectedHour: selectedHour,
-              hours: hours,
-              onHourChanged: (val) {
-                if (val != null) setState(() => selectedHour = val);
-              },
-              selectedMinute: selectedMinute,
-              minutes: minutes,
-              onMinuteChanged: (val) {
-                if (val != null) setState(() => selectedMinute = val);
-              },
-              isActive: isActive,
-              onActiveChanged: (val) => setState(() => isActive = val),
-              onNameChanged: () {
-                if (nameError != null) setState(() => nameError = null);
-              },
-              onSourceChanged: () {
-                if (sourceError != null) setState(() => sourceError = null);
-              },
-            ),
-            actions: [
-              material.TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(strings.cancel),
-              ),
-              material.FilledButton(
-                onPressed: handleSave,
-                child: Text(
-                  strings.save,
-                  style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildAndroidFormFields({
-    required BuildContext context,
-    required AppThemeData theme,
-    required AppStrings strings,
-    required TextEditingController nameController,
-    required TextEditingController srcController,
-    required TextEditingController targetFolderController,
-    required String? nameError,
-    required String? sourceError,
-    required String? remotesError,
-    required String selectedSourceCategory,
-    required List<String> mobileCategories,
-    required ValueChanged<String?> onSourceCategoryChanged,
-    required List<String> selectedRemotes,
-    required List<String> remotesList,
-    required void Function(String remote, bool? checked) onToggleRemote,
-    required DistributionStrategy selectedDistribution,
-    required ValueChanged<DistributionStrategy> onDistributionChanged,
-    required TargetFolderMode selectedTargetFolderMode,
-    required ValueChanged<TargetFolderMode> onTargetFolderModeChanged,
-    required SyncMode selectedSyncMode,
-    required ValueChanged<SyncMode> onSyncModeChanged,
-    required String selectedScheduleDay,
-    required List<String> scheduleDayOptions,
-    required ValueChanged<String?> onScheduleDayChanged,
-    required String selectedHour,
-    required List<String> hours,
-    required ValueChanged<String?> onHourChanged,
-    required String selectedMinute,
-    required List<String> minutes,
-    required ValueChanged<String?> onMinuteChanged,
-    required bool isActive,
-    required ValueChanged<bool> onActiveChanged,
-    required VoidCallback onNameChanged,
-    required VoidCallback onSourceChanged,
-  }) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          material.TextField(
-            controller: nameController,
-            decoration: material.InputDecoration(
-              labelText: strings.taskNameLabel,
-              hintText: strings.taskNameHint,
-              errorText: nameError,
-            ),
-            onChanged: (_) => onNameChanged(),
-          ),
-          SizedBox(height: theme.lg),
-          material.DropdownButtonFormField<String>(
-            initialValue: selectedSourceCategory,
-            decoration: material.InputDecoration(
-              labelText: strings.sourceCategoryLabel,
-              suffixIcon: _buildInfoTooltip(context, theme, strings.tooltipSourcePath),
-            ),
-            items: mobileCategories.map((cat) {
-              return material.DropdownMenuItem(
-                value: cat,
-                child: Text(_getCategoryLabel(strings, cat)),
-              );
-            }).toList(),
-            onChanged: onSourceCategoryChanged,
-          ),
-          if (selectedSourceCategory == 'folders') ...[
-            SizedBox(height: theme.sm),
-            material.TextField(
-              controller: srcController,
-              decoration: material.InputDecoration(
-                labelText: strings.sourcePathLabel,
-                hintText: strings.specificFoldersHint,
-                errorText: sourceError,
-              ),
-              onChanged: (_) => onSourceChanged(),
-            ),
-          ],
-          SizedBox(height: theme.lg),
-
-          // --- Destination Remotes Multi-Select ---
-          Row(
-            children: [
-              Text(strings.destinationRemoteLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          material.Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              side: BorderSide(
-                color: remotesError != null ? theme.error : material.Theme.of(context).colorScheme.outlineVariant,
-                width: remotesError != null ? 1.5 : 1,
-              ),
-            ),
-            child: Column(
-              children: remotesList.map((remote) {
-                return material.CheckboxListTile(
-                  title: Text(remote, style: const TextStyle(fontSize: 13)),
-                  value: selectedRemotes.contains(remote),
-                  dense: true,
-                  onChanged: (bool? val) => onToggleRemote(remote, val),
-                );
-              }).toList(),
-            ),
-          ),
-          if (remotesError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(
-              remotesError,
-              style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
-            ),
-          ],
-
-          // --- Distribution Strategy (If > 1 remote selected) ---
-          if (selectedRemotes.length > 1) ...[
-            SizedBox(height: theme.lg),
-            Row(
-              children: [
-                Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(width: theme.xs),
-                _buildInfoTooltip(context, theme, strings.distributionTooltip),
-              ],
-            ),
-            SizedBox(height: theme.xs),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                side: BorderSide(
-                  color: selectedDistribution == DistributionStrategy.mirrorAll
-                      ? theme.accent
-                      : material.Theme.of(context).colorScheme.outlineVariant,
-                  width: selectedDistribution == DistributionStrategy.mirrorAll ? 1.5 : 1,
-                ),
-              ),
-              color: selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent.withValues(alpha: 0.08) : null,
-              child: material.InkWell(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                onTap: () => onDistributionChanged(DistributionStrategy.mirrorAll),
-                child: Padding(
-                  padding: EdgeInsets.all(theme.sm),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        selectedDistribution == DistributionStrategy.mirrorAll
-                            ? material.Icons.radio_button_checked
-                            : material.Icons.radio_button_unchecked,
-                        size: 20,
-                        color: selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.distributionMirrorAll,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            SizedBox(height: theme.xs / 2),
-                            Text(
-                              strings.distributionMirrorAllDesc,
-                              style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: theme.xs),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                side: BorderSide(
-                  color: selectedDistribution == DistributionStrategy.balance
-                      ? theme.accent
-                      : material.Theme.of(context).colorScheme.outlineVariant,
-                  width: selectedDistribution == DistributionStrategy.balance ? 1.5 : 1,
-                ),
-              ),
-              color: selectedDistribution == DistributionStrategy.balance ? theme.accent.withValues(alpha: 0.08) : null,
-              child: material.InkWell(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                onTap: () => onDistributionChanged(DistributionStrategy.balance),
-                child: Padding(
-                  padding: EdgeInsets.all(theme.sm),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        selectedDistribution == DistributionStrategy.balance
-                            ? material.Icons.radio_button_checked
-                            : material.Icons.radio_button_unchecked,
-                        size: 20,
-                        color: selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.distributionBalance,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            SizedBox(height: theme.xs / 2),
-                            Text(
-                              strings.distributionBalanceDesc,
-                              style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-
-          SizedBox(height: theme.lg),
-
-          // --- Cloud Target Folder Mode ---
-          material.DropdownButtonFormField<TargetFolderMode>(
-            initialValue: selectedTargetFolderMode,
-            decoration: material.InputDecoration(
-              labelText: strings.targetFolderModeLabel,
-              suffixIcon: _buildInfoTooltip(context, theme, strings.targetFolderTooltip),
-            ),
-            items: [
-              material.DropdownMenuItem(
-                value: TargetFolderMode.root,
-                child: Text(strings.targetFolderRoot),
-              ),
-              material.DropdownMenuItem(
-                value: TargetFolderMode.custom,
-                child: Text(strings.targetFolderCustom),
-              ),
-              material.DropdownMenuItem(
-                value: TargetFolderMode.newFolder,
-                child: Text(strings.targetFolderNew),
-              ),
-            ],
-            onChanged: (val) {
-              if (val != null) onTargetFolderModeChanged(val);
-            },
-          ),
-          if (selectedTargetFolderMode == TargetFolderMode.custom || selectedTargetFolderMode == TargetFolderMode.newFolder) ...[
-            SizedBox(height: theme.sm),
-            material.TextField(
-              controller: targetFolderController,
-              decoration: material.InputDecoration(
-                labelText: selectedTargetFolderMode == TargetFolderMode.newFolder
-                    ? strings.newFolderNameLabel
-                    : strings.targetFolderModeLabel,
-                hintText: selectedTargetFolderMode == TargetFolderMode.newFolder
-                    ? strings.newFolderNameHint
-                    : 'backup/media',
-              ),
-            ),
-          ],
-
-          SizedBox(height: theme.lg),
-
-          // --- Sync Mode Selection ---
-          Row(
-            children: [
-              Text(strings.syncModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(
-                context,
-                theme,
-                selectedSyncMode == SyncMode.incremental
-                    ? strings.syncModeTooltipIncremental
-                    : strings.syncModeTooltipMirror,
-              ),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          material.Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              side: BorderSide(
-                color: selectedSyncMode == SyncMode.incremental
-                    ? theme.accent
-                    : material.Theme.of(context).colorScheme.outlineVariant,
-                width: selectedSyncMode == SyncMode.incremental ? 1.5 : 1,
-              ),
-            ),
-            color: selectedSyncMode == SyncMode.incremental ? theme.accent.withValues(alpha: 0.08) : null,
-            child: material.InkWell(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              onTap: () => onSyncModeChanged(SyncMode.incremental),
-              child: Padding(
-                padding: EdgeInsets.all(theme.sm),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      selectedSyncMode == SyncMode.incremental
-                          ? material.Icons.radio_button_checked
-                          : material.Icons.radio_button_unchecked,
-                      size: 20,
-                      color: selectedSyncMode == SyncMode.incremental ? theme.accent : theme.textSecondary,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            strings.syncModeIncremental,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.syncModeIncrementalDescription,
-                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.xs),
-          material.Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              side: BorderSide(
-                color: selectedSyncMode == SyncMode.mirror
-                    ? theme.warning
-                    : material.Theme.of(context).colorScheme.outlineVariant,
-                width: selectedSyncMode == SyncMode.mirror ? 1.5 : 1,
-              ),
-            ),
-            color: selectedSyncMode == SyncMode.mirror ? theme.warning.withValues(alpha: 0.1) : null,
-            child: material.InkWell(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              onTap: () => onSyncModeChanged(SyncMode.mirror),
-              child: Padding(
-                padding: EdgeInsets.all(theme.sm),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      selectedSyncMode == SyncMode.mirror
-                          ? material.Icons.radio_button_checked
-                          : material.Icons.radio_button_unchecked,
-                      size: 20,
-                      color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                strings.syncModeMirror,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: selectedSyncMode == SyncMode.mirror ? theme.warning : null,
-                                ),
-                              ),
-                              SizedBox(width: theme.xs),
-                              Icon(material.Icons.warning_amber_rounded, size: 16, color: theme.warning),
-                            ],
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.syncModeMirrorDescription,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
-                              fontWeight: selectedSyncMode == SyncMode.mirror ? FontWeight.w600 : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.lg),
-
-          // --- Schedule Selection ---
-          material.DropdownButtonFormField<String>(
-            initialValue: selectedScheduleDay,
-            decoration: material.InputDecoration(
-              labelText: strings.scheduleDayLabel,
-              suffixIcon: _buildInfoTooltip(context, theme, strings.tooltipSchedule),
-            ),
-            items: scheduleDayOptions.map((sched) {
-              return material.DropdownMenuItem(
-                value: sched,
-                child: Text(_getDayLabel(strings, sched)),
-              );
-            }).toList(),
-            onChanged: onScheduleDayChanged,
-          ),
-          if (selectedScheduleDay != 'Manual') ...[
-            SizedBox(height: theme.lg),
-            Row(
-              children: [
-                Text('${strings.scheduleTimeLabel}:'),
-                SizedBox(width: theme.md),
-                Expanded(
-                  child: material.DropdownButtonFormField<String>(
-                    initialValue: selectedHour,
-                    decoration: material.InputDecoration(labelText: strings.hourLabel),
-                    items: hours.map((h) => material.DropdownMenuItem(value: h, child: Text(h))).toList(),
-                    onChanged: onHourChanged,
-                  ),
-                ),
-                SizedBox(width: theme.sm),
-                const Text(':'),
-                SizedBox(width: theme.sm),
-                Expanded(
-                  child: material.DropdownButtonFormField<String>(
-                    initialValue: selectedMinute,
-                    decoration: material.InputDecoration(labelText: strings.minuteLabel),
-                    items: minutes.map((m) => material.DropdownMenuItem(value: m, child: Text(m))).toList(),
-                    onChanged: onMinuteChanged,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text('${strings.activeSyncJob}:'),
-              const Spacer(),
-              material.Switch(
-                value: isActive,
-                onChanged: onActiveChanged,
-              ),
-            ],
-          ),
-          SizedBox(height: theme.md),
-          Row(
-            children: [
-              Icon(
-                material.Icons.check_circle_outline,
-                size: 14,
-                color: theme.success,
-                semanticLabel: strings.catchUpNotice,
-              ),
-              SizedBox(width: theme.xs),
-              Expanded(
-                child: Text(
-                  strings.catchUpNotice,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-              SizedBox(width: theme.xs),
-              _buildInfoTooltip(context, theme, strings.tooltipCatchUp),
-            ],
-          ),
-        ],
-      ),
-    );
+  void showTaskDialog(
+    BuildContext context,
+    WidgetRef ref,
+    BackupTask? existingTask, [
+    TargetPlatform? platform,
+  ]) {
+    _showAddEditTaskDialog(context, ref, existingTask, platform ?? defaultTargetPlatform);
   }
 
   // =========================================================================
@@ -3179,6 +1172,1962 @@ class TasksScreen extends ConsumerWidget {
       return strings.scheduleDisplay(day: 'Daily', time: task.scheduleTime);
     } else {
       return strings.scheduleDisplay(day: _getDayLabel(strings, task.scheduleDay), time: task.scheduleTime);
+    }
+  }
+}
+
+/// Public dialog dispatcher for creating or editing backup tasks across platforms.
+void showAddEditTaskDialog(
+  BuildContext context,
+  WidgetRef ref, [
+  BackupTask? existingTask,
+  TargetPlatform? platform,
+]) {
+  const TasksScreen().showTaskDialog(context, ref, existingTask, platform);
+}
+
+// ===========================================================================
+// 3-STEP TASK WIZARD DIALOG (Windows, iOS, Android)
+// ===========================================================================
+class TaskWizardDialog extends ConsumerStatefulWidget {
+  final BackupTask? existingTask;
+  final TargetPlatform platform;
+
+  const TaskWizardDialog({
+    super.key,
+    this.existingTask,
+    required this.platform,
+  });
+
+  @override
+  ConsumerState<TaskWizardDialog> createState() => _TaskWizardDialogState();
+}
+
+class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
+  int _currentStep = 0; // 0 = Grundlagen, 1 = Cloud-Ziel, 2 = Zeitplan & Modus
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _srcController;
+  late final TextEditingController _targetFolderController;
+
+  late List<String> _selectedRemotes;
+  late DistributionStrategy _selectedDistribution;
+  late TargetFolderMode _selectedTargetFolderMode;
+  late SyncMode _selectedSyncMode;
+
+  late String _selectedScheduleDay;
+  late String _selectedHour;
+  late String _selectedMinute;
+  late bool _isActive;
+
+  // Mobile categories: 'all', 'photos', 'videos', 'folders'
+  late String _selectedSourceCategory;
+
+  String? _nameError;
+  String? _sourceError;
+  String? _remotesError;
+
+  final List<String> _hours = List.generate(24, (i) => i.toString().padLeft(2, '0'));
+  final List<String> _minutes = List.generate(12, (i) => (i * 5).toString().padLeft(2, '0'));
+
+  @override
+  void initState() {
+    super.initState();
+    final task = widget.existingTask;
+    _nameController = TextEditingController(text: task?.name ?? '');
+    _srcController = TextEditingController(text: task?.sourcePath ?? '');
+    _targetFolderController = TextEditingController(text: task?.targetFolderName ?? 'fibu-backup');
+
+    final remotesList = TasksScreen._resolveRemotesList(ref);
+    _selectedRemotes = task != null && task.targetRemotes.isNotEmpty
+        ? List<String>.from(task.targetRemotes)
+        : (remotesList.isNotEmpty ? [remotesList.first] : ['GoogleDrive_Backup']);
+
+    _selectedDistribution = task?.distributionStrategy ?? DistributionStrategy.mirrorAll;
+    _selectedTargetFolderMode = task?.targetFolderMode ?? TargetFolderMode.newFolder;
+    _selectedSyncMode = task?.syncMode ?? SyncMode.incremental;
+
+    _selectedScheduleDay = task?.scheduleDay ?? 'Daily';
+    _selectedHour = '02';
+    _selectedMinute = '00';
+    if (task != null && task.scheduleTime.contains(':')) {
+      final parts = task.scheduleTime.split(':');
+      if (parts.length == 2) {
+        _selectedHour = parts[0];
+        _selectedMinute = parts[1];
+      }
+    }
+    _isActive = task?.isActive ?? true;
+
+    if (task != null) {
+      if (task.sourcePath == 'all' || task.sourcePath == 'Alles') {
+        _selectedSourceCategory = 'all';
+      } else if (task.sourcePath == 'photos' || task.sourcePath == 'Alle Fotos') {
+        _selectedSourceCategory = 'photos';
+      } else if (task.sourcePath == 'videos' || task.sourcePath == 'Alle Videos') {
+        _selectedSourceCategory = 'videos';
+      } else {
+        _selectedSourceCategory = 'folders';
+      }
+    } else {
+      _selectedSourceCategory = 'all';
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _srcController.dispose();
+    _targetFolderController.dispose();
+    super.dispose();
+  }
+
+  bool _validateStep0(AppStrings strings) {
+    final name = _nameController.text.trim();
+    final sourcePath = _srcController.text.trim();
+
+    bool hasError = false;
+    String? newNameError;
+    String? newSourceError;
+
+    if (name.isEmpty) {
+      newNameError = strings.taskNameRequiredError;
+      hasError = true;
+    }
+
+    if (widget.platform == TargetPlatform.windows || _selectedSourceCategory == 'folders') {
+      if (sourcePath.isEmpty) {
+        newSourceError = strings.sourcePathRequiredError;
+        hasError = true;
+      }
+    }
+
+    setState(() {
+      _nameError = newNameError;
+      _sourceError = newSourceError;
+    });
+
+    return !hasError;
+  }
+
+  bool _validateStep1(AppStrings strings) {
+    if (_selectedRemotes.isEmpty) {
+      setState(() {
+        _remotesError = strings.selectAtLeastOneRemote;
+      });
+      return false;
+    }
+    setState(() {
+      _remotesError = null;
+    });
+    return true;
+  }
+
+  void _handleNext(AppStrings strings) {
+    if (_currentStep == 0) {
+      if (_validateStep0(strings)) {
+        setState(() => _currentStep = 1);
+      }
+    } else if (_currentStep == 1) {
+      if (_validateStep1(strings)) {
+        setState(() => _currentStep = 2);
+      }
+    }
+  }
+
+  void _handleBack() {
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+    }
+  }
+
+  void _handleSave(AppStrings strings) {
+    if (!_validateStep0(strings)) {
+      setState(() => _currentStep = 0);
+      return;
+    }
+    if (!_validateStep1(strings)) {
+      setState(() => _currentStep = 1);
+      return;
+    }
+
+    final name = _nameController.text.trim();
+    String finalSourcePath = _srcController.text.trim();
+    if (widget.platform != TargetPlatform.windows && _selectedSourceCategory != 'folders') {
+      finalSourcePath = _selectedSourceCategory;
+    }
+
+    final String finalTime = _selectedScheduleDay == 'Manual' ? '12:00' : '$_selectedHour:$_selectedMinute';
+    final String finalSchedule = _selectedScheduleDay == 'Daily'
+        ? 'Daily at $finalTime'
+        : (_selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${_selectedScheduleDay}s at $finalTime');
+
+    String finalTargetFolder = _targetFolderController.text.trim();
+    if (_selectedTargetFolderMode == TargetFolderMode.root) {
+      finalTargetFolder = '/';
+    } else if (finalTargetFolder.isEmpty) {
+      finalTargetFolder = _selectedTargetFolderMode == TargetFolderMode.newFolder ? 'fibu-backup' : 'backup/media';
+    }
+
+    final task = BackupTask(
+      id: widget.existingTask?.id ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      sourcePath: finalSourcePath,
+      targetRemotes: List<String>.from(_selectedRemotes),
+      schedule: finalSchedule,
+      scheduleDay: _selectedScheduleDay,
+      scheduleTime: finalTime,
+      isActive: _isActive,
+      runMissedOnStartup: true,
+      excludedFiles: widget.existingTask?.excludedFiles ?? const [],
+      syncMode: _selectedSyncMode,
+      distributionStrategy: _selectedRemotes.length > 1 ? _selectedDistribution : DistributionStrategy.mirrorAll,
+      targetFolderMode: _selectedTargetFolderMode,
+      targetFolderName: finalTargetFolder,
+    );
+
+    if (widget.existingTask == null) {
+      ref.read(tasksListProvider.notifier).addTask(task);
+    } else {
+      ref.read(tasksListProvider.notifier).updateTask(widget.existingTask!.id, task);
+    }
+
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final remotesList = TasksScreen._resolveRemotesList(ref);
+
+    if (widget.platform == TargetPlatform.iOS) {
+      return _buildIOSLayout(context, theme, strings, remotesList);
+    } else if (widget.platform == TargetPlatform.windows) {
+      return _buildWindowsLayout(context, theme, strings, remotesList);
+    } else {
+      return _buildAndroidLayout(context, theme, strings, remotesList);
+    }
+  }
+
+  // =========================================================================
+  // STEP INDICATOR HEADER (3 Connected Step Badges)
+  // =========================================================================
+  Widget _buildStepIndicatorHeader(AppThemeData theme, AppStrings strings) {
+    final stepTitles = [
+      strings.taskWizardStep1Title,
+      strings.taskWizardStep2Title,
+      strings.taskWizardStep3Title,
+    ];
+    final stepSubtitles = [
+      strings.taskWizardStep1Subtitle,
+      strings.taskWizardStep2Subtitle,
+      strings.taskWizardStep3Subtitle,
+    ];
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg, theme.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              _buildStepBadge(theme, 0, strings.stepIndicator),
+              Expanded(
+                child: Container(
+                  height: 2,
+                  margin: EdgeInsets.symmetric(horizontal: theme.xs),
+                  color: _currentStep > 0 ? theme.accent : theme.textSecondary.withValues(alpha: 0.25),
+                ),
+              ),
+              _buildStepBadge(theme, 1, strings.stepIndicator),
+              Expanded(
+                child: Container(
+                  height: 2,
+                  margin: EdgeInsets.symmetric(horizontal: theme.xs),
+                  color: _currentStep > 1 ? theme.accent : theme.textSecondary.withValues(alpha: 0.25),
+                ),
+              ),
+              _buildStepBadge(theme, 2, strings.stepIndicator),
+            ],
+          ),
+          SizedBox(height: theme.md),
+          Text(
+            stepTitles[_currentStep],
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: theme.xs / 2),
+          Text(
+            stepSubtitles[_currentStep],
+            style: TextStyle(
+              color: theme.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepBadge(AppThemeData theme, int index, String stepWord) {
+    final isCompleted = index < _currentStep;
+    final isActive = index == _currentStep;
+
+    final Color badgeBg;
+    final Color badgeTextColor;
+    final Border? border;
+
+    if (isActive) {
+      badgeBg = theme.accent;
+      badgeTextColor = const Color(0xFFFFFFFF);
+      border = null;
+    } else if (isCompleted) {
+      badgeBg = theme.accent.withValues(alpha: 0.2);
+      badgeTextColor = theme.accent;
+      border = Border.all(color: theme.accent, width: 1.5);
+    } else {
+      badgeBg = theme.surface;
+      badgeTextColor = theme.textSecondary;
+      border = Border.all(color: theme.textSecondary.withValues(alpha: 0.3), width: 1);
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: badgeBg,
+            shape: BoxShape.circle,
+            border: border,
+          ),
+          child: Center(
+            child: isCompleted
+                ? Icon(
+                    defaultTargetPlatform == TargetPlatform.windows
+                        ? fluent.FluentIcons.check_mark
+                        : (defaultTargetPlatform == TargetPlatform.iOS
+                            ? cupertino.CupertinoIcons.checkmark
+                            : material.Icons.check),
+                    size: 13,
+                    color: theme.accent,
+                    semanticLabel: 'Done',
+                  )
+                : Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: badgeTextColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+        SizedBox(width: theme.xs),
+        Text(
+          '$stepWord ${index + 1}',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? theme.accent : theme.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =========================================================================
+  // WINDOWS WIZARD LAYOUT (Fluent Design)
+  // =========================================================================
+  Widget _buildWindowsLayout(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    return Center(
+      child: material.Material(
+        color: material.Colors.transparent,
+        child: Container(
+          width: 580,
+          constraints: const BoxConstraints(maxHeight: 680),
+          margin: EdgeInsets.all(theme.lg),
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusLg),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 24,
+                offset: Offset(0, 8),
+              ),
+            ],
+            border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15), width: 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Padding(
+                padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.md, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.existingTask == null ? strings.addTask : strings.editTask,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: fluent.IconButton(
+                          icon: Icon(fluent.FluentIcons.chrome_close, size: 12, semanticLabel: strings.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildStepIndicatorHeader(theme, strings),
+              const material.Divider(height: 1),
+
+              // Animated Step Body
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(_currentStep),
+                      child: _buildWindowsStepContent(context, theme, strings, remotesList),
+                    ),
+                  ),
+                ),
+              ),
+              const material.Divider(height: 1),
+
+              // Bottom Actions
+              Padding(
+                padding: EdgeInsets.all(theme.md),
+                child: Row(
+                  children: [
+                    fluent.Button(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(strings.cancel),
+                    ),
+                    const Spacer(),
+                    if (_currentStep > 0) ...[
+                      fluent.Button(
+                        onPressed: _handleBack,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(fluent.FluentIcons.back, size: 12),
+                            SizedBox(width: theme.xs),
+                            Text(strings.back),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: theme.sm),
+                    ],
+                    if (_currentStep < 2)
+                      fluent.FilledButton(
+                        onPressed: () => _handleNext(strings),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              strings.next,
+                              style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(width: theme.xs),
+                            const Icon(fluent.FluentIcons.forward, size: 12, color: Color(0xFFFFFFFF)),
+                          ],
+                        ),
+                      )
+                    else
+                      fluent.FilledButton(
+                        onPressed: () => _handleSave(strings),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(fluent.FluentIcons.save, size: 14, color: Color(0xFFFFFFFF)),
+                            SizedBox(width: theme.xs),
+                            Text(
+                              strings.save,
+                              style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWindowsStepContent(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    if (_currentStep == 0) {
+      return _buildWindowsStep1(context, theme, strings);
+    } else if (_currentStep == 1) {
+      return _buildWindowsStep2(context, theme, strings, remotesList);
+    } else {
+      return _buildWindowsStep3(context, theme, strings);
+    }
+  }
+
+  Widget _buildWindowsStep1(BuildContext context, AppThemeData theme, AppStrings strings) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(strings.taskNameLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(height: theme.xs),
+        fluent.TextBox(
+          controller: _nameController,
+          placeholder: strings.taskNameHint,
+          decoration: _nameError != null
+              ? WidgetStatePropertyAll(
+                  BoxDecoration(
+                    color: theme.surface,
+                    border: Border.all(color: theme.error, width: 1.5),
+                    borderRadius: BorderRadius.circular(theme.radiusSm),
+                  ),
+                )
+              : null,
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+        ),
+        if (_nameError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(
+            _nameError!,
+            style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+        SizedBox(height: theme.lg),
+        Row(
+          children: [
+            Text(strings.sourcePathLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSourcePath),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        Row(
+          children: [
+            Expanded(
+              child: fluent.TextBox(
+                controller: _srcController,
+                placeholder: strings.sourcePathHint,
+                decoration: _sourceError != null
+                    ? WidgetStatePropertyAll(
+                        BoxDecoration(
+                          color: theme.surface,
+                          border: Border.all(color: theme.error, width: 1.5),
+                          borderRadius: BorderRadius.circular(theme.radiusSm),
+                        ),
+                      )
+                    : null,
+                onChanged: (_) {
+                  if (_sourceError != null) setState(() => _sourceError = null);
+                },
+              ),
+            ),
+            SizedBox(width: theme.sm),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: fluent.IconButton(
+                  icon: Icon(fluent.FluentIcons.folder_open, semanticLabel: strings.selectFolder),
+                  onPressed: () async {
+                    final path = await FilePicker.getDirectoryPath();
+                    if (path != null) {
+                      setState(() {
+                        _srcController.text = path;
+                        _sourceError = null;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_sourceError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(
+            _sourceError!,
+            style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWindowsStep2(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Text(strings.destinationRemoteLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(
+              color: _remotesError != null ? theme.error : theme.textSecondary.withValues(alpha: 0.25),
+              width: _remotesError != null ? 1.5 : 1,
+            ),
+          ),
+          padding: EdgeInsets.all(theme.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: remotesList.map((remote) {
+              final isChecked = _selectedRemotes.contains(remote);
+              return Padding(
+                padding: EdgeInsets.symmetric(vertical: theme.xs / 2),
+                child: fluent.Checkbox(
+                  checked: isChecked,
+                  content: Text(remote),
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        if (!_selectedRemotes.contains(remote)) _selectedRemotes.add(remote);
+                      } else {
+                        _selectedRemotes.remove(remote);
+                      }
+                      if (_selectedRemotes.isNotEmpty) _remotesError = null;
+                    });
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        if (_remotesError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(
+            _remotesError!,
+            style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+
+        // Distribution Strategy (Shown only if > 1 remote selected)
+        if (_selectedRemotes.length > 1) ...[
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          fluent.Card(
+            padding: EdgeInsets.all(theme.sm),
+            backgroundColor: _selectedDistribution == DistributionStrategy.mirrorAll
+                ? theme.accent.withValues(alpha: 0.08)
+                : theme.surface,
+            borderColor: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : null,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.mirrorAll),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      _selectedDistribution == DistributionStrategy.mirrorAll
+                          ? fluent.FluentIcons.radio_bullet
+                          : fluent.FluentIcons.radio_btn_off,
+                      color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
+                      size: 18,
+                    ),
+                    SizedBox(width: theme.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.distributionMirrorAll,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          SizedBox(height: theme.xs / 2),
+                          Text(
+                            strings.distributionMirrorAllDesc,
+                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: theme.xs),
+          fluent.Card(
+            padding: EdgeInsets.all(theme.sm),
+            backgroundColor: _selectedDistribution == DistributionStrategy.balance
+                ? theme.accent.withValues(alpha: 0.08)
+                : theme.surface,
+            borderColor: _selectedDistribution == DistributionStrategy.balance ? theme.accent : null,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.balance),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      _selectedDistribution == DistributionStrategy.balance
+                          ? fluent.FluentIcons.radio_bullet
+                          : fluent.FluentIcons.radio_btn_off,
+                      color: _selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
+                      size: 18,
+                    ),
+                    SizedBox(width: theme.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.distributionBalance,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          SizedBox(height: theme.xs / 2),
+                          Text(
+                            strings.distributionBalanceDesc,
+                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+
+        // Target Folder Mode
+        SizedBox(height: theme.lg),
+        Row(
+          children: [
+            Text(strings.targetFolderModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.targetFolderTooltip),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        fluent.ComboBox<TargetFolderMode>(
+          value: _selectedTargetFolderMode,
+          items: [
+            fluent.ComboBoxItem(
+              value: TargetFolderMode.root,
+              child: Text(strings.targetFolderRoot),
+            ),
+            fluent.ComboBoxItem(
+              value: TargetFolderMode.custom,
+              child: Text(strings.targetFolderCustom),
+            ),
+            fluent.ComboBoxItem(
+              value: TargetFolderMode.newFolder,
+              child: Text(strings.targetFolderNew),
+            ),
+          ],
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedTargetFolderMode = val);
+          },
+        ),
+        if (_selectedTargetFolderMode == TargetFolderMode.custom || _selectedTargetFolderMode == TargetFolderMode.newFolder) ...[
+          SizedBox(height: theme.xs),
+          fluent.TextBox(
+            controller: _targetFolderController,
+            placeholder: _selectedTargetFolderMode == TargetFolderMode.newFolder
+                ? strings.newFolderNameHint
+                : 'fibu-backup',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWindowsStep3(BuildContext context, AppThemeData theme, AppStrings strings) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Text(strings.syncModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(
+              context,
+              theme,
+              _selectedSyncMode == SyncMode.incremental
+                  ? strings.syncModeTooltipIncremental
+                  : strings.syncModeTooltipMirror,
+            ),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        fluent.Card(
+          padding: EdgeInsets.all(theme.sm),
+          backgroundColor: _selectedSyncMode == SyncMode.incremental
+              ? theme.accent.withValues(alpha: 0.08)
+              : theme.surface,
+          borderColor: _selectedSyncMode == SyncMode.incremental ? theme.accent : null,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _selectedSyncMode = SyncMode.incremental),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _selectedSyncMode == SyncMode.incremental
+                        ? fluent.FluentIcons.radio_bullet
+                        : fluent.FluentIcons.radio_btn_off,
+                    color: _selectedSyncMode == SyncMode.incremental ? theme.accent : theme.textSecondary,
+                    size: 18,
+                  ),
+                  SizedBox(width: theme.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          strings.syncModeIncremental,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        SizedBox(height: theme.xs / 2),
+                        Text(
+                          strings.syncModeIncrementalDescription,
+                          style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: theme.xs),
+        fluent.Card(
+          padding: EdgeInsets.all(theme.sm),
+          backgroundColor: _selectedSyncMode == SyncMode.mirror
+              ? theme.warning.withValues(alpha: 0.1)
+              : theme.surface,
+          borderColor: _selectedSyncMode == SyncMode.mirror ? theme.warning : null,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _selectedSyncMode = SyncMode.mirror),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _selectedSyncMode == SyncMode.mirror
+                        ? fluent.FluentIcons.radio_bullet
+                        : fluent.FluentIcons.radio_btn_off,
+                    color: _selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
+                    size: 18,
+                  ),
+                  SizedBox(width: theme.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              strings.syncModeMirror,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: _selectedSyncMode == SyncMode.mirror ? theme.warning : null,
+                              ),
+                            ),
+                            SizedBox(width: theme.xs),
+                            Icon(
+                              fluent.FluentIcons.warning,
+                              size: 14,
+                              color: theme.warning,
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: theme.xs / 2),
+                        Text(
+                          strings.syncModeMirrorDescription,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
+                            fontWeight: _selectedSyncMode == SyncMode.mirror ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: theme.lg),
+
+        // Schedule Repeat & Time
+        Row(
+          children: [
+            Text(strings.scheduleDayLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSchedule),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        fluent.ComboBox<String>(
+          value: _selectedScheduleDay,
+          items: TasksScreen._scheduleDayKeys.map((sched) {
+            return fluent.ComboBoxItem(value: sched, child: Text(TasksScreen._getDayLabel(strings, sched)));
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedScheduleDay = val);
+          },
+        ),
+        if (_selectedScheduleDay != 'Manual') ...[
+          SizedBox(height: theme.sm),
+          Row(
+            children: [
+              Text('${strings.scheduleTimeLabel}:'),
+              SizedBox(width: theme.sm),
+              fluent.ComboBox<String>(
+                value: _selectedHour,
+                items: _hours.map((h) => fluent.ComboBoxItem(value: h, child: Text(h))).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedHour = val);
+                },
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.xs),
+                child: const Text(':'),
+              ),
+              fluent.ComboBox<String>(
+                value: _selectedMinute,
+                items: _minutes.map((m) => fluent.ComboBoxItem(value: m, child: Text(m))).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedMinute = val);
+                },
+              ),
+            ],
+          ),
+        ],
+        SizedBox(height: theme.lg),
+
+        // Active Toggle
+        Row(
+          children: [
+            Text('${strings.activeSyncJob}:', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            fluent.ToggleSwitch(
+              checked: _isActive,
+              onChanged: (val) => setState(() => _isActive = val),
+            ),
+          ],
+        ),
+        SizedBox(height: theme.md),
+
+        // Catch-up Notice
+        Row(
+          children: [
+            Icon(fluent.FluentIcons.completed, size: 14, color: theme.success, semanticLabel: strings.catchUpNotice),
+            SizedBox(width: theme.xs),
+            Expanded(
+              child: Text(
+                strings.catchUpNotice,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipCatchUp),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // =========================================================================
+  // IOS WIZARD LAYOUT (Cupertino)
+  // =========================================================================
+  Widget _buildIOSLayout(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    final mediaQuery = MediaQuery.of(context);
+    final sheetHeight = mediaQuery.size.height * 0.85;
+
+    return Container(
+      height: sheetHeight,
+      decoration: BoxDecoration(
+        color: theme.canvas,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(theme.radiusLg)),
+      ),
+      child: cupertino.CupertinoPageScaffold(
+        backgroundColor: theme.canvas,
+        navigationBar: cupertino.CupertinoNavigationBar(
+          backgroundColor: theme.surface,
+          middle: Text(widget.existingTask == null ? strings.addTask : strings.editTask),
+          leading: SizedBox(
+            width: 70,
+            height: 44,
+            child: cupertino.CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.pop(context),
+              child: Text(strings.cancel),
+            ),
+          ),
+          trailing: SizedBox(
+            width: 80,
+            height: 44,
+            child: cupertino.CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _currentStep < 2 ? () => _handleNext(strings) : () => _handleSave(strings),
+              child: Text(
+                _currentStep < 2 ? strings.next : strings.save,
+                style: TextStyle(fontWeight: FontWeight.bold, color: theme.accent),
+              ),
+            ),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildStepIndicatorHeader(theme, strings),
+              const material.Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(_currentStep),
+                      child: _buildIOSStepContent(context, theme, strings, remotesList),
+                    ),
+                  ),
+                ),
+              ),
+              const material.Divider(height: 1),
+              Padding(
+                padding: EdgeInsets.all(theme.md),
+                child: Row(
+                  children: [
+                    if (_currentStep > 0)
+                      cupertino.CupertinoButton(
+                        padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.xs),
+                        onPressed: _handleBack,
+                        child: Text(strings.back),
+                      ),
+                    const Spacer(),
+                    if (_currentStep < 2)
+                      cupertino.CupertinoButton.filled(
+                        padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.xs),
+                        onPressed: () => _handleNext(strings),
+                        child: Text(
+                          strings.next,
+                          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    else
+                      cupertino.CupertinoButton.filled(
+                        padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.xs),
+                        onPressed: () => _handleSave(strings),
+                        child: Text(
+                          strings.save,
+                          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIOSStepContent(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    if (_currentStep == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(strings.taskNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoTextField(
+            controller: _nameController,
+            placeholder: strings.taskNameHint,
+            padding: EdgeInsets.all(theme.md),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              border: Border.all(
+                color: _nameError != null ? theme.error : cupertino.CupertinoColors.separator,
+                width: _nameError != null ? 1.5 : 0.5,
+              ),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+            onChanged: (_) {
+              if (_nameError != null) setState(() => _nameError = null);
+            },
+          ),
+          if (_nameError != null) ...[
+            SizedBox(height: theme.xs),
+            Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+          ],
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text(strings.sourceCategoryLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSourcePath),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoSlidingSegmentedControl<String>(
+            groupValue: _selectedSourceCategory,
+            children: {
+              'all': Text(strings.allMedia, style: const TextStyle(fontSize: 11)),
+              'photos': Text(strings.allPhotos, style: const TextStyle(fontSize: 11)),
+              'videos': Text(strings.allVideos, style: const TextStyle(fontSize: 11)),
+              'folders': Text(strings.specificFoldersShort, style: const TextStyle(fontSize: 11)),
+            },
+            onValueChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedSourceCategory = val;
+                  if (val != 'folders') _sourceError = null;
+                });
+              }
+            },
+          ),
+          if (_selectedSourceCategory == 'folders') ...[
+            SizedBox(height: theme.sm),
+            cupertino.CupertinoTextField(
+              controller: _srcController,
+              placeholder: strings.specificFoldersHint,
+              padding: EdgeInsets.all(theme.md),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                border: Border.all(
+                  color: _sourceError != null ? theme.error : cupertino.CupertinoColors.separator,
+                  width: _sourceError != null ? 1.5 : 0.5,
+                ),
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+              ),
+              onChanged: (_) {
+                if (_sourceError != null) setState(() => _sourceError = null);
+              },
+            ),
+            if (_sourceError != null) ...[
+              SizedBox(height: theme.xs),
+              Text(_sourceError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+            ],
+          ],
+        ],
+      );
+    } else if (_currentStep == 1) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(strings.destinationRemoteLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              border: Border.all(
+                color: _remotesError != null ? theme.error : cupertino.CupertinoColors.separator,
+                width: _remotesError != null ? 1.5 : 0.5,
+              ),
+            ),
+            child: Column(
+              children: remotesList.map((remote) {
+                final isChecked = _selectedRemotes.contains(remote);
+                return cupertino.CupertinoListTile(
+                  title: Text(remote, style: const TextStyle(fontSize: 13)),
+                  trailing: isChecked
+                      ? Icon(cupertino.CupertinoIcons.checkmark_alt_circle_fill, color: theme.accent, size: 22)
+                      : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
+                  onTap: () {
+                    setState(() {
+                      if (isChecked) {
+                        _selectedRemotes.remove(remote);
+                      } else {
+                        _selectedRemotes.add(remote);
+                      }
+                      if (_selectedRemotes.isNotEmpty) _remotesError = null;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          if (_remotesError != null) ...[
+            SizedBox(height: theme.xs),
+            Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+          ],
+          if (_selectedRemotes.length > 1) ...[
+            SizedBox(height: theme.lg),
+            Row(
+              children: [
+                Text(strings.distributionStrategyLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                SizedBox(width: theme.xs),
+                TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
+              ],
+            ),
+            SizedBox(height: theme.xs),
+            cupertino.CupertinoSlidingSegmentedControl<DistributionStrategy>(
+              groupValue: _selectedDistribution,
+              children: {
+                DistributionStrategy.mirrorAll: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                  child: Text(strings.distributionBadgeMirrorAll, style: const TextStyle(fontSize: 11)),
+                ),
+                DistributionStrategy.balance: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                  child: Text(strings.distributionBadgeBalance, style: const TextStyle(fontSize: 11)),
+                ),
+              },
+              onValueChanged: (val) {
+                if (val != null) setState(() => _selectedDistribution = val);
+              },
+            ),
+          ],
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text(strings.targetFolderModeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.targetFolderTooltip),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoSlidingSegmentedControl<TargetFolderMode>(
+            groupValue: _selectedTargetFolderMode,
+            children: {
+              TargetFolderMode.root: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
+                child: Text(strings.targetFolderRoot, style: const TextStyle(fontSize: 10), maxLines: 1),
+              ),
+              TargetFolderMode.custom: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
+                child: Text(strings.targetFolderCustom, style: const TextStyle(fontSize: 10), maxLines: 1),
+              ),
+              TargetFolderMode.newFolder: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
+                child: Text(strings.targetFolderNew, style: const TextStyle(fontSize: 10), maxLines: 1),
+              ),
+            },
+            onValueChanged: (val) {
+              if (val != null) setState(() => _selectedTargetFolderMode = val);
+            },
+          ),
+          if (_selectedTargetFolderMode != TargetFolderMode.root) ...[
+            SizedBox(height: theme.sm),
+            cupertino.CupertinoTextField(
+              controller: _targetFolderController,
+              placeholder: _selectedTargetFolderMode == TargetFolderMode.newFolder
+                  ? strings.newFolderNameHint
+                  : 'fibu-backup',
+              padding: EdgeInsets.all(theme.md),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+              ),
+            ),
+          ],
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(strings.syncModeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(
+                context,
+                theme,
+                _selectedSyncMode == SyncMode.incremental
+                    ? strings.syncModeTooltipIncremental
+                    : strings.syncModeTooltipMirror,
+              ),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
+            groupValue: _selectedSyncMode,
+            children: {
+              SyncMode.incremental: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                child: Text(strings.syncModeIncremental, style: const TextStyle(fontSize: 11)),
+              ),
+              SyncMode.mirror: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                child: Text(strings.syncModeBadgeMirror, style: const TextStyle(fontSize: 11)),
+              ),
+            },
+            onValueChanged: (mode) {
+              if (mode != null) setState(() => _selectedSyncMode = mode);
+            },
+          ),
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text(strings.scheduleDayLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSchedule),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoSlidingSegmentedControl<String>(
+            groupValue: _selectedScheduleDay,
+            children: {
+              for (final sched in ['Daily', 'Monday', 'Sunday', 'Manual'])
+                sched: Text(TasksScreen._getDayLabel(strings, sched), style: const TextStyle(fontSize: 10)),
+            },
+            onValueChanged: (val) {
+              if (val != null) setState(() => _selectedScheduleDay = val);
+            },
+          ),
+          if (_selectedScheduleDay != 'Manual') ...[
+            SizedBox(height: theme.md),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('${strings.scheduleTimeLabel}: ', style: const TextStyle(fontSize: 12)),
+                material.DropdownButton<String>(
+                  value: _selectedHour,
+                  items: _hours.map((h) => material.DropdownMenuItem(value: h, child: Text(h, style: const TextStyle(fontSize: 12)))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedHour = val);
+                  },
+                ),
+                const Text(' : ', style: TextStyle(fontSize: 12)),
+                material.DropdownButton<String>(
+                  value: _selectedMinute,
+                  items: _minutes.map((m) => material.DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedMinute = val);
+                  },
+                ),
+              ],
+            ),
+          ],
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text('${strings.activeSyncJob}:', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              cupertino.CupertinoSwitch(
+                value: _isActive,
+                onChanged: (val) => setState(() => _isActive = val),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.md),
+          Row(
+            children: [
+              Icon(
+                cupertino.CupertinoIcons.check_mark_circled_solid,
+                size: 14,
+                color: theme.success,
+                semanticLabel: strings.catchUpNotice,
+              ),
+              SizedBox(width: theme.xs),
+              Expanded(
+                child: Text(
+                  strings.catchUpNotice,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+  }
+
+  // =========================================================================
+  // ANDROID WIZARD LAYOUT (Material 3)
+  // =========================================================================
+  Widget _buildAndroidLayout(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    return material.Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusLg)),
+      child: Container(
+        width: 540,
+        constraints: const BoxConstraints(maxHeight: 680),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.sm, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.existingTask == null ? strings.addTask : strings.editTask,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  material.IconButton(
+                    icon: const Icon(material.Icons.close, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            _buildStepIndicatorHeader(theme, strings),
+            const material.Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_currentStep),
+                    child: _buildAndroidStepContent(context, theme, strings, remotesList),
+                  ),
+                ),
+              ),
+            ),
+            const material.Divider(height: 1),
+            Padding(
+              padding: EdgeInsets.all(theme.md),
+              child: Row(
+                children: [
+                  material.TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(strings.cancel),
+                  ),
+                  const Spacer(),
+                  if (_currentStep > 0) ...[
+                    material.OutlinedButton(
+                      onPressed: _handleBack,
+                      child: Text(strings.back),
+                    ),
+                    SizedBox(width: theme.sm),
+                  ],
+                  if (_currentStep < 2)
+                    material.FilledButton(
+                      onPressed: () => _handleNext(strings),
+                      child: Text(
+                        strings.next,
+                        style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                      ),
+                    )
+                  else
+                    material.FilledButton(
+                      onPressed: () => _handleSave(strings),
+                      child: Text(
+                        strings.save,
+                        style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAndroidStepContent(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    if (_currentStep == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          material.TextField(
+            controller: _nameController,
+            decoration: material.InputDecoration(
+              labelText: strings.taskNameLabel,
+              hintText: strings.taskNameHint,
+              errorText: _nameError,
+            ),
+            onChanged: (_) {
+              if (_nameError != null) setState(() => _nameError = null);
+            },
+          ),
+          SizedBox(height: theme.lg),
+          material.DropdownButtonFormField<String>(
+            initialValue: _selectedSourceCategory,
+            decoration: material.InputDecoration(
+              labelText: strings.sourceCategoryLabel,
+              suffixIcon: TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSourcePath),
+            ),
+            items: ['all', 'photos', 'videos', 'folders'].map((cat) {
+              return material.DropdownMenuItem(
+                value: cat,
+                child: Text(TasksScreen._getCategoryLabel(strings, cat)),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedSourceCategory = val;
+                  if (val != 'folders') _sourceError = null;
+                });
+              }
+            },
+          ),
+          if (_selectedSourceCategory == 'folders') ...[
+            SizedBox(height: theme.sm),
+            material.TextField(
+              controller: _srcController,
+              decoration: material.InputDecoration(
+                labelText: strings.sourcePathLabel,
+                hintText: strings.specificFoldersHint,
+                errorText: _sourceError,
+              ),
+              onChanged: (_) {
+                if (_sourceError != null) setState(() => _sourceError = null);
+              },
+            ),
+          ],
+        ],
+      );
+    } else if (_currentStep == 1) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(strings.destinationRemoteLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          material.Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              side: BorderSide(
+                color: _remotesError != null ? theme.error : material.Theme.of(context).colorScheme.outlineVariant,
+                width: _remotesError != null ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              children: remotesList.map((remote) {
+                return material.CheckboxListTile(
+                  title: Text(remote, style: const TextStyle(fontSize: 13)),
+                  value: _selectedRemotes.contains(remote),
+                  dense: true,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        if (!_selectedRemotes.contains(remote)) _selectedRemotes.add(remote);
+                      } else {
+                        _selectedRemotes.remove(remote);
+                      }
+                      if (_selectedRemotes.isNotEmpty) _remotesError = null;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          if (_remotesError != null) ...[
+            SizedBox(height: theme.xs),
+            Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+          ],
+          if (_selectedRemotes.length > 1) ...[
+            SizedBox(height: theme.lg),
+            Row(
+              children: [
+                Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+                SizedBox(width: theme.xs),
+                TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
+              ],
+            ),
+            SizedBox(height: theme.xs),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+                side: BorderSide(
+                  color: _selectedDistribution == DistributionStrategy.mirrorAll
+                      ? theme.accent
+                      : material.Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent.withValues(alpha: 0.08) : null,
+              child: material.InkWell(
+                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.mirrorAll),
+                child: Padding(
+                  padding: EdgeInsets.all(theme.sm),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedDistribution == DistributionStrategy.mirrorAll
+                            ? material.Icons.radio_button_checked
+                            : material.Icons.radio_button_unchecked,
+                        color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
+                      ),
+                      SizedBox(width: theme.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(strings.distributionMirrorAll, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            SizedBox(height: theme.xs / 2),
+                            Text(strings.distributionMirrorAllDesc, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: theme.xs),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+                side: BorderSide(
+                  color: _selectedDistribution == DistributionStrategy.balance
+                      ? theme.accent
+                      : material.Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              color: _selectedDistribution == DistributionStrategy.balance ? theme.accent.withValues(alpha: 0.08) : null,
+              child: material.InkWell(
+                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.balance),
+                child: Padding(
+                  padding: EdgeInsets.all(theme.sm),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedDistribution == DistributionStrategy.balance
+                            ? material.Icons.radio_button_checked
+                            : material.Icons.radio_button_unchecked,
+                        color: _selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
+                      ),
+                      SizedBox(width: theme.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(strings.distributionBalance, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            SizedBox(height: theme.xs / 2),
+                            Text(strings.distributionBalanceDesc, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          SizedBox(height: theme.lg),
+          material.DropdownButtonFormField<TargetFolderMode>(
+            initialValue: _selectedTargetFolderMode,
+            decoration: material.InputDecoration(
+              labelText: strings.targetFolderModeLabel,
+              suffixIcon: TasksScreen._buildInfoTooltip(context, theme, strings.targetFolderTooltip),
+            ),
+            items: [
+              material.DropdownMenuItem(value: TargetFolderMode.root, child: Text(strings.targetFolderRoot)),
+              material.DropdownMenuItem(value: TargetFolderMode.custom, child: Text(strings.targetFolderCustom)),
+              material.DropdownMenuItem(value: TargetFolderMode.newFolder, child: Text(strings.targetFolderNew)),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedTargetFolderMode = val);
+            },
+          ),
+          if (_selectedTargetFolderMode != TargetFolderMode.root) ...[
+            SizedBox(height: theme.sm),
+            material.TextField(
+              controller: _targetFolderController,
+              decoration: material.InputDecoration(
+                labelText: _selectedTargetFolderMode == TargetFolderMode.newFolder
+                    ? strings.newFolderNameLabel
+                    : strings.targetFolderModeLabel,
+                hintText: _selectedTargetFolderMode == TargetFolderMode.newFolder
+                    ? strings.newFolderNameHint
+                    : 'fibu-backup',
+              ),
+            ),
+          ],
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(strings.syncModeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(
+                context,
+                theme,
+                _selectedSyncMode == SyncMode.incremental
+                    ? strings.syncModeTooltipIncremental
+                    : strings.syncModeTooltipMirror,
+              ),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          material.Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              side: BorderSide(
+                color: _selectedSyncMode == SyncMode.incremental
+                    ? theme.accent
+                    : material.Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            color: _selectedSyncMode == SyncMode.incremental ? theme.accent.withValues(alpha: 0.08) : null,
+            child: material.InkWell(
+              onTap: () => setState(() => _selectedSyncMode = SyncMode.incremental),
+              child: Padding(
+                padding: EdgeInsets.all(theme.sm),
+                child: Row(
+                  children: [
+                    Icon(
+                      _selectedSyncMode == SyncMode.incremental
+                          ? material.Icons.radio_button_checked
+                          : material.Icons.radio_button_unchecked,
+                      color: _selectedSyncMode == SyncMode.incremental ? theme.accent : theme.textSecondary,
+                    ),
+                    SizedBox(width: theme.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(strings.syncModeIncremental, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          SizedBox(height: theme.xs / 2),
+                          Text(strings.syncModeIncrementalDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: theme.xs),
+          material.Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              side: BorderSide(
+                color: _selectedSyncMode == SyncMode.mirror
+                    ? theme.warning
+                    : material.Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            color: _selectedSyncMode == SyncMode.mirror ? theme.warning.withValues(alpha: 0.1) : null,
+            child: material.InkWell(
+              onTap: () => setState(() => _selectedSyncMode = SyncMode.mirror),
+              child: Padding(
+                padding: EdgeInsets.all(theme.sm),
+                child: Row(
+                  children: [
+                    Icon(
+                      _selectedSyncMode == SyncMode.mirror
+                          ? material.Icons.radio_button_checked
+                          : material.Icons.radio_button_unchecked,
+                      color: _selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
+                    ),
+                    SizedBox(width: theme.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                strings.syncModeMirror,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: _selectedSyncMode == SyncMode.mirror ? theme.warning : null,
+                                ),
+                              ),
+                              SizedBox(width: theme.xs),
+                              Icon(material.Icons.warning_amber_rounded, size: 16, color: theme.warning),
+                            ],
+                          ),
+                          SizedBox(height: theme.xs / 2),
+                          Text(
+                            strings.syncModeMirrorDescription,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _selectedSyncMode == SyncMode.mirror ? theme.warning : theme.textSecondary,
+                              fontWeight: _selectedSyncMode == SyncMode.mirror ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: theme.lg),
+          material.DropdownButtonFormField<String>(
+            initialValue: _selectedScheduleDay,
+            decoration: material.InputDecoration(
+              labelText: strings.scheduleDayLabel,
+              suffixIcon: TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSchedule),
+            ),
+            items: TasksScreen._scheduleDayKeys.map((sched) {
+              return material.DropdownMenuItem(
+                value: sched,
+                child: Text(TasksScreen._getDayLabel(strings, sched)),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedScheduleDay = val);
+            },
+          ),
+          if (_selectedScheduleDay != 'Manual') ...[
+            SizedBox(height: theme.lg),
+            Row(
+              children: [
+                Text('${strings.scheduleTimeLabel}:'),
+                SizedBox(width: theme.md),
+                Expanded(
+                  child: material.DropdownButtonFormField<String>(
+                    initialValue: _selectedHour,
+                    decoration: material.InputDecoration(labelText: strings.hourLabel),
+                    items: _hours.map((h) => material.DropdownMenuItem(value: h, child: Text(h))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedHour = val);
+                    },
+                  ),
+                ),
+                SizedBox(width: theme.sm),
+                const Text(':'),
+                SizedBox(width: theme.sm),
+                Expanded(
+                  child: material.DropdownButtonFormField<String>(
+                    initialValue: _selectedMinute,
+                    decoration: material.InputDecoration(labelText: strings.minuteLabel),
+                    items: _minutes.map((m) => material.DropdownMenuItem(value: m, child: Text(m))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedMinute = val);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text('${strings.activeSyncJob}:'),
+              const Spacer(),
+              material.Switch(
+                value: _isActive,
+                onChanged: (val) => setState(() => _isActive = val),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.md),
+          Row(
+            children: [
+              Icon(
+                material.Icons.check_circle_outline,
+                size: 14,
+                color: theme.success,
+                semanticLabel: strings.catchUpNotice,
+              ),
+              SizedBox(width: theme.xs),
+              Expanded(
+                child: Text(
+                  strings.catchUpNotice,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipCatchUp),
+            ],
+          ),
+        ],
+      );
     }
   }
 }

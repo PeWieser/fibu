@@ -1579,7 +1579,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: theme.sm, horizontal: theme.xs),
+                  padding: EdgeInsets.fromLTRB(theme.xs, theme.sm, theme.lg, theme.sm),
                   child: Row(
                     children: [
                       Icon(folderIcon, color: theme.accent, size: 24, semanticLabel: '${strings.isGerman ? 'Ordner' : 'Folder'} ${file.name}'),
@@ -1635,7 +1635,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: theme.sm, horizontal: theme.xs),
+                  padding: EdgeInsets.fromLTRB(theme.xs, theme.sm, theme.lg, theme.sm),
                   child: Row(
                     children: [
                       Icon(fileIcon, color: theme.textSecondary, size: 24, semanticLabel: '${strings.isGerman ? 'Datei' : 'File'} ${file.name}'),

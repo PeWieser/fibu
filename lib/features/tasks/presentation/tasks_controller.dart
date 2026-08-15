@@ -54,8 +54,8 @@ class BackupTask {
     this.excludedFiles = const [],
     this.syncMode = SyncMode.incremental,
     this.distributionStrategy = DistributionStrategy.mirrorAll,
-    this.targetFolderMode = TargetFolderMode.custom,
-    this.targetFolderName = 'backup/media',
+    this.targetFolderMode = TargetFolderMode.newFolder,
+    this.targetFolderName = 'fibu-backup',
   })  : _targetRemotes = targetRemotes,
         _targetRemote = targetRemote;
 
@@ -208,6 +208,12 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
 
   void addTask(BackupTask task) {
     state = [...state, task];
+    _saveTasks();
+  }
+
+  /// Imports multiple tasks and appends them to state.
+  void importTasks(List<BackupTask> newTasks) {
+    state = [...state, ...newTasks];
     _saveTasks();
   }
 

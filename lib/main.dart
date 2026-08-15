@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 
 import 'theme/theme.dart';
 import 'features/shell/presentation/shell_screen.dart';
+import 'features/onboarding/presentation/onboarding_controller.dart';
+import 'features/onboarding/presentation/onboarding_screen.dart';
 
 void main() {
   runApp(
@@ -49,6 +51,8 @@ class FibuApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final platform = defaultTargetPlatform;
     final themeData = ref.watch(appThemeProvider);
+    final onboardingCompleted = ref.watch(onboardingControllerProvider);
+    final Widget homeWidget = onboardingCompleted ? const ShellScreen() : const OnboardingScreen();
 
     // Compute active brightness based on resolved colors
     final isDark = themeData.canvas.computeLuminance() < 0.5;
@@ -142,7 +146,7 @@ class FibuApp extends ConsumerWidget {
           ),
         ),
         debugShowCheckedModeBanner: false,
-        home: const ShellScreen(),
+        home: homeWidget,
       );
     } else if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoApp(
@@ -160,7 +164,7 @@ class FibuApp extends ConsumerWidget {
           ),
         ),
         debugShowCheckedModeBanner: false,
-        home: const ShellScreen(),
+        home: homeWidget,
       );
     } else {
       // Default to Android/Material 3
@@ -294,7 +298,7 @@ class FibuApp extends ConsumerWidget {
           ),
         ),
         debugShowCheckedModeBanner: false,
-        home: const ShellScreen(),
+        home: homeWidget,
       );
     }
   }

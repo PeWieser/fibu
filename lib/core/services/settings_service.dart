@@ -10,10 +10,12 @@ import '../localization/locale_provider.dart';
 class AppSettingsData {
   final ThemeConfig themeConfig;
   final AppLocale locale;
+  final bool onboardingCompleted;
 
   const AppSettingsData({
     required this.themeConfig,
     required this.locale,
+    this.onboardingCompleted = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +24,7 @@ class AppSettingsData {
     'selectedLightPalette': themeConfig.selectedLightPalette?.name,
     'selectedDarkPalette': themeConfig.selectedDarkPalette?.name,
     'locale': locale.name,
+    'onboardingCompleted': onboardingCompleted,
   };
 
   factory AppSettingsData.fromJson(Map<String, dynamic> json) {
@@ -59,11 +62,12 @@ class AppSettingsData {
         selectedDarkPalette: darkPal,
       ),
       locale: loc,
+      onboardingCompleted: json['onboardingCompleted'] as bool? ?? false,
     );
   }
 }
 
-/// Service to persist and load application settings (Theme, Wada Palettes, Locale).
+/// Service to persist and load application settings (Theme, Wada Palettes, Locale, Onboarding).
 class SettingsService {
   static Future<File> _getFile() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -84,13 +88,49 @@ class SettingsService {
     return null;
   }
 
-  static Future<void> saveSettings(ThemeConfig themeConfig, AppLocale locale) async {
+  static Future<void> saveSettings(
+    ThemeConfig themeConfig,
+    AppLocale locale, {
+    bool? onboardingCompleted,
+  }) async {
     try {
       final file = await _getFile();
-      final data = AppSettingsData(themeConfig: themeConfig, locale: locale);
+      bool completed = onboardingCompleted ?? false;
+      if (await file.exists() && onboardingCompleted == null) {
+        try {
+          final content = await file.readAsString();
+          final Map<String, dynamic> map = json.decode(content);
+          completed = map['onboardingCompleted'] as bool? ?? false;
+        } catch (_) {}
+      }
+
+      final data = AppSettingsData(
+        themeConfig: themeConfig,
+        locale: locale,
+        onboardingCompleted: onboardingCompleted ?? completed,
+      );
       await file.writeAsString(json.encode(data.toJson()));
     } catch (_) {
       // Ignore write errors in test environments
     }
+  }
+
+  static Future<void> setOnboardingCompleted(bool completed) async {
+    try {
+      final current = await loadSettings();
+      if (current != null) {
+        await saveSettings(
+          current.themeConfig,
+          current.locale,
+          onboardingCompleted: completed,
+        );
+      } else {
+        await saveSettings(
+          const ThemeConfig(),
+          AppLocale.de,
+          onboardingCompleted: completed,
+        );
+      }
+    } catch (_) {}
   }
 }

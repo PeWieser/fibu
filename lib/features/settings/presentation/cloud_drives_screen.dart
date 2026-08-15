@@ -8,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
+import '../../tasks/presentation/tasks_controller.dart';
 
 /// Platform-adaptive screen to view, add, and remove configured cloud drives (remotes).
 /// Supports Windows (Fluent Design), iOS (Cupertino), and Android (Material 3).
@@ -117,7 +119,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ),
       ),
       content: SingleChildScrollView(
-        padding: EdgeInsets.all(theme.lg),
+        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -211,6 +213,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final isDeleting = _deletingRemote == remote;
 
         return fluent.Card(
+          padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md + 4, theme.md),
           child: Row(
             children: [
               Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 28, semanticLabel: 'Cloud Remote'),
@@ -290,7 +293,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(theme.lg),
+          padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -437,7 +440,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(theme.lg),
+        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -529,6 +532,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
           ),
           child: material.ListTile(
+            contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
             leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: 'Cloud Remote'),
             title: Text(remote),
             subtitle: Text(type),
@@ -729,6 +733,116 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
 
     if (addedRemoteName != null && mounted) {
       _showNotification(strings.driveAddedSuccess(addedRemoteName), isError: false);
+      await _checkAndPromptRemoteConfig(addedRemoteName, platform);
+    }
+  }
+
+  // --- Remote Config Detection Confirmation Dialog ---
+  Future<void> _checkAndPromptRemoteConfig(
+      String remoteName, TargetPlatform platform) async {
+    final hasConfig = await ref.read(syncConfigServiceProvider).checkRemoteForConfig(remoteName);
+    if (!hasConfig || !mounted) return;
+
+    final strings = context.strings;
+    final title = strings.existingConfigDetectedTitle;
+    final message = strings.existingConfigDetectedMessage(remoteName);
+
+    Future<void> handleImport() async {
+      final config = await ref.read(syncConfigServiceProvider).readRemoteConfig(remoteName);
+      if (config != null) {
+        final tasks = ref.read(syncConfigServiceProvider).convertConfigToTasks(config, remoteName);
+        ref.read(tasksListProvider.notifier).importTasks(tasks);
+        if (mounted) {
+          _showNotification(strings.configImportSuccess, isError: false);
+        }
+      }
+    }
+
+    if (platform == TargetPlatform.windows) {
+      await fluent.showDialog(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
+          title: fluent.Text(title),
+          content: Text(message),
+          actions: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(dialogCtx);
+                    await handleImport();
+                  },
+                  child: Text(
+                    strings.importConfigAndSync,
+                    style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.Button(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: Text(strings.skipConfigImport),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      await cupertino.showCupertinoDialog(
+        context: context,
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          title: Text(title),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(message),
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              child: Text(strings.skipConfigImport),
+              onPressed: () => Navigator.pop(dialogCtx),
+            ),
+            cupertino.CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                Navigator.pop(dialogCtx);
+                await handleImport();
+              },
+              child: Text(strings.importConfigAndSync),
+            ),
+          ],
+        ),
+      );
+    } else {
+      await material.showDialog(
+        context: context,
+        builder: (dialogCtx) => material.AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            material.TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.skipConfigImport),
+            ),
+            material.FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogCtx);
+                await handleImport();
+              },
+              child: Text(
+                strings.importConfigAndSync,
+                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
     }
   }
 }

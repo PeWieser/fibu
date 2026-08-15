@@ -75,15 +75,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
         ),
       );
     } else if (platform == TargetPlatform.iOS) {
-      try {
-        material.ScaffoldMessenger.of(context).showSnackBar(
-          material.SnackBar(
-            content: Text(strings.drivesRefreshed),
-            duration: const Duration(seconds: 2),
-            behavior: material.SnackBarBehavior.floating,
+      final overlay = Overlay.of(context);
+      final entry = OverlayEntry(
+        builder: (context) => Positioned(
+          bottom: 50.0,
+          left: 20.0,
+          right: 20.0,
+          child: SafeArea(
+            child: cupertino.CupertinoPopupSurface(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Text(
+                  strings.drivesRefreshed,
+                  style: cupertino.CupertinoTheme.of(context).textTheme.textStyle,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           ),
-        );
-      } catch (_) {}
+        ),
+      );
+      overlay.insert(entry);
+      Future.delayed(const Duration(seconds: 2), () {
+        if (entry.mounted) entry.remove();
+      });
     } else {
       material.ScaffoldMessenger.of(context).showSnackBar(
         material.SnackBar(
@@ -322,8 +337,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
         middle: Text(strings.navDashboard),
         trailing: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: material.Tooltip(
-            message: strings.refresh,
+          child: Semantics(
+            label: strings.refresh,
             child: cupertino.CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
@@ -348,8 +363,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               quotaAsync.when(
                 data: (quota) {
                   if (quota == null) {
-                    return material.Tooltip(
-                      message: strings.tooltipStorageCard,
+                    return Semantics(
+                      label: strings.tooltipStorageCard,
                       child: Container(
                         padding: EdgeInsets.all(theme.lg),
                         decoration: BoxDecoration(
@@ -383,8 +398,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                       ),
                     );
                   }
-                  return material.Tooltip(
-                    message: strings.tooltipStorageCard,
+                  return Semantics(
+                    label: strings.tooltipStorageCard,
                     child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
                   );
                 },
@@ -397,8 +412,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 SizedBox(height: theme.xl),
               ],
               if (isSyncing)
-                material.Tooltip(
-                  message: strings.cancelSync,
+                Semantics(
+                  label: strings.cancelSync,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: cupertino.CupertinoButton(
@@ -426,8 +441,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                   ),
                 )
               else
-                material.Tooltip(
-                  message: strings.syncAll,
+                Semantics(
+                  label: strings.syncAll,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: cupertino.CupertinoButton.filled(
@@ -451,8 +466,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                   ),
                 ),
               const SizedBox(height: 12),
-              material.Tooltip(
-                message: strings.exploreRemoteFiles,
+              Semantics(
+                label: strings.exploreRemoteFiles,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 44),
                   child: cupertino.CupertinoButton(
@@ -726,6 +741,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     if (platform == TargetPlatform.windows) {
       return fluent.Tooltip(
         message: strings.tooltipSyncBanner,
+        child: bannerWidget,
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      return Semantics(
+        label: strings.tooltipSyncBanner,
         child: bannerWidget,
       );
     }

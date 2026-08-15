@@ -1,0 +1,8 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: false
+- tapOn: ".*(Einstellungen|Settings).*"
+- tapOn: ".*(Design|Theme).*"
+- tapOn: ".*(Sanzo Wada).*"
+- tapOn: ".*(Sprache|Language).*"

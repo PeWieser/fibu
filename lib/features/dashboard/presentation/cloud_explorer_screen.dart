@@ -378,7 +378,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
   // --- Details / Actions Modals ---
   void _showWindowsFileDetails(BuildContext context, RcloneFileInfo file, AppThemeData theme, AppStrings strings) {
     final fullFilePath = _currentPath.isEmpty ? file.name : '$_currentPath/${file.name}';
-    final specificMetadata = FileMetadataHelper.getSpecificMetadata(fileName: file.name, fileSize: file.size);
+    final specificMetadata = FileMetadataHelper.getSpecificMetadata(fileName: file.name, fileSize: file.size, modTime: file.modTime);
     final mimeType = FileMetadataHelper.getMimeType(file.name);
     final exactBytes = FileMetadataHelper.formatExactBytes(file.size);
     final formatLabel = FileMetadataHelper.getFormatLabel(file.name);
@@ -700,13 +700,15 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
           cupertino.CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(modalCtx);
-              material.showDialog(
-                context: context,
-                builder: (_) => FilePreviewDialog(
-                  fileName: file.name,
-                  remoteName: _selectedRemote ?? '',
-                  remotePath: fullFilePath,
-                  fileSize: file.size,
+              Navigator.of(context).push(
+                cupertino.CupertinoPageRoute(
+                  fullscreenDialog: true,
+                  builder: (_) => FilePreviewDialog(
+                    fileName: file.name,
+                    remoteName: _selectedRemote ?? '',
+                    remotePath: fullFilePath,
+                    fileSize: file.size,
+                  ),
                 ),
               );
             },
@@ -1065,8 +1067,8 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudExplorerTitle),
         previousPageTitle: strings.back,
-        trailing: material.Tooltip(
-          message: strings.refresh,
+        trailing: Semantics(
+          label: strings.refresh,
           child: MouseRegion(
             cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
             child: ConstrainedBox(
@@ -1104,8 +1106,8 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                   onValueChanged: _changeRemote,
                 )
               else
-                material.Tooltip(
-                  message: strings.remoteDriveSelectorLabel,
+                Semantics(
+                  label: strings.remoteDriveSelectorLabel,
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: ConstrainedBox(
@@ -1322,7 +1324,9 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
           // Back button with Tooltip
           platform == TargetPlatform.windows
               ? fluent.Tooltip(message: strings.back, child: backButton)
-              : material.Tooltip(message: strings.back, child: backButton),
+              : (platform == TargetPlatform.iOS
+                  ? Semantics(label: strings.back, child: backButton)
+                  : material.Tooltip(message: strings.back, child: backButton)),
           SizedBox(width: theme.xs),
           // Scrollable breadcrumb chips
           Expanded(
@@ -1430,6 +1434,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
     if (platform == TargetPlatform.windows) {
       return fluent.Tooltip(
         message: tooltipMessage,
+        child: chipContent,
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      return Semantics(
+        label: tooltipMessage,
         child: chipContent,
       );
     } else {
@@ -1620,6 +1629,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
               message: '${strings.isGerman ? 'Ordner öffnen' : 'Open folder'}: ${file.name}',
               child: folderItem,
             );
+          } else if (platform == TargetPlatform.iOS) {
+            return Semantics(
+              label: '${strings.isGerman ? 'Ordner öffnen' : 'Open folder'}: ${file.name}',
+              child: folderItem,
+            );
           } else {
             return material.Tooltip(
               message: '${strings.isGerman ? 'Ordner öffnen' : 'Open folder'}: ${file.name}',
@@ -1676,6 +1690,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
           if (platform == TargetPlatform.windows) {
             return fluent.Tooltip(
               message: '${strings.fileDetailsTitle}: ${file.name}',
+              child: fileItem,
+            );
+          } else if (platform == TargetPlatform.iOS) {
+            return Semantics(
+              label: '${strings.fileDetailsTitle}: ${file.name}',
               child: fileItem,
             );
           } else {

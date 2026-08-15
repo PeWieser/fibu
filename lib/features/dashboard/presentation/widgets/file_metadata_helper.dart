@@ -168,74 +168,17 @@ class FileMetadataHelper {
   static Map<String, String> getSpecificMetadata({
     required String fileName,
     required int fileSize,
+    String? modTime,
   }) {
-    final cat = getCategory(fileName);
-    final ext = getExtension(fileName);
     final Map<String, String> data = {};
 
-    switch (cat) {
-      case FileCategory.image:
-        if (ext == 'png' || ext == 'jpg' || ext == 'jpeg' || ext == 'heic') {
-          data['Abmessungen'] = '4032 × 3024 Pixel';
-          data['Auflösung'] = '12.2 Megapixel';
-          data['Farbraum'] = 'sRGB IEC61966-2.1 (24-Bit)';
-          data['Kamera-Modell'] = 'Sony Alpha 7 IV / iPhone 15 Pro';
-          data['Objektiv'] = '24-70mm F2.8 G Master';
-          data['Belichtung'] = '1/250 Sek. bei f/2.8';
-          data['ISO-Wert'] = 'ISO 100';
-          data['Brennweite'] = '35 mm (Kleinbild-Äquivalent)';
-        } else if (ext == 'svg') {
-          data['Vektortyp'] = 'Scalable Vector Graphics (SVG)';
-          data['Farbraum'] = 'Vektor (RGB)';
-          data['Rendering'] = 'Auflösungsunabhängig';
-        } else {
-          data['Abmessungen'] = '1920 × 1080 Pixel';
-          data['Auflösung'] = '2.1 Megapixel';
-          data['Farbraum'] = 'sRGB (24-Bit)';
-        }
-        break;
-
-      case FileCategory.video:
-        data['Video-Codec'] = ext == 'mov' ? 'Apple ProRes / HEVC' : 'H.264 / MPEG-4 AVC';
-        data['Auflösung'] = '3840 × 2160 (4K UHD)';
-        data['Bildrate'] = '59.94 Bilder/Sek. (60 FPS)';
-        data['Audio-Format'] = 'AAC Stereo (48.000 kHz, 2 Kanäle)';
-        data['Bitrate'] = '45.2 Mbit/s';
-        data['Dauer'] = fileSize > 50000000 ? '03:45 Min.' : '00:58 Min.';
-        break;
-
-      case FileCategory.audio:
-        data['Audio-Codec'] = ext == 'flac' ? 'FLAC (Lossless 24-Bit)' : 'MPEG Audio Layer 3 (MP3)';
-        data['Abtastrate'] = '48.000 Hz (48.0 kHz)';
-        data['Bitrate'] = ext == 'flac' ? '1.411 kbit/s' : '320 kbit/s (CBR)';
-        data['Kanäle'] = '2 Kanäle (Stereo)';
-        data['Dauer'] = '03:42 Min.';
-        break;
-
-      case FileCategory.textCode:
-        data['Zeichenkodierung'] = 'Unicode (UTF-8)';
-        data['Zeilenumbrüche'] = 'LF (UNIX) / CRLF (Windows)';
-        data['Geschätzte Zeilen'] = (fileSize ~/ 40).clamp(1, 10000).toString();
-        data['Geschätzte Zeichen'] = fileSize.toString();
-        data['Programmiersprache'] = ext.toUpperCase();
-        break;
-
-      case FileCategory.document:
-        data['Dokumententyp'] = ext == 'pdf' ? 'Portable Document Format (PDF 1.7)' : 'Office Open XML Dokument';
-        data['Seiten'] = (fileSize ~/ 50000).clamp(1, 150).toString();
-        data['Sicherheit'] = 'Kein Passwortschutz';
-        break;
-
-      case FileCategory.archive:
-        data['Archivformat'] = '$ext-Archiv';
-        data['Komprimierungs-Methode'] = 'Deflate / LZMA2';
-        data['Verschlüsselung'] = 'Standard';
-        break;
-
-      case FileCategory.binary:
-        data['Binärformat'] = 'Ausführbare Datei / Binärdaten';
-        data['Architektur'] = 'x86_64 / Universal';
-        break;
+    data['Dateiname'] = fileName;
+    data['Dateigröße'] = formatExactBytes(fileSize);
+    data['Erweiterung'] = getExtension(fileName).toUpperCase();
+    data['Kategorie'] = getFormatLabel(fileName);
+    data['MIME-Typ'] = getMimeType(fileName);
+    if (modTime != null) {
+      data['Änderungsdatum'] = modTime;
     }
 
     return data;

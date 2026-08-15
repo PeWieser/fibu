@@ -136,23 +136,11 @@ class SyncConfigService {
   /// Reads and parses `.fibu/config.json` from a remote.
   Future<FibuRemoteConfig?> readRemoteConfig(String remoteName) async {
     try {
-      // Return sample configuration if detected
-      return FibuRemoteConfig(
-        version: 1,
-        createdAt: DateTime.now().toIso8601String(),
-        deviceName: 'Remote Fibu Backup',
-        tasks: [
-          FibuRemoteTaskConfig(
-            taskId: 'imported_${DateTime.now().millisecondsSinceEpoch}',
-            name: '$remoteName Spiegel-Backup',
-            sourcePath: 'C:\\Users\\User\\Documents\\fibu-backup',
-            syncMode: 'mirror',
-            distributionStrategy: 'mirrorAll',
-            linkedRemotes: [remoteName],
-            targetFolder: defaultRemoteFolder,
-          ),
-        ],
-      );
+      final files = await _rcloneService.listFiles(remoteName, defaultRemoteFolder);
+      final hasConfig = files.any((f) => f.name == 'config.json');
+      if (!hasConfig) return null;
+      // Actual reading requires downloading the file which might not be implemented in RcloneService yet.
+      return null;
     } catch (_) {
       return null;
     }

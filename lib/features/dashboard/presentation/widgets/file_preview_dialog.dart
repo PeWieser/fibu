@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/localization/app_strings.dart';
 import '../../../../core/services/file_viewer_service.dart';
 import '../../../../theme/theme.dart';
+
 import 'file_metadata_helper.dart';
 
 /// Apple Quick Look inspired modal preview dialog for cloud files.

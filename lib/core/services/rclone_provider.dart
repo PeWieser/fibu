@@ -3,23 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'rclone_service.dart';
 import 'mock_rclone_service.dart';
 import 'rclone_service_impl.dart';
+import 'mobile_rclone_service.dart';
 
 /// Riverpod provider for the [RcloneService].
 /// Automatically swaps implementations depending on runtime platform or debug config.
 final rcloneServiceProvider = Provider<RcloneService>((ref) {
-  // During desktop execution on Windows, return the real process-based service.
+  const useMock = bool.fromEnvironment('USE_MOCK_RCLONE', defaultValue: false);
+  if (useMock) {
+    return MockRcloneService();
+  }
+
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-    // Note: To toggle Mock vs. Process in developer builds, you can customize this.
-    // We return MockRcloneService by default for safe local development without rclone.exe dependencies,
-    // but WindowsRcloneService when fully deployed.
-    const useMock = bool.fromEnvironment('USE_MOCK_RCLONE', defaultValue: false);
-    if (useMock) {
-      return MockRcloneService();
-    }
     return WindowsRcloneService();
   }
 
-  // Fallback to MockRcloneService for iOS, Android (mobile stub phase) and Web
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
+    return MobileRcloneService();
+  }
+
   return MockRcloneService();
 });
 

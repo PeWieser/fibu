@@ -1,0 +1,9 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: false
+- tapOn: ".*(Aufgaben|Tasks).*"
+- tapOn: ".*(Erstellen|Create|Hinzufügen|Add).*"
+- tapOn: ".*(Weiter|Next).*"
+- tapOn: ".*(Weiter|Next).*"
+- tapOn: ".*(Speichern|Save).*"

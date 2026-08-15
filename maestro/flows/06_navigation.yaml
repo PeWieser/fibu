@@ -1,0 +1,8 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: false
+- tapOn: ".*(Dashboard).*"
+- tapOn: ".*(Aufgaben|Tasks).*"
+- tapOn: ".*(Cloud).*"
+- tapOn: ".*(Einstellungen|Settings).*"

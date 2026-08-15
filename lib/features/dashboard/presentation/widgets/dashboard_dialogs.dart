@@ -79,7 +79,7 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         const SizedBox(height: 8),
         _buildLegendItem('Free Space', '${freeGb.toStringAsFixed(1)} GB (${freePercent.toStringAsFixed(1)}%)', freeColor),
         const SizedBox(height: 8),
-        const fluent.Divider(),
+        if (platform != TargetPlatform.iOS) const fluent.Divider(),
         const SizedBox(height: 8),
         _buildLegendItem('Total Capacity', '${totalGb.toStringAsFixed(1)} GB', theme.textSecondary.withValues(alpha: 0.6)),
       ],
@@ -108,12 +108,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
       context: context,
       builder: (context) => cupertino.CupertinoAlertDialog(
         title: const Text('Storage Details'),
-        content: material.Material(
-          color: material.Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12.0),
-            child: buildContent(),
-          ),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12.0),
+          child: buildContent(),
         ),
         actions: [
           cupertino.CupertinoDialogAction(
@@ -202,14 +199,11 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
       context: context,
       builder: (context) => cupertino.CupertinoAlertDialog(
         title: const Text('Sync Activity Logs'),
-        content: material.Material(
-          color: material.Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12.0),
-            child: SizedBox(
-              height: 250,
-              child: buildContent(),
-            ),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12.0),
+          child: SizedBox(
+            height: 250,
+            child: buildContent(),
           ),
         ),
         actions: [

@@ -643,6 +643,47 @@ class TasksScreen extends ConsumerWidget {
       badgeIcon = isMirrorAll ? material.Icons.content_copy : material.Icons.alt_route;
     }
 
+    final child = Container(
+      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            badgeIcon,
+            size: 11,
+            color: badgeColor,
+            semanticLabel: labelText,
+          ),
+          SizedBox(width: theme.xs),
+          Text(
+            labelText,
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Semantics(
+        label: tooltipText,
+        child: GestureDetector(
+          onTap: () {
+            // Optional: Provide a small haptic or visual feedback
+          },
+          child: child,
+        ),
+      );
+    }
+
     return material.Tooltip(
       message: tooltipText,
       waitDuration: const Duration(milliseconds: 300),
@@ -663,34 +704,7 @@ class TasksScreen extends ConsumerWidget {
         fontSize: 11,
         fontWeight: FontWeight.normal,
       ),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-        decoration: BoxDecoration(
-          color: badgeColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(theme.radiusSm),
-          border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              badgeIcon,
-              size: 11,
-              color: badgeColor,
-              semanticLabel: labelText,
-            ),
-            SizedBox(width: theme.xs),
-            Text(
-              labelText,
-              style: TextStyle(
-                color: theme.textPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -717,6 +731,45 @@ class TasksScreen extends ConsumerWidget {
       badgeIcon = isMirror ? material.Icons.warning_amber_rounded : material.Icons.sync;
     }
 
+    final child = Container(
+      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            badgeIcon,
+            size: 11,
+            color: badgeColor,
+            semanticLabel: labelText,
+          ),
+          SizedBox(width: theme.xs),
+          Text(
+            labelText,
+            style: TextStyle(
+              color: isMirror ? theme.warning : theme.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Semantics(
+        label: tooltipText,
+        child: GestureDetector(
+          onTap: () {},
+          child: child,
+        ),
+      );
+    }
+
     return material.Tooltip(
       message: tooltipText,
       waitDuration: const Duration(milliseconds: 300),
@@ -737,34 +790,7 @@ class TasksScreen extends ConsumerWidget {
         fontSize: 11,
         fontWeight: FontWeight.normal,
       ),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-        decoration: BoxDecoration(
-          color: badgeColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(theme.radiusSm),
-          border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              badgeIcon,
-              size: 11,
-              color: badgeColor,
-              semanticLabel: labelText,
-            ),
-            SizedBox(width: theme.xs),
-            Text(
-              labelText,
-              style: TextStyle(
-                color: isMirror ? theme.warning : theme.textPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -778,6 +804,35 @@ class TasksScreen extends ConsumerWidget {
     BackupTask task,
   ) {
     final scheduleText = _formatScheduleDescription(strings, task);
+    final child = Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.sm,
+        vertical: theme.xs / 2,
+      ),
+      decoration: BoxDecoration(
+        color: theme.accent.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+      ),
+      child: Text(
+        scheduleText,
+        style: TextStyle(
+          color: theme.textPrimary,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Semantics(
+        label: strings.tooltipSchedule,
+        child: GestureDetector(
+          onTap: () {},
+          child: child,
+        ),
+      );
+    }
+
     return material.Tooltip(
       message: strings.tooltipSchedule,
       waitDuration: const Duration(milliseconds: 300),
@@ -798,24 +853,7 @@ class TasksScreen extends ConsumerWidget {
         fontSize: 11,
         fontWeight: FontWeight.normal,
       ),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: theme.sm,
-          vertical: theme.xs / 2,
-        ),
-        decoration: BoxDecoration(
-          color: theme.accent.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(theme.radiusSm),
-        ),
-        child: Text(
-          scheduleText,
-          style: TextStyle(
-            color: theme.textPrimary,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -834,6 +872,29 @@ class TasksScreen extends ConsumerWidget {
       infoIcon = cupertino.CupertinoIcons.info_circle;
     } else {
       infoIcon = material.Icons.info_outline;
+    }
+
+    final child = MouseRegion(
+      cursor: SystemMouseCursors.help,
+      child: Padding(
+        padding: EdgeInsets.all(theme.xs / 2),
+        child: Icon(
+          infoIcon,
+          size: 14,
+          color: theme.textSecondary,
+          semanticLabel: tooltipText,
+        ),
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Semantics(
+        label: tooltipText,
+        child: GestureDetector(
+          onTap: () {},
+          child: child,
+        ),
+      );
     }
 
     return material.Tooltip(
@@ -856,18 +917,7 @@ class TasksScreen extends ConsumerWidget {
         fontSize: 11,
         fontWeight: FontWeight.normal,
       ),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.help,
-        child: Padding(
-          padding: EdgeInsets.all(theme.xs / 2),
-          child: Icon(
-            infoIcon,
-            size: 14,
-            color: theme.textSecondary,
-            semanticLabel: tooltipText,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -894,6 +944,45 @@ class TasksScreen extends ConsumerWidget {
       badgeIcon = material.Icons.filter_alt_outlined;
     }
 
+    final child = Container(
+      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
+      decoration: BoxDecoration(
+        color: theme.warning.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: theme.warning.withValues(alpha: 0.35), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            badgeIcon,
+            size: 11,
+            color: theme.warning,
+            semanticLabel: strings.excludedFilesTooltip(count),
+          ),
+          SizedBox(width: theme.xs),
+          Text(
+            strings.excludedFilesBadge(count),
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Semantics(
+        label: tooltipText,
+        child: GestureDetector(
+          onTap: () {},
+          child: child,
+        ),
+      );
+    }
+
     return material.Tooltip(
       message: tooltipText,
       waitDuration: const Duration(milliseconds: 300),
@@ -914,34 +1003,7 @@ class TasksScreen extends ConsumerWidget {
         fontSize: 11,
         fontWeight: FontWeight.normal,
       ),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-        decoration: BoxDecoration(
-          color: theme.warning.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(theme.radiusSm),
-          border: Border.all(color: theme.warning.withValues(alpha: 0.35), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              badgeIcon,
-              size: 11,
-              color: theme.warning,
-              semanticLabel: strings.excludedFilesTooltip(count),
-            ),
-            SizedBox(width: theme.xs),
-            Text(
-              strings.excludedFilesBadge(count),
-              style: TextStyle(
-                color: theme.textPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -1099,13 +1161,13 @@ class TasksScreen extends ConsumerWidget {
 
   static List<String> _resolveRemotesList(WidgetRef ref) {
     final remotesAsync = ref.read(remotesProvider);
-    const fallback = ['GoogleDrive_Backup', 'OneDrive_Backup', 'Dropbox_Backup'];
+    
     return remotesAsync.maybeWhen(
       data: (list) {
-        if (list.isEmpty) return fallback;
+        if (list.isEmpty) return [];
         return list.map((e) => e.endsWith(':') ? e.substring(0, e.length - 1) : e).toList();
       },
-      orElse: () => fallback,
+      orElse: () => [],
     );
   }
 
@@ -1241,7 +1303,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     final remotesList = TasksScreen._resolveRemotesList(ref);
     _selectedRemotes = task != null && task.targetRemotes.isNotEmpty
         ? List<String>.from(task.targetRemotes)
-        : (remotesList.isNotEmpty ? [remotesList.first] : ['GoogleDrive_Backup']);
+        : (remotesList.isNotEmpty ? [remotesList.first] : []);
 
     _selectedDistribution = task?.distributionStrategy ?? DistributionStrategy.mirrorAll;
     _selectedTargetFolderMode = task?.targetFolderMode ?? TargetFolderMode.newFolder;
@@ -2246,7 +2308,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildStepIndicatorHeader(theme, strings),
-              const material.Divider(height: 1),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
@@ -2259,7 +2320,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
                   ),
                 ),
               ),
-              const material.Divider(height: 1),
               Padding(
                 padding: EdgeInsets.all(theme.md),
                 child: Row(
@@ -2561,19 +2621,51 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text('${strings.scheduleTimeLabel}: ', style: const TextStyle(fontSize: 12)),
-                material.DropdownButton<String>(
-                  value: _selectedHour,
-                  items: _hours.map((h) => material.DropdownMenuItem(value: h, child: Text(h, style: const TextStyle(fontSize: 12)))).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedHour = val);
+                cupertino.CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Text(_selectedHour, style: const TextStyle(fontSize: 16)),
+                  onPressed: () {
+                    cupertino.showCupertinoModalPopup(
+                      context: context,
+                      builder: (ctx) => Container(
+                        height: 216,
+                        color: cupertino.CupertinoTheme.of(context).scaffoldBackgroundColor,
+                        child: SafeArea(
+                          top: false,
+                          child: cupertino.CupertinoPicker(
+                            itemExtent: 32,
+                            scrollController: cupertino.FixedExtentScrollController(
+                                initialItem: _hours.contains(_selectedHour) ? _hours.indexOf(_selectedHour) : 0),
+                            onSelectedItemChanged: (i) => setState(() => _selectedHour = _hours[i]),
+                            children: _hours.map((h) => Center(child: Text(h))).toList(),
+                          ),
+                        ),
+                      ),
+                    );
                   },
                 ),
-                const Text(' : ', style: TextStyle(fontSize: 12)),
-                material.DropdownButton<String>(
-                  value: _selectedMinute,
-                  items: _minutes.map((m) => material.DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)))).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedMinute = val);
+                const Text(' : ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                cupertino.CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Text(_selectedMinute, style: const TextStyle(fontSize: 16)),
+                  onPressed: () {
+                    cupertino.showCupertinoModalPopup(
+                      context: context,
+                      builder: (ctx) => Container(
+                        height: 216,
+                        color: cupertino.CupertinoTheme.of(context).scaffoldBackgroundColor,
+                        child: SafeArea(
+                          top: false,
+                          child: cupertino.CupertinoPicker(
+                            itemExtent: 32,
+                            scrollController: cupertino.FixedExtentScrollController(
+                                initialItem: _minutes.contains(_selectedMinute) ? _minutes.indexOf(_selectedMinute) : 0),
+                            onSelectedItemChanged: (i) => setState(() => _selectedMinute = _minutes[i]),
+                            children: _minutes.map((m) => Center(child: Text(m))).toList(),
+                          ),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ],

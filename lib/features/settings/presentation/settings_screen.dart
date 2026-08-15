@@ -270,8 +270,8 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              material.Tooltip(
-                message: strings.tooltipThemeMode,
+              Semantics(
+                label: strings.tooltipThemeMode,
                 child: cupertino.CupertinoFormSection.insetGrouped(
                   header: Text(strings.themeMode.toUpperCase()),
                   children: [
@@ -308,8 +308,8 @@ class SettingsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    material.Tooltip(
-                      message: strings.tooltipWadaPalette,
+                    Semantics(
+                      label: strings.tooltipWadaPalette,
                       child: Text(
                         strings.lightModeSection.toUpperCase(),
                         style: const TextStyle(
@@ -322,8 +322,8 @@ class SettingsScreen extends ConsumerWidget {
                     SizedBox(height: theme.sm),
                     _buildWadaPaletteRow(context, ref, config, false, strings),
                     SizedBox(height: theme.lg),
-                    material.Tooltip(
-                      message: strings.tooltipWadaPalette,
+                    Semantics(
+                      label: strings.tooltipWadaPalette,
                       child: Text(
                         strings.darkModeSection.toUpperCase(),
                         style: const TextStyle(
@@ -338,8 +338,8 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              material.Tooltip(
-                message: strings.tooltipLanguage,
+              Semantics(
+                label: strings.tooltipLanguage,
                 child: cupertino.CupertinoFormSection.insetGrouped(
                   header: Text(strings.preferences.toUpperCase()),
                   children: [
@@ -598,6 +598,11 @@ class SettingsScreen extends ConsumerWidget {
           if (platform == TargetPlatform.windows) {
             return fluent.Tooltip(
               message: '$paletteLabel — ${strings.tooltipWadaPalette}',
+              child: swatchCard,
+            );
+          } else if (platform == TargetPlatform.iOS) {
+            return Semantics(
+              label: '$paletteLabel — ${strings.tooltipWadaPalette}',
               child: swatchCard,
             );
           }

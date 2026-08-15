@@ -1,0 +1,9 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: false
+- tapOn: ".*(Cloud).*"
+- tapOn: ".*(Hinzufügen|Add).*"
+- tapOn: ".*(Mega).*"
+- tapOn: ".*(Verbindung testen|Test).*"
+- tapOn: ".*(Speichern|Save).*"

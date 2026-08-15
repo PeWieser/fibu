@@ -10,6 +10,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
+import '../../../core/widgets/adaptive_widgets.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 
 /// Platform-adaptive screen to view, add, and remove configured cloud drives (remotes).
@@ -719,17 +720,29 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     }
   }
 
+
   // --- Show 2-Step Wizard Dialog ---
   Future<void> _openAddRemoteWizard(BuildContext context, TargetPlatform platform) async {
     final strings = context.strings;
-    final addedRemoteName = await showGeneralDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Add Remote Wizard',
-      pageBuilder: (dialogContext, _, __) {
-        return AddRemoteWizardDialog(platform: platform);
-      },
-    );
+    String? addedRemoteName;
+    
+    if (platform == TargetPlatform.iOS) {
+      addedRemoteName = await Navigator.of(context).push<String>(
+        cupertino.CupertinoPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => AddRemoteWizardDialog(platform: platform),
+        ),
+      );
+    } else {
+      addedRemoteName = await showGeneralDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        barrierLabel: 'Add Remote Wizard',
+        pageBuilder: (dialogContext, _, __) {
+          return AddRemoteWizardDialog(platform: platform);
+        },
+      );
+    }
 
     if (addedRemoteName != null && mounted) {
       _showNotification(strings.driveAddedSuccess(addedRemoteName), isError: false);
@@ -1187,10 +1200,32 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
     final theme = context.theme;
+
+    if (widget.platform == TargetPlatform.iOS) {
+      return cupertino.CupertinoPageScaffold(
+        navigationBar: cupertino.CupertinoNavigationBar(
+          middle: Text(_currentStep == 0 ? context.strings.wizardStep1Title : context.strings.wizardStep2Title),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(theme.xl),
+                  child: _currentStep == 0 ? _buildStep1Content(theme) : _buildStep2Content(theme),
+                ),
+              ),
+              _buildWizardFooter(theme),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Center(
       child: material.Material(
@@ -1234,6 +1269,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       ),
     );
   }
+
 
   Widget _buildWizardHeader(AppThemeData theme) {
     final strings = context.strings;
@@ -1608,10 +1644,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.megaUserTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _userController,
-            placeholder: 'user@mega.nz',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'user@mega.nz'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1647,10 +1680,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.s3EndpointTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _hostController,
-            placeholder: 'https://s3.eu-central-1.amazonaws.com / s3.us-west-004.backblazeb2.com',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'https://s3.eu-central-1.amazonaws.com / s3.us-west-004.backblazeb2.com'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1658,10 +1688,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.s3AccessKeyTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _userController,
-            placeholder: 'AKIAIOSFODNN7EXAMPLE',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'AKIAIOSFODNN7EXAMPLE'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1697,10 +1724,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.webdavUrlTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _hostController,
-            placeholder: 'https://cloud.example.com/remote.php/dav/files/user/',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'https://cloud.example.com/remote.php/dav/files/user/'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1708,10 +1732,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.webdavUserTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _userController,
-            placeholder: 'username / user@example.com',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'username / user@example.com'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1754,10 +1775,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       tooltipMessage: strings.sftpHostTooltip,
                     ),
                     SizedBox(height: theme.xs),
-                    fluent.TextBox(
-                      controller: _hostController,
-                      placeholder: 'sftp.example.com / 192.168.1.100',
-                    ),
+                    buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'sftp.example.com / 192.168.1.100'),
                   ],
                 ),
               ),
@@ -1773,10 +1791,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       tooltipMessage: strings.sftpPortTooltip,
                     ),
                     SizedBox(height: theme.xs),
-                    fluent.TextBox(
-                      controller: _portController,
-                      placeholder: _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22',
-                    ),
+                    buildAdaptiveTextField(platform: widget.platform, controller: _portController, placeholder: _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22'),
                   ],
                 ),
               ),
@@ -1789,10 +1804,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.sftpUserTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _userController,
-            placeholder: 'root / username',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'root / username'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1828,10 +1840,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             tooltipMessage: strings.emailOrUserTooltip,
           ),
           SizedBox(height: theme.xs),
-          fluent.TextBox(
-            controller: _userController,
-            placeholder: 'user@example.com / username',
-          ),
+          buildAdaptiveTextField(platform: widget.platform, controller: _userController, placeholder: 'user@example.com / username'),
           SizedBox(height: theme.md),
           _buildFieldLabelWithTooltip(
             theme: theme,
@@ -1873,10 +1882,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                         tooltipMessage: strings.hostTooltip,
                       ),
                       SizedBox(height: theme.xs),
-                      fluent.TextBox(
-                        controller: _hostController,
-                        placeholder: 'server.example.com',
-                      ),
+                      buildAdaptiveTextField(platform: widget.platform, controller: _hostController, placeholder: 'server.example.com'),
                     ],
                   ),
                 ),
@@ -1892,10 +1898,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                         tooltipMessage: strings.portTooltip,
                       ),
                       SizedBox(height: theme.xs),
-                      fluent.TextBox(
-                        controller: _portController,
-                        placeholder: '443',
-                      ),
+                      buildAdaptiveTextField(platform: widget.platform, controller: _portController, placeholder: '443'),
                     ],
                   ),
                 ),

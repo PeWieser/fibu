@@ -1,0 +1,12 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: true
+- assertVisible: ".*(Willkommen|Welcome).*"
+- tapOn: ".*(Weiter|Next).*"
+- assertVisible: ".*(Schritt 1|Step 1).*"
+- tapOn: ".*(Später einrichten|Set Up Later|Weiter|Next).*"
+- assertVisible: ".*(Schritt 2|Step 2).*"
+- tapOn: ".*(Später einrichten|Set Up Later|Weiter|Next).*"
+- assertVisible: ".*(Du bist startklar|You are all set).*"
+- tapOn: ".*(Jetzt loslegen|Get Started).*"

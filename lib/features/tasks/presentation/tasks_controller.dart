@@ -30,7 +30,7 @@ class BackupTask {
   final List<String> _targetRemotes;
   final String _targetRemote;
   final String schedule; // Formatted description string, e.g. "Daily at 02:00"
-  final String scheduleDay; // "Daily", "Monday", "Tuesday", etc.
+  final String scheduleDay; // "Daily", "Monday", "Tuesday", "iOS System", etc.
   final String scheduleTime; // "HH:MM" (e.g. "02:00")
   final bool isActive;
   final bool runMissedOnStartup; // Catch-up task flag
@@ -39,6 +39,7 @@ class BackupTask {
   final DistributionStrategy distributionStrategy; // Mirror all vs Balance
   final TargetFolderMode targetFolderMode; // Root vs Custom vs New Folder
   final String targetFolderName; // Subfolder path (e.g. "backup/pictures")
+  final bool wifiOnly; // Sync restricted to Wi-Fi only (no cellular data)
 
   const BackupTask({
     required this.id,
@@ -56,6 +57,7 @@ class BackupTask {
     this.distributionStrategy = DistributionStrategy.mirrorAll,
     this.targetFolderMode = TargetFolderMode.newFolder,
     this.targetFolderName = 'fibu-backup',
+    this.wifiOnly = true,
   })  : _targetRemotes = targetRemotes,
         _targetRemote = targetRemote;
 
@@ -68,13 +70,55 @@ class BackupTask {
       : (_targetRemotes.isNotEmpty ? _targetRemotes.first : '');
 
   String get scheduleDescription {
-    if (scheduleDay == 'Daily') {
+    if (scheduleDay == 'iOS System' || scheduleDay == 'System') {
+      return 'Automatisch (iOS System)';
+    } else if (scheduleDay == 'Daily') {
       return 'Daily at $scheduleTime';
     } else if (scheduleDay == 'Manual') {
       return 'Manual';
     } else {
       return 'Weekly on ${scheduleDay}s at $scheduleTime';
     }
+  }
+
+  static BackupTask createMediaBackupTask({
+    required String remoteName,
+    bool isIOS = false,
+  }) {
+    return BackupTask(
+      id: 'media_backup_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Fotos & Medien Backup',
+      sourcePath: 'photos',
+      targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
+      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      scheduleDay: isIOS ? 'iOS System' : 'Daily',
+      scheduleTime: '02:00',
+      isActive: true,
+      syncMode: SyncMode.incremental,
+      targetFolderMode: TargetFolderMode.newFolder,
+      targetFolderName: 'Fotos',
+      wifiOnly: true,
+    );
+  }
+
+  static BackupTask createDocumentsBackupTask({
+    required String remoteName,
+    bool isIOS = false,
+  }) {
+    return BackupTask(
+      id: 'docs_backup_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Dokumente & Dateien Backup',
+      sourcePath: 'documents',
+      targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
+      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      scheduleDay: isIOS ? 'iOS System' : 'Daily',
+      scheduleTime: '02:00',
+      isActive: true,
+      syncMode: SyncMode.incremental,
+      targetFolderMode: TargetFolderMode.newFolder,
+      targetFolderName: 'Dokumente',
+      wifiOnly: true,
+    );
   }
 
   BackupTask copyWith({
@@ -91,6 +135,7 @@ class BackupTask {
     DistributionStrategy? distributionStrategy,
     TargetFolderMode? targetFolderMode,
     String? targetFolderName,
+    bool? wifiOnly,
   }) {
     return BackupTask(
       id: id,
@@ -107,6 +152,7 @@ class BackupTask {
       distributionStrategy: distributionStrategy ?? this.distributionStrategy,
       targetFolderMode: targetFolderMode ?? this.targetFolderMode,
       targetFolderName: targetFolderName ?? this.targetFolderName,
+      wifiOnly: wifiOnly ?? this.wifiOnly,
     );
   }
 }
@@ -170,6 +216,7 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             distributionStrategy: dist,
             targetFolderMode: folderMode,
             targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
+            wifiOnly: j['wifiOnly'] as bool? ?? true,
           );
         }).toList();
       }
@@ -199,6 +246,7 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             ? 'root'
             : (t.targetFolderMode == TargetFolderMode.newFolder ? 'newFolder' : 'custom'),
         'targetFolderName': t.targetFolderName,
+        'wifiOnly': t.wifiOnly,
       }).toList();
       await file.writeAsString(json.encode(jsonList));
     } catch (_) {

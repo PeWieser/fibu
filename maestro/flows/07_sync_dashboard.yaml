@@ -1,0 +1,8 @@
+appId: com.example.fibu
+---
+- launchApp:
+    clearState: false
+- tapOn:
+    text: ".*(Übersicht|Dashboard).*"
+- tapOn:
+    text: ".*(Alle synchronisieren|Sync All).*"

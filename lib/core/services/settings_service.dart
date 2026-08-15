@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/theme.dart';
 import '../../theme/sanzo_wada_palettes.dart';
@@ -11,11 +12,13 @@ class AppSettingsData {
   final ThemeConfig themeConfig;
   final AppLocale locale;
   final bool onboardingCompleted;
+  final bool wifiOnlySync;
 
   const AppSettingsData({
     required this.themeConfig,
     required this.locale,
     this.onboardingCompleted = false,
+    this.wifiOnlySync = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +28,7 @@ class AppSettingsData {
     'selectedDarkPalette': themeConfig.selectedDarkPalette?.name,
     'locale': locale.name,
     'onboardingCompleted': onboardingCompleted,
+    'wifiOnlySync': wifiOnlySync,
   };
 
   factory AppSettingsData.fromJson(Map<String, dynamic> json) {
@@ -63,6 +67,7 @@ class AppSettingsData {
       ),
       locale: loc,
       onboardingCompleted: json['onboardingCompleted'] as bool? ?? false,
+      wifiOnlySync: json['wifiOnlySync'] as bool? ?? true,
     );
   }
 }
@@ -92,15 +97,22 @@ class SettingsService {
     ThemeConfig themeConfig,
     AppLocale locale, {
     bool? onboardingCompleted,
+    bool? wifiOnlySync,
   }) async {
     try {
       final file = await _getFile();
       bool completed = onboardingCompleted ?? false;
-      if (await file.exists() && onboardingCompleted == null) {
+      bool wifiOnly = wifiOnlySync ?? true;
+      if (await file.exists()) {
         try {
           final content = await file.readAsString();
           final Map<String, dynamic> map = json.decode(content);
-          completed = map['onboardingCompleted'] as bool? ?? false;
+          if (onboardingCompleted == null) {
+            completed = map['onboardingCompleted'] as bool? ?? false;
+          }
+          if (wifiOnlySync == null && map['wifiOnlySync'] != null) {
+            wifiOnly = map['wifiOnlySync'] as bool? ?? true;
+          }
         } catch (_) {}
       }
 
@@ -108,6 +120,7 @@ class SettingsService {
         themeConfig: themeConfig,
         locale: locale,
         onboardingCompleted: onboardingCompleted ?? completed,
+        wifiOnlySync: wifiOnlySync ?? wifiOnly,
       );
       await file.writeAsString(json.encode(data.toJson()));
     } catch (_) {
@@ -123,14 +136,59 @@ class SettingsService {
           current.themeConfig,
           current.locale,
           onboardingCompleted: completed,
+          wifiOnlySync: current.wifiOnlySync,
         );
       } else {
         await saveSettings(
           const ThemeConfig(),
           AppLocale.de,
           onboardingCompleted: completed,
+          wifiOnlySync: true,
+        );
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> setWifiOnlySync(bool wifiOnly) async {
+    try {
+      final current = await loadSettings();
+      if (current != null) {
+        await saveSettings(
+          current.themeConfig,
+          current.locale,
+          onboardingCompleted: current.onboardingCompleted,
+          wifiOnlySync: wifiOnly,
+        );
+      } else {
+        await saveSettings(
+          const ThemeConfig(),
+          AppLocale.de,
+          wifiOnlySync: wifiOnly,
         );
       }
     } catch (_) {}
   }
 }
+
+/// StateNotifier for WiFi-Only Sync setting.
+class WifiOnlySyncNotifier extends StateNotifier<bool> {
+  WifiOnlySyncNotifier() : super(true) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final settings = await SettingsService.loadSettings();
+    if (settings != null) {
+      state = settings.wifiOnlySync;
+    }
+  }
+
+  Future<void> setWifiOnly(bool value) async {
+    state = value;
+    await SettingsService.setWifiOnlySync(value);
+  }
+}
+
+final wifiOnlySyncProvider = StateNotifierProvider<WifiOnlySyncNotifier, bool>((ref) {
+  return WifiOnlySyncNotifier();
+});

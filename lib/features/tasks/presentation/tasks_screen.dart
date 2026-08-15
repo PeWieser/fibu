@@ -1281,6 +1281,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   late String _selectedHour;
   late String _selectedMinute;
   late bool _isActive;
+  late bool _wifiOnly;
 
   // Mobile categories: 'all', 'photos', 'videos', 'folders'
   late String _selectedSourceCategory;
@@ -1309,7 +1310,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     _selectedTargetFolderMode = task?.targetFolderMode ?? TargetFolderMode.newFolder;
     _selectedSyncMode = task?.syncMode ?? SyncMode.incremental;
 
-    _selectedScheduleDay = task?.scheduleDay ?? 'Daily';
+    _selectedScheduleDay = task?.scheduleDay ?? (widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily');
     _selectedHour = '02';
     _selectedMinute = '00';
     if (task != null && task.scheduleTime.contains(':')) {
@@ -1320,6 +1321,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       }
     }
     _isActive = task?.isActive ?? true;
+    _wifiOnly = task?.wifiOnly ?? true;
 
     if (task != null) {
       if (task.sourcePath == 'all' || task.sourcePath == 'Alles') {
@@ -1420,9 +1422,11 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     }
 
     final String finalTime = _selectedScheduleDay == 'Manual' ? '12:00' : '$_selectedHour:$_selectedMinute';
-    final String finalSchedule = _selectedScheduleDay == 'Daily'
-        ? 'Daily at $finalTime'
-        : (_selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${_selectedScheduleDay}s at $finalTime');
+    final String finalSchedule = _selectedScheduleDay == 'iOS System'
+        ? strings.iosBackgroundScheduleBadge
+        : (_selectedScheduleDay == 'Daily'
+            ? 'Daily at $finalTime'
+            : (_selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${_selectedScheduleDay}s at $finalTime'));
 
     String finalTargetFolder = _targetFolderController.text.trim();
     if (_selectedTargetFolderMode == TargetFolderMode.root) {
@@ -1446,6 +1450,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       distributionStrategy: _selectedRemotes.length > 1 ? _selectedDistribution : DistributionStrategy.mirrorAll,
       targetFolderMode: _selectedTargetFolderMode,
       targetFolderName: finalTargetFolder,
+      wifiOnly: _wifiOnly,
     );
 
     if (widget.existingTask == null) {
@@ -2236,6 +2241,26 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             ),
           ],
         ),
+        SizedBox(height: theme.sm),
+
+        // WiFi-Only Toggle
+        Row(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                SizedBox(height: theme.xs / 2),
+                Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+              ],
+            ),
+            const Spacer(),
+            fluent.ToggleSwitch(
+              checked: _wifiOnly,
+              onChanged: (val) => setState(() => _wifiOnly = val),
+            ),
+          ],
+        ),
         SizedBox(height: theme.md),
 
         // Catch-up Notice
@@ -2597,81 +2622,52 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             },
           ),
           SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text(strings.scheduleDayLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSchedule),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoSlidingSegmentedControl<String>(
-            groupValue: _selectedScheduleDay,
-            children: {
-              for (final sched in ['Daily', 'Monday', 'Sunday', 'Manual'])
-                sched: Text(TasksScreen._getDayLabel(strings, sched), style: const TextStyle(fontSize: 10)),
-            },
-            onValueChanged: (val) {
-              if (val != null) setState(() => _selectedScheduleDay = val);
-            },
-          ),
-          if (_selectedScheduleDay != 'Manual') ...[
-            SizedBox(height: theme.md),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+
+          // iOS Native Background Scheduling Banner
+          Container(
+            padding: EdgeInsets.all(theme.md),
+            decoration: BoxDecoration(
+              color: theme.accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${strings.scheduleTimeLabel}: ', style: const TextStyle(fontSize: 12)),
-                cupertino.CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: Text(_selectedHour, style: const TextStyle(fontSize: 16)),
-                  onPressed: () {
-                    cupertino.showCupertinoModalPopup(
-                      context: context,
-                      builder: (ctx) => Container(
-                        height: 216,
-                        color: cupertino.CupertinoTheme.of(context).scaffoldBackgroundColor,
-                        child: SafeArea(
-                          top: false,
-                          child: cupertino.CupertinoPicker(
-                            itemExtent: 32,
-                            scrollController: cupertino.FixedExtentScrollController(
-                                initialItem: _hours.contains(_selectedHour) ? _hours.indexOf(_selectedHour) : 0),
-                            onSelectedItemChanged: (i) => setState(() => _selectedHour = _hours[i]),
-                            children: _hours.map((h) => Center(child: Text(h))).toList(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const Text(' : ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                cupertino.CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: Text(_selectedMinute, style: const TextStyle(fontSize: 16)),
-                  onPressed: () {
-                    cupertino.showCupertinoModalPopup(
-                      context: context,
-                      builder: (ctx) => Container(
-                        height: 216,
-                        color: cupertino.CupertinoTheme.of(context).scaffoldBackgroundColor,
-                        child: SafeArea(
-                          top: false,
-                          child: cupertino.CupertinoPicker(
-                            itemExtent: 32,
-                            scrollController: cupertino.FixedExtentScrollController(
-                                initialItem: _minutes.contains(_selectedMinute) ? _minutes.indexOf(_selectedMinute) : 0),
-                            onSelectedItemChanged: (i) => setState(() => _selectedMinute = _minutes[i]),
-                            children: _minutes.map((m) => Center(child: Text(m))).toList(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                Icon(cupertino.CupertinoIcons.info_circle_fill, color: theme.accent, size: 20),
+                SizedBox(width: theme.sm),
+                Expanded(
+                  child: Text(
+                    strings.iosBackgroundScheduleNotice,
+                    style: TextStyle(fontSize: 12, color: theme.textPrimary),
+                  ),
                 ),
               ],
             ),
-          ],
+          ),
           SizedBox(height: theme.lg),
+
+          // WiFi-Only Switch
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    SizedBox(height: theme.xs / 2),
+                    Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                  ],
+                ),
+              ),
+              cupertino.CupertinoSwitch(
+                value: _wifiOnly,
+                onChanged: (val) => setState(() => _wifiOnly = val),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.lg),
+
           Row(
             children: [
               Text('${strings.activeSyncJob}:', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -3188,6 +3184,25 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             ),
           ],
           SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    SizedBox(height: theme.xs / 2),
+                    Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                  ],
+                ),
+              ),
+              material.Switch(
+                value: _wifiOnly,
+                onChanged: (val) => setState(() => _wifiOnly = val),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.md),
           Row(
             children: [
               Text('${strings.activeSyncJob}:'),

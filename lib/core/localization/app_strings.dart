@@ -419,6 +419,34 @@ class AppStrings {
   String get localLog => isGerman ? 'Lokales Protokoll' : 'Local Log';
   String get remoteLog => isGerman ? 'Remote-Protokoll' : 'Remote Log';
   String get defaultBackupFolder => isGerman ? 'fibu-backup' : 'fibu-backup';
+
+  // --- Mobile Onboarding & Tasks ---
+  String get onboardingMediaBackupTitle => isGerman ? 'Medien-Backup (Fotos & Videos)' : 'Media Backup (Photos & Videos)';
+  String get onboardingMediaBackupDesc => isGerman
+      ? 'Sichert automatisch alle Fotos und Videos aus deiner Galerie / Fotos-App in die Cloud.'
+      : 'Automatically backs up all photos and videos from your gallery / Photos app to the cloud.';
+  String get onboardingDocsBackupTitle => isGerman ? 'Dokumente & lokale Dateien' : 'Documents & Local Files';
+  String get onboardingDocsBackupDesc => isGerman
+      ? 'Sichert zusätzlich alle Dokumente und lokalen Dateien aus deiner Dateien-App.'
+      : 'Optionally backs up all local documents and files from your Files app.';
+  String get onboardingSelectBackupsHeader => isGerman ? 'Vorgeschlagene Backup-Aufgaben' : 'Recommended Backup Tasks';
+  String get onboardingSelectBackupsSubtitle => isGerman
+      ? 'Wähle aus, was automatisch für dich gesichert werden soll:'
+      : 'Select what should be automatically backed up for you:';
+
+  // --- iOS Background Sync Notice & WiFi-Only Sync ---
+  String get iosBackgroundScheduleNotice => isGerman
+      ? 'Hinweis: Unter iOS steuert das Betriebssystem Hintergrund-Backups (BGProcessingTask) eigenständig nach Kriterien wie Ladezustand, Inaktivität und WLAN-Verbindung. Eine feste Uhrzeit ist nicht erforderlich.'
+      : 'Notice: On iOS, background backups (BGProcessingTask) are managed dynamically by the system when charging, idle, and connected to Wi-Fi. An exact minute schedule is not required.';
+  String get iosBackgroundScheduleBadge => isGerman ? 'Automatisch (iOS System)' : 'Automatic (iOS System)';
+  String get wifiOnlySyncLabel => isGerman ? 'Nur über WLAN synchronisieren' : 'Sync on Wi-Fi Only';
+  String get wifiOnlySyncDescription => isGerman
+      ? 'Verhindert die Datennutzung über Mobilfunkverbindungen, um dein mobiles Datenvolumen zu schonen.'
+      : 'Prevents sync over cellular data connections to preserve your mobile data plan.';
+  String get cellularSyncBlockedNotice => isGerman
+      ? 'Synchronisation pausiert: Aktuell besteht eine Mobilfunkverbindung und "Nur über WLAN synchronisieren" ist aktiv.'
+      : 'Sync paused: Connected via cellular data and "Sync on Wi-Fi Only" is enabled.';
+  String get networkSectionTitle => isGerman ? 'Netzwerk & Mobilfunk' : 'Network & Cellular';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

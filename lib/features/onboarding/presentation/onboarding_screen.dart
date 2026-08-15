@@ -31,6 +31,8 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _enableMediaBackup = true;
+  bool _enableDocsBackup = false;
 
   @override
   void dispose() {
@@ -47,14 +49,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _openAddRemoteWizard(BuildContext context, TargetPlatform platform) async {
-    final addedRemoteName = await showGeneralDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Add Remote Wizard',
-      pageBuilder: (dialogContext, _, __) {
-        return AddRemoteWizardDialog(platform: platform);
-      },
-    );
+    String? addedRemoteName;
+    if (platform == TargetPlatform.iOS) {
+      addedRemoteName = await Navigator.of(context).push<String>(
+        cupertino.CupertinoPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => AddRemoteWizardDialog(platform: platform),
+        ),
+      );
+    } else if (platform == TargetPlatform.android) {
+      addedRemoteName = await Navigator.of(context).push<String>(
+        material.MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => AddRemoteWizardDialog(platform: platform),
+        ),
+      );
+    } else {
+      addedRemoteName = await showGeneralDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        barrierLabel: 'Add Remote Wizard',
+        pageBuilder: (dialogContext, _, __) {
+          return AddRemoteWizardDialog(platform: platform);
+        },
+      );
+    }
 
     if (addedRemoteName != null && mounted) {
       ref.invalidate(remotesProvider);
@@ -66,6 +85,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _completeOnboarding() {
+    final platform = defaultTargetPlatform;
+    if (platform != TargetPlatform.windows) {
+      final remotes = ref.read(remotesProvider).value ?? [];
+      final defaultRemote = remotes.isNotEmpty ? remotes.first : '';
+      final isIOS = platform == TargetPlatform.iOS;
+      final List<BackupTask> autoTasks = [];
+
+      if (_enableMediaBackup) {
+        autoTasks.add(BackupTask.createMediaBackupTask(remoteName: defaultRemote, isIOS: isIOS));
+      }
+      if (_enableDocsBackup) {
+        autoTasks.add(BackupTask.createDocumentsBackupTask(remoteName: defaultRemote, isIOS: isIOS));
+      }
+
+      if (autoTasks.isNotEmpty) {
+        ref.read(tasksListProvider.notifier).importTasks(autoTasks);
+      }
+    }
+
     ref.read(onboardingControllerProvider.notifier).completeOnboarding();
   }
 
@@ -717,101 +755,264 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           SizedBox(height: theme.lg),
 
-          // Overview or Tasks List Card
-          Container(
-            padding: EdgeInsets.all(theme.lg),
-            decoration: BoxDecoration(
-              color: theme.surface,
-              borderRadius: BorderRadius.circular(theme.radiusLg),
-              border: Border.all(
-                color: theme.textSecondary.withValues(alpha: 0.18),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (tasks.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        platform == TargetPlatform.windows
-                            ? fluent.FluentIcons.completed
-                            : (platform == TargetPlatform.iOS
-                                ? cupertino.CupertinoIcons.checkmark_circle_fill
-                                : material.Icons.check_circle),
-                        color: theme.success,
-                        size: 20,
-                        semanticLabel: 'Success',
-                      ),
-                      SizedBox(width: theme.sm),
-                      Text(
-                        strings.tasksTitle,
-                        style: TextStyle(
-                          color: theme.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: theme.sm),
-                  ...tasks.map((t) => Padding(
-                        padding: EdgeInsets.symmetric(vertical: theme.xs / 2),
-                        child: Row(
-                          children: [
-                            Icon(
-                              platform == TargetPlatform.windows
-                                  ? fluent.FluentIcons.task_manager
-                                  : (platform == TargetPlatform.iOS
-                                      ? cupertino.CupertinoIcons.list_bullet
-                                      : material.Icons.task_alt),
-                              size: 14,
-                              color: theme.accent,
-                              semanticLabel: t.name,
-                            ),
-                            SizedBox(width: theme.xs),
-                            Expanded(
-                              child: Text(
-                                '${t.name} (${t.scheduleDescription})',
-                                style: TextStyle(
-                                  color: theme.textPrimary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )),
-                ] else ...[
-                  _buildWorkflowStepRow(theme, '1', 'Quellordner wählen', 'Lokalen Ordner (z.B. Bilder, Dokumente) auswählen'),
-                  SizedBox(height: theme.sm),
-                  _buildWorkflowStepRow(theme, '2', 'Cloud-Ziel festlegen', 'Verbundenes Cloud-Laufwerk und Zielordner wählen'),
-                  SizedBox(height: theme.sm),
-                  _buildWorkflowStepRow(theme, '3', 'Zeitplan & Modus wählen', 'Täglich, wöchentlich oder manuell synchronisieren'),
-                ],
-              ],
-            ),
-          ),
           SizedBox(height: theme.lg),
 
-          // Primary CTA: Create First Task
-          _buildPrimaryButton(
-            context: context,
-            theme: theme,
-            platform: platform,
-            label: strings.onboardingCreateTaskButton,
-            icon: platform == TargetPlatform.windows
-                ? fluent.FluentIcons.add
-                : (platform == TargetPlatform.iOS
-                    ? cupertino.CupertinoIcons.add
-                    : material.Icons.add),
-            onPressed: () => _openCreateTaskDialog(context, platform),
-          ),
-          SizedBox(height: theme.sm),
+          if (platform != TargetPlatform.windows) ...[
+            // Mobile Direct Backup Selection Header
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                strings.onboardingSelectBackupsHeader,
+                style: TextStyle(
+                  color: theme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            SizedBox(height: theme.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                strings.onboardingSelectBackupsSubtitle,
+                style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            SizedBox(height: theme.md),
+
+            // 1. Photos & Media Backup Option Card
+            Container(
+              padding: EdgeInsets.all(theme.md),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                border: Border.all(
+                  color: _enableMediaBackup ? theme.accent : theme.textSecondary.withValues(alpha: 0.2),
+                  width: _enableMediaBackup ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    platform == TargetPlatform.iOS
+                        ? cupertino.CupertinoIcons.photo_on_rectangle
+                        : material.Icons.photo_library_outlined,
+                    color: theme.accent,
+                    size: 28,
+                  ),
+                  SizedBox(width: theme.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          strings.onboardingMediaBackupTitle,
+                          style: TextStyle(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        SizedBox(height: theme.xs / 2),
+                        Text(
+                          strings.onboardingMediaBackupDesc,
+                          style: TextStyle(
+                            color: theme.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: theme.sm),
+                  if (platform == TargetPlatform.iOS)
+                    cupertino.CupertinoSwitch(
+                      value: _enableMediaBackup,
+                      onChanged: (val) => setState(() => _enableMediaBackup = val),
+                    )
+                  else
+                    material.Switch(
+                      value: _enableMediaBackup,
+                      onChanged: (val) => setState(() => _enableMediaBackup = val),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: theme.md),
+
+            // 2. Documents & Local Files Backup Option Card
+            Container(
+              padding: EdgeInsets.all(theme.md),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                border: Border.all(
+                  color: _enableDocsBackup ? theme.accent : theme.textSecondary.withValues(alpha: 0.2),
+                  width: _enableDocsBackup ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    platform == TargetPlatform.iOS
+                        ? cupertino.CupertinoIcons.folder_badge_plus
+                        : material.Icons.folder_outlined,
+                    color: theme.accent,
+                    size: 28,
+                  ),
+                  SizedBox(width: theme.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          strings.onboardingDocsBackupTitle,
+                          style: TextStyle(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        SizedBox(height: theme.xs / 2),
+                        Text(
+                          strings.onboardingDocsBackupDesc,
+                          style: TextStyle(
+                            color: theme.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: theme.sm),
+                  if (platform == TargetPlatform.iOS)
+                    cupertino.CupertinoSwitch(
+                      value: _enableDocsBackup,
+                      onChanged: (val) => setState(() => _enableDocsBackup = val),
+                    )
+                  else
+                    material.Switch(
+                      value: _enableDocsBackup,
+                      onChanged: (val) => setState(() => _enableDocsBackup = val),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: theme.md),
+
+            // iOS Background Task Notice on iOS
+            if (platform == TargetPlatform.iOS) ...[
+              Container(
+                padding: EdgeInsets.all(theme.md),
+                decoration: BoxDecoration(
+                  color: theme.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(theme.radiusSm),
+                  border: Border.all(color: theme.accent.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(cupertino.CupertinoIcons.info_circle_fill, color: theme.accent, size: 18),
+                    SizedBox(width: theme.sm),
+                    Expanded(
+                      child: Text(
+                        strings.iosBackgroundScheduleNotice,
+                        style: TextStyle(fontSize: 11, color: theme.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: theme.md),
+            ],
+          ] else ...[
+            // Windows Overview or Tasks List Card
+            Container(
+              padding: EdgeInsets.all(theme.lg),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                border: Border.all(
+                  color: theme.textSecondary.withValues(alpha: 0.18),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (tasks.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          fluent.FluentIcons.completed,
+                          color: theme.success,
+                          size: 20,
+                          semanticLabel: 'Success',
+                        ),
+                        SizedBox(width: theme.sm),
+                        Text(
+                          strings.tasksTitle,
+                          style: TextStyle(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: theme.sm),
+                    ...tasks.map((t) => Padding(
+                          padding: EdgeInsets.symmetric(vertical: theme.xs / 2),
+                          child: Row(
+                            children: [
+                              Icon(
+                                fluent.FluentIcons.task_manager,
+                                size: 14,
+                                color: theme.accent,
+                                semanticLabel: t.name,
+                              ),
+                              SizedBox(width: theme.xs),
+                              Expanded(
+                                child: Text(
+                                  '${t.name} (${t.scheduleDescription})',
+                                  style: TextStyle(
+                                    color: theme.textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                  ] else ...[
+                    _buildWorkflowStepRow(theme, '1', 'Quellordner wählen', 'Lokalen Ordner (z.B. Bilder, Dokumente) auswählen'),
+                    SizedBox(height: theme.sm),
+                    _buildWorkflowStepRow(theme, '2', 'Cloud-Ziel festlegen', 'Verbundenes Cloud-Laufwerk und Zielordner wählen'),
+                    SizedBox(height: theme.sm),
+                    _buildWorkflowStepRow(theme, '3', 'Zeitplan & Modus wählen', 'Täglich, wöchentlich oder manuell synchronisieren'),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: theme.lg),
+
+            // Primary CTA: Create First Task (Windows)
+            _buildPrimaryButton(
+              context: context,
+              theme: theme,
+              platform: platform,
+              label: strings.onboardingCreateTaskButton,
+              icon: fluent.FluentIcons.add,
+              onPressed: () => _openCreateTaskDialog(context, platform),
+            ),
+            SizedBox(height: theme.sm),
+          ],
 
           // Final CTA: Complete Onboarding ("Jetzt loslegen")
           _buildAccentFinishButton(

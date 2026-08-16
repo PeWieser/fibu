@@ -1346,6 +1346,197 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     super.dispose();
   }
 
+  void _applyPreset(String presetType, AppStrings strings) {
+    setState(() {
+      if (presetType == 'media_mirror') {
+        _nameController.text = strings.presetMediaMirrorTitle;
+        _selectedSourceCategory = 'all';
+        _srcController.text = widget.platform == TargetPlatform.windows ? 'Pictures' : 'all';
+        _selectedSyncMode = SyncMode.mirror;
+        _selectedTargetFolderMode = TargetFolderMode.newFolder;
+        _targetFolderController.text = 'Mediathek';
+        _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
+        _wifiOnly = true;
+      } else if (presetType == 'media_incremental') {
+        _nameController.text = strings.presetMediaIncrementalTitle;
+        _selectedSourceCategory = 'all';
+        _srcController.text = widget.platform == TargetPlatform.windows ? 'Pictures' : 'all';
+        _selectedSyncMode = SyncMode.incremental;
+        _selectedTargetFolderMode = TargetFolderMode.newFolder;
+        _targetFolderController.text = 'Fotos';
+        _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
+        _wifiOnly = true;
+      } else if (presetType == 'documents') {
+        _nameController.text = strings.presetDocsTitle;
+        _selectedSourceCategory = 'folders';
+        _srcController.text = widget.platform == TargetPlatform.windows ? 'Documents' : 'documents';
+        _selectedSyncMode = SyncMode.incremental;
+        _selectedTargetFolderMode = TargetFolderMode.newFolder;
+        _targetFolderController.text = 'Dokumente';
+        _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
+        _wifiOnly = true;
+      }
+      _nameError = null;
+      _sourceError = null;
+    });
+  }
+
+  Widget _buildPresetCard({
+    required AppThemeData theme,
+    required String title,
+    required String subtitle,
+    required String badge,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(theme.md),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.accent.withValues(alpha: 0.08) : theme.surface,
+          borderRadius: BorderRadius.circular(theme.radiusSm),
+          border: Border.all(
+            color: isSelected ? theme.accent : theme.textSecondary.withValues(alpha: 0.2),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: EdgeInsets.all(theme.xs),
+              decoration: BoxDecoration(
+                color: theme.accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+              ),
+              child: Icon(icon, size: 20, color: theme.accent),
+            ),
+            SizedBox(width: theme.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? theme.accent : theme.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs / 2),
+                        decoration: BoxDecoration(
+                          color: isSelected ? theme.accent : theme.textSecondary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          badge,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? const Color(0xFFFFFFFF) : theme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: theme.xs / 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetSelectionCards(BuildContext context, AppThemeData theme, AppStrings strings) {
+    if (widget.existingTask != null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              widget.platform == TargetPlatform.windows
+                  ? fluent.FluentIcons.favorite_star
+                  : (widget.platform == TargetPlatform.iOS
+                      ? cupertino.CupertinoIcons.sparkles
+                      : material.Icons.auto_awesome),
+              size: 16,
+              color: theme.accent,
+            ),
+            SizedBox(width: theme.xs),
+            Text(
+              strings.presetSelectHeader,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ],
+        ),
+        SizedBox(height: theme.xs / 2),
+        Text(
+          strings.presetSelectSubtitle,
+          style: TextStyle(fontSize: 11, color: theme.textSecondary),
+        ),
+        SizedBox(height: theme.sm),
+        // Preset 1: Mediathek-Spiegelung (2-Wege Mirror)
+        _buildPresetCard(
+          theme: theme,
+          title: strings.presetMediaMirrorTitle,
+          subtitle: strings.presetMediaMirrorSubtitle,
+          badge: strings.presetMediaMirrorBadge,
+          icon: widget.platform == TargetPlatform.iOS
+              ? cupertino.CupertinoIcons.photo_on_rectangle
+              : (widget.platform == TargetPlatform.windows ? fluent.FluentIcons.photo_collection : material.Icons.photo_library_outlined),
+          isSelected: _selectedSyncMode == SyncMode.mirror && _targetFolderController.text == 'Mediathek',
+          onTap: () => _applyPreset('media_mirror', strings),
+        ),
+        SizedBox(height: theme.xs),
+        // Preset 2: Medien-Sicherung (Inkrementell)
+        _buildPresetCard(
+          theme: theme,
+          title: strings.presetMediaIncrementalTitle,
+          subtitle: strings.presetMediaIncrementalSubtitle,
+          badge: strings.syncModeIncremental,
+          icon: widget.platform == TargetPlatform.iOS
+              ? cupertino.CupertinoIcons.camera
+              : (widget.platform == TargetPlatform.windows ? fluent.FluentIcons.camera : material.Icons.photo_camera_outlined),
+          isSelected: _selectedSyncMode == SyncMode.incremental && _targetFolderController.text == 'Fotos',
+          onTap: () => _applyPreset('media_incremental', strings),
+        ),
+        SizedBox(height: theme.xs),
+        // Preset 3: Dokumente & Dateien
+        _buildPresetCard(
+          theme: theme,
+          title: strings.presetDocsTitle,
+          subtitle: strings.presetDocsSubtitle,
+          badge: strings.syncModeIncremental,
+          icon: widget.platform == TargetPlatform.iOS
+              ? cupertino.CupertinoIcons.doc_text
+              : (widget.platform == TargetPlatform.windows ? fluent.FluentIcons.document : material.Icons.description_outlined),
+          isSelected: _targetFolderController.text == 'Dokumente',
+          onTap: () => _applyPreset('documents', strings),
+        ),
+        SizedBox(height: theme.md),
+        const material.Divider(height: 1),
+        SizedBox(height: theme.md),
+      ],
+    );
+  }
+
   bool _validateStep0(AppStrings strings) {
     final name = _nameController.text.trim();
     final sourcePath = _srcController.text.trim();
@@ -1767,6 +1958,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
+        _buildPresetSelectionCards(context, theme, strings),
         Text(strings.taskNameLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
         SizedBox(height: theme.xs),
         fluent.TextBox(
@@ -2394,6 +2586,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildPresetSelectionCards(context, theme, strings),
           Text(strings.taskNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           SizedBox(height: theme.xs),
           cupertino.CupertinoTextField(
@@ -2801,6 +2994,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildPresetSelectionCards(context, theme, strings),
           material.TextField(
             controller: _nameController,
             decoration: material.InputDecoration(

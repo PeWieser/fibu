@@ -100,13 +100,18 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       final List<String> includeFilters = [];
       final srcLower = task.sourcePath.toLowerCase();
       if (srcLower == 'photos' || srcLower == 'alle fotos') {
-        includeFilters.addAll(['*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef']);
+        includeFilters.addAll(['*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif']);
       } else if (srcLower == 'videos' || srcLower == 'alle videos') {
-        includeFilters.addAll(['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']);
+        includeFilters.addAll(['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp']);
+      } else if (srcLower == 'all' || srcLower == 'alles' || srcLower == 'media' || srcLower == 'mediathek') {
+        includeFilters.addAll([
+          '*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif',
+          '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp',
+        ]);
       }
 
       final isEcho = task.syncMode == SyncMode.mirror;
-      final modeLabel = isEcho ? 'Echo (2-Way Mirror)' : 'Incremental';
+      final modeLabel = isEcho ? '2-Way Mirror (Echo)' : 'Incremental';
       final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
       state = state.copyWith(
         logs: [...state.logs, startMsg],

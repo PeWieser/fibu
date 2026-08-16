@@ -86,22 +86,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _completeOnboarding() {
     final platform = defaultTargetPlatform;
-    if (platform != TargetPlatform.windows) {
-      final remotes = ref.read(remotesProvider).value ?? [];
-      final defaultRemote = remotes.isNotEmpty ? remotes.first : '';
-      final isIOS = platform == TargetPlatform.iOS;
-      final List<BackupTask> autoTasks = [];
+    final remotes = ref.read(remotesProvider).value ?? [];
+    final defaultRemote = remotes.isNotEmpty ? remotes.first : '';
+    final isIOS = platform == TargetPlatform.iOS;
+    final List<BackupTask> autoTasks = [];
 
-      if (_enableMediaBackup) {
-        autoTasks.add(BackupTask.createMediaBackupTask(remoteName: defaultRemote, isIOS: isIOS));
-      }
-      if (_enableDocsBackup) {
-        autoTasks.add(BackupTask.createDocumentsBackupTask(remoteName: defaultRemote, isIOS: isIOS));
-      }
+    if (_enableMediaBackup) {
+      autoTasks.add(BackupTask.createMediaMirrorPresetTask(remoteName: defaultRemote, isIOS: isIOS));
+    }
+    if (_enableDocsBackup) {
+      autoTasks.add(BackupTask.createDocumentsPresetTask(remoteName: defaultRemote, isIOS: isIOS));
+    }
 
-      if (autoTasks.isNotEmpty) {
-        ref.read(tasksListProvider.notifier).importTasks(autoTasks);
-      }
+    if (autoTasks.isNotEmpty) {
+      ref.read(tasksListProvider.notifier).importTasks(autoTasks);
     }
 
     ref.read(onboardingControllerProvider.notifier).completeOnboarding();

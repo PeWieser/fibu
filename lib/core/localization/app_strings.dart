@@ -443,10 +443,32 @@ class AppStrings {
   String get wifiOnlySyncDescription => isGerman
       ? 'Verhindert die Datennutzung über Mobilfunkverbindungen, um dein mobiles Datenvolumen zu schonen.'
       : 'Prevents sync over cellular data connections to preserve your mobile data plan.';
-  String get cellularSyncBlockedNotice => isGerman
-      ? 'Synchronisation pausiert: Aktuell besteht eine Mobilfunkverbindung und "Nur über WLAN synchronisieren" ist aktiv.'
-      : 'Sync paused: Connected via cellular data and "Sync on Wi-Fi Only" is enabled.';
   String get networkSectionTitle => isGerman ? 'Netzwerk & Mobilfunk' : 'Network & Cellular';
+
+  // --- Task Presets ---
+  String get presetSelectHeader => isGerman ? 'Vorlage wählen (Schnellstart)' : 'Select Preset (Quick Start)';
+  String get presetSelectSubtitle => isGerman
+      ? 'Wähle eine vorkonfigurierte Vorlage oder erstelle eine individuelle Aufgabe:'
+      : 'Choose a preconfigured preset or create a custom task:';
+  String get presetMediaMirrorTitle => isGerman ? 'Mediathek-Spiegelung (Fotos & Videos)' : 'Media Library Mirror (Photos & Videos)';
+  String get presetMediaMirrorSubtitle => isGerman
+      ? 'Vollständiges 2-Wege-Spiegel-Backup aller Fotos & Videos mit Cloud-Löschabgleich.'
+      : 'Full 2-way mirror backup of all photos & videos with cloud deletion synchronization.';
+  String get presetMediaMirrorBadge => isGerman ? '2-Wege Spiegelung' : '2-Way Mirror';
+  String get presetMediaIncrementalTitle => isGerman ? 'Medien-Sicherung (Inkrementell)' : 'Media Backup (Incremental)';
+  String get presetMediaIncrementalSubtitle => isGerman
+      ? 'Sichert alle neuen Fotos und Videos in die Cloud; Cloud-Dateien bleiben stets erhalten.'
+      : 'Uploads all new photos and videos to the cloud; cloud files are always preserved.';
+  String get presetDocsTitle => isGerman ? 'Dokumente & Lokale Dateien' : 'Documents & Local Files';
+  String get presetDocsSubtitle => isGerman
+      ? 'Sichert alle lokalen Dokumente, PDFs und Arbeitsordner zuverlässig in die Cloud.'
+      : 'Backs up local documents, PDFs, and working folders reliably to the cloud.';
+  String get presetCustomTitle => isGerman ? 'Benutzerdefinierte Aufgabe' : 'Custom Task';
+  String get presetCustomSubtitle => isGerman
+      ? 'Alle Parameter (Quelle, Ordner, Zeitplan, Modus) schrittweise manuell festlegen.'
+      : 'Configure all parameters (source, destination, schedule, mode) manually step-by-step.';
+  String get usePresetButton => isGerman ? 'Vorlage anwenden' : 'Apply Preset';
+  String get customizeTaskButton => isGerman ? 'Details anpassen' : 'Customize Details';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

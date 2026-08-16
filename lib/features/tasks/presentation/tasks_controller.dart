@@ -81,27 +81,49 @@ class BackupTask {
     }
   }
 
-  static BackupTask createMediaBackupTask({
+  static BackupTask createMediaMirrorPresetTask({
+    required String remoteName,
+    bool isIOS = false,
+  }) {
+    return BackupTask(
+      id: 'media_mirror_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Mediathek-Spiegelung (Fotos & Videos)',
+      sourcePath: 'all',
+      targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
+      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      scheduleDay: isIOS ? 'iOS System' : 'Daily',
+      scheduleTime: '02:00',
+      isActive: true,
+      syncMode: SyncMode.mirror,
+      distributionStrategy: DistributionStrategy.mirrorAll,
+      targetFolderMode: TargetFolderMode.newFolder,
+      targetFolderName: 'Mediathek',
+      wifiOnly: true,
+    );
+  }
+
+  static BackupTask createMediaIncrementalPresetTask({
     required String remoteName,
     bool isIOS = false,
   }) {
     return BackupTask(
       id: 'media_backup_${DateTime.now().millisecondsSinceEpoch}',
-      name: 'Fotos & Medien Backup',
-      sourcePath: 'photos',
+      name: 'Medien-Sicherung (Inkrementell)',
+      sourcePath: 'all',
       targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
       schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
       scheduleDay: isIOS ? 'iOS System' : 'Daily',
       scheduleTime: '02:00',
       isActive: true,
       syncMode: SyncMode.incremental,
+      distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
       targetFolderName: 'Fotos',
       wifiOnly: true,
     );
   }
 
-  static BackupTask createDocumentsBackupTask({
+  static BackupTask createDocumentsPresetTask({
     required String remoteName,
     bool isIOS = false,
   }) {
@@ -115,10 +137,25 @@ class BackupTask {
       scheduleTime: '02:00',
       isActive: true,
       syncMode: SyncMode.incremental,
+      distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
       targetFolderName: 'Dokumente',
       wifiOnly: true,
     );
+  }
+
+  static BackupTask createMediaBackupTask({
+    required String remoteName,
+    bool isIOS = false,
+  }) {
+    return createMediaMirrorPresetTask(remoteName: remoteName, isIOS: isIOS);
+  }
+
+  static BackupTask createDocumentsBackupTask({
+    required String remoteName,
+    bool isIOS = false,
+  }) {
+    return createDocumentsPresetTask(remoteName: remoteName, isIOS: isIOS);
   }
 
   BackupTask copyWith({

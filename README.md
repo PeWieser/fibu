@@ -1,156 +1,125 @@
-# Fibu
+# Fibu — Multi-Cloud-Backup & Mediathek-Spiegelung
 
-Mobile app to sync your device files to any cloud storage — powered by [rclone](https://rclone.org).
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
+[![rclone](https://img.shields.io/badge/rclone-70%2B%20Clouds-1C6BBA?logo=rclone)](https://rclone.org)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20iOS%20%7C%20Android-green)](#unterstützte-plattformen)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Built with Expo (React Native), TypeScript strict, NativeWind, and expo-sqlite.
-
----
-
-## Features
-
-- **60+ cloud providers** — Google Drive, OneDrive, Dropbox, S3, SFTP, WebDAV, Nextcloud, and everything else rclone supports
-- **Searchable provider picker** — find any backend instantly
-- **Encrypted local database** — AES-256-GCM via Web Crypto + expo-secure-store
-- **Background sync** — expo-task-manager keeps your files in sync automatically
-- **Crypt remote support** — encrypt files on the fly before uploading
-- **Privacy first** — rclone runs locally on your device; no intermediate server
+**Fibu** ist eine moderne, plattformadaptive Multi-Cloud-Backup-App für iOS, Android und Windows. Sie verbindet die Leistungsfähigkeit und Protokollvielfalt von **[rclone](https://rclone.org)** mit einer eleganten, an **Apple Human Interface Guidelines (HIG)** angelehnten Benutzeroberfläche.
 
 ---
 
-## Tech Stack
+## Highlights & Kernfunktionen
 
-| Layer | Technology |
-|---|---|
-| Framework | Expo SDK 57 / React Native 0.86 |
-| Language | TypeScript 6 (strict) |
-| Styling | NativeWind v4 (Tailwind CSS v3) |
-| Navigation | React Navigation v7 |
-| Database | expo-sqlite + AES-256-GCM encryption |
-| Cloud backend | rclone (embedded binary, `rclone rcd` HTTP mode) |
-| Native bridge | Expo Modules API (Kotlin / Swift) |
-| Testing | jest-expo (unit) + Maestro (E2E) |
+### 1. 70+ Cloud-Anbieter & Protokolle
+Unterstützung für alle Cloud-Speicher und Protokolle aus dem Rclone-Ökosystem:
+- **Cloud-Speicher (OAuth & Web-Login):** Google Drive, Google Photos, Microsoft OneDrive, Dropbox, Box, pCloud, MEGA, Yandex Disk, STRATO HiDrive, Zoho WorkDrive, Proton Drive, PikPak, Put.io, Mail.ru uvm.
+- **S3 & Object Storage:** Amazon S3, Wasabi Hot Cloud, Backblaze B2, Cloudflare R2 (Null Egress), DigitalOcean Spaces, MinIO, Synology C2, IDrive e2, Ceph RADOS.
+- **Native Enterprise APIs:** Google Cloud Storage (GCS), Azure Blob Storage, Azure Files, Storj DCS, OpenStack Swift.
+- **Protokolle & Server:** SFTP (mit SSH-Key-Support), WebDAV (Nextcloud, ownCloud, Synology), FTP/FTPS, SMB/CIFS (Windows Freigaben), HTTP Read-Only.
+- **Verschlüsselung & Virtuelle Laufwerke:** Crypt (Ende-zu-Ende-Verschlüsselung mit eigenem Master-Passwort), Chunker (Datei-Splitting), Union (Speicher-Pools), Combine & Kompression.
+
+### 2. Echte 1:1 Mediathek-Spiegelung (iOS & Android)
+- Liest über native APIs (`PhotoKit` / `PHAsset` / `photo_manager`) die reale Albenstruktur aus.
+- Spiegelt Medien mit exakter Hierarchie in die Cloud:
+  ```text
+  fibu-backup/
+  └── Photos/
+      ├── Camera Roll/
+      │   ├── IMG_0001.HEIC
+      │   └── IMG_0002.MOV
+      ├── Favoriten/
+      │   └── IMG_0042.HEIC
+      └── WhatsApp/
+          └── IMG_1337.JPG
+  ```
+- **2-Wege-Spiegelung (Echo):** Synchronisiert Löschungen und Änderungen sauber zwischen lokalem Gerät und Cloud.
+
+### 3. Dateisystem- & Ordner-Sicherung (Files App)
+- Volle Integration mit der iOS Dateien-App und Android Storage Access Framework.
+- Ordnerhierarchien bleiben 1:1 erhalten: `fibu-backup/Dateien/<Projekt>/...`
+
+### 4. Fibu Manifest & DB-Katalog (`.fibu/manifest.json`)
+- Nach jeder Synchronisation wird ein Snapshot-Katalog mit Checksummen, Dateigrößen, Zeitstempeln und Sync-Status lokal und remote abgelegt.
+- Ermöglicht blitzschnelle inkrementelle Backups und Offline-Durchsuchen des Cloud-Explorers.
+
+### 5. Resiliente Offline- & Netzwerk-State Machine
+- Kontinuierliche Netzwerkprüfung über `connectivity_plus`.
+- Bei Verbindungsabbruch oder fehlender Berechtigung schaltet die App sofort in einen sauberen "Pausiert"- bzw. "Fehler"-Status mit Klartext-Hinweisen.
+- **WLAN-Only Option:** Verhindert ungewollten Datenverbrauch über mobile Netze.
+
+### 6. Apple Minimalist UI/UX Design
+- **Progressive Disclosure:** Beliebte Provider erhalten priorisierte Schnellzugriffskarten; komplexe Parameter (S3-Endpoints, Ports, SSH-Keys) sind aufgeräumt eingeklappt.
+- **Plattform-Adaptiv:**
+  - **Windows:** Fluent UI (Mica, Acrylic, Fluent Icons)
+  - **iOS:** Cupertino Design (Blur-Effekte, SF Symbols, Cupertino Navigation)
+  - **Android:** Material 3 (Dynamic Color, Elevation, Floating Bars)
+- **Barrierefreiheit:** 44pt Mindest-Touch-Targets, WCAG AA Kontraste, Sanzo Wada Farbpaletten.
 
 ---
 
-## Getting Started
+## Projektstruktur
 
-### Prerequisites
+```text
+fibu win/
+├── lib/
+│   ├── core/
+│   │   ├── localization/         # Zweisprachig (Deutsch & Englisch) via AppStrings
+│   │   ├── services/             # RcloneService, RcloneProviderRegistry, SyncManifestService
+│   │   └── utils/                # Dateihandler, Formatierer
+│   ├── features/
+│   │   ├── dashboard/            # Übersicht, Hero-Status, Speicher-Karten, Explorer
+│   │   ├── tasks/                # Aufgaben-Manager, 1-Klick-Presets, Wizard
+│   │   ├── settings/             # 70+ Cloud Drives Wizard, WLAN-Only, Farbpaletten
+│   │   ├── onboarding/           # Erststart-Assistent (Mediathek & Dateien Schnellstart)
+│   │   └── shell/                # Plattformadaptiver Navigations-Rahmen
+│   └── theme/                    # 4pt Design-Tokens, Farbpaletten, Typografie
+├── test/
+│   ├── unit/                     # Unit Tests für Provider-Registry, Manifest, RcloneService
+│   ├── widget/                   # Widget- und Interaktionstests
+│   └── e2e/                      # End-to-End Testskripte
+├── ios/                          # iOS Runner (PhotoKit Berechtigungen, File Sharing)
+├── android/                      # Android App (Storage & Media Berechtigungen)
+└── windows/                      # Windows Desktop Runner
+```
 
-- Node.js 22 LTS
-- Java 21 (for Android builds — Java 26 is not supported by Gradle yet)
-- Xcode 16+ (for iOS builds)
-- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+---
 
-### Setup
+## Installation & Ausführung
 
+### Voraussetzungen
+- Flutter SDK `>=3.0.0 <4.0.0`
+- Dart SDK `>=3.0.0`
+
+### Abhängigkeiten installieren
 ```bash
-# Install dependencies
-npm ci
-
-# Generate the iOS and Android projects
-npx expo prebuild
-
-# Start development server
-npm start
+flutter pub get
 ```
 
-### Run on device / emulator
-
+### Tests ausführen
 ```bash
-# Android
-npm run android
-
-# iOS
-npm run ios
+flutter test
 ```
 
----
-
-## Project Structure
-
-```
-fibu/
-├── src/
-│   ├── screens/          # Screen components
-│   ├── components/       # Shared UI components
-│   ├── db/               # SQLite repositories + crypto
-│   ├── data/             # Static data (rcloneProviders.ts)
-│   ├── navigation/       # React Navigation setup
-│   ├── theme/            # Design tokens
-│   ├── types/            # Shared TypeScript types
-│   └── utils/            # Logger, onboarding helpers
-├── modules/
-│   └── rclone/
-│       ├── src/          # RcloneService.ts (JS layer)
-│       ├── android/      # Kotlin Expo Module
-│       └── ios/          # Swift Expo Module
-└── __tests__/
-```
-
----
-
-## Adding a Cloud Drive
-
-1. Open the **Cloud Drives** tab
-2. Tap **Add Cloud Drive**
-3. Search for your provider (60+ supported)
-4. Fill in the required credentials
-5. Tap **Save**
-
-For OAuth providers (Google Drive, OneDrive, Dropbox, …) you will be redirected to the provider's login page. The token is stored encrypted on your device.
-
----
-
-## Rclone Bridge
-
-The typed JavaScript service and the local Expo module are autolinked for both
-Android and iOS. The app shell can therefore be generated for both platforms
-without manual edits to Gradle or Xcode.
-
-The in-process rclone engine is not release-ready yet. Both native bridges
-currently reject rclone calls with an explicit `NotImplemented` error. A
-production implementation must package rclone's `librclone/gomobile` output as
-an Android AAR and iOS XCFramework. Executing a binary copied into writable app
-storage is not a supported mobile architecture.
-
----
-
-## Development
-
+### Statische Codeanalyse
 ```bash
-# TypeScript check
-npm run typecheck
+flutter analyze
+```
 
-# Lint
-npm run lint
+### App starten
+```bash
+# Windows Desktop
+flutter run -d windows
 
-# Tests
-npm test
+# iOS Simulator / Gerät
+flutter run -d ios
 
-# E2E (Maestro)
-maestro test e2e/
+# Android Emulator / Gerät
+flutter run -d android
 ```
 
 ---
 
-## CI
-
-GitHub Actions runs on every push:
-- `npm ci`
-- `tsc --noEmit`
-- `eslint . --max-warnings 0`
-- `jest`
-
-Requires Java 21 and Node 22 in the CI environment.
-
----
-
-## Supported Providers
-
-Google Drive · OneDrive · Dropbox · MEGA · Box · pCloud · Yandex Disk · Jottacloud · Koofr · Mail.ru · Zoho WorkDrive · HiDrive · Proton Drive · Filen · PremiumizeMe · Put.io · OpenDrive · SugarSync · Linkbox · PikPak · Ulož.to · Seafile · Citrix ShareFile · Quatrix · FileFabric · Google Photos · Internet Archive · Amazon S3 · Backblaze B2 · Storj · IDrive e2 · Azure Blob Storage · Azure Files · Google Cloud Storage · OpenStack Swift · Oracle Object Storage · Sia · HDFS · SFTP · FTP · FTPS · WebDAV · SMB/CIFS · NFS · Wasabi · Cloudflare R2 · DigitalOcean Spaces · MinIO · Scaleway · Linode · Rackspace · Alibaba OSS · Tencent COS · Huawei OBS · and more via the `s3`-compatible backend
-
----
-
-## License
-
-Private repository — all rights reserved.
+## Lizenz
+MIT License. Erstellt für sichere, dezentrale und unabhängige Datensicherung.

@@ -59,6 +59,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um Fotos und Videos 1:1 in Ihrer Cloud zu sichern.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um wiederhergestellte Medien zu speichern.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

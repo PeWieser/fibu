@@ -97,7 +97,7 @@ class BackupTask {
       syncMode: SyncMode.mirror,
       distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
-      targetFolderName: 'Mediathek',
+      targetFolderName: 'fibu-backup/Photos',
       wifiOnly: true,
     );
   }
@@ -118,7 +118,7 @@ class BackupTask {
       syncMode: SyncMode.incremental,
       distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
-      targetFolderName: 'Fotos',
+      targetFolderName: 'fibu-backup/Photos',
       wifiOnly: true,
     );
   }
@@ -139,7 +139,7 @@ class BackupTask {
       syncMode: SyncMode.incremental,
       distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
-      targetFolderName: 'Dokumente',
+      targetFolderName: 'fibu-backup/Dateien',
       wifiOnly: true,
     );
   }

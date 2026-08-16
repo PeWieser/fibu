@@ -469,6 +469,25 @@ class AppStrings {
       : 'Configure all parameters (source, destination, schedule, mode) manually step-by-step.';
   String get usePresetButton => isGerman ? 'Vorlage anwenden' : 'Apply Preset';
   String get customizeTaskButton => isGerman ? 'Details anpassen' : 'Customize Details';
+
+  // --- 70+ Provider Categories & Progressive Disclosure ---
+  String get popularProvidersHeader => isGerman ? 'Beliebte Cloud-Dienste' : 'Popular Cloud Services';
+  String get allProvidersHeader => isGerman ? 'Alle 70+ Cloud-Dienste' : 'All 70+ Cloud Services';
+  String get categoryCloudStorage => isGerman ? 'Cloud-Speicher' : 'Cloud Storage';
+  String get categoryS3Compatible => isGerman ? 'S3 & Object Storage' : 'S3 & Object Storage';
+  String get categoryEnterprise => isGerman ? 'Enterprise & Native APIs' : 'Enterprise & Native APIs';
+  String get categoryProtocols => isGerman ? 'Server & Protokolle' : 'Servers & Protocols';
+  String get categoryWrappers => isGerman ? 'Verschlüsselung & Wrapper' : 'Encryption & Wrappers';
+  String get advancedSettings => isGerman ? 'Erweiterte Einstellungen' : 'Advanced Settings';
+  String get noMediaPermissionError => isGerman
+      ? 'Zugriff auf Mediathek verweigert. Bitte erlaube den Foto-Zugriff in den iOS-Einstellungen.'
+      : 'Photo library access denied. Please grant photo permission in iOS Settings.';
+  String get networkUnavailableError => isGerman
+      ? 'Keine aktive Internetverbindung vorhanden.'
+      : 'No active internet connection available.';
+  String get cellularSyncBlockedNotice => isGerman
+      ? 'Synchronisierung pausiert: Verbindung über Mobilfunk nicht erlaubt (WLAN erforderlich).'
+      : 'Sync paused: Cellular data connection blocked (Wi-Fi required).';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

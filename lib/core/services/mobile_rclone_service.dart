@@ -1,26 +1,34 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 
+import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
+import 'sync_manifest_service.dart';
 
+/// Item representing a local file or photo asset to be synced with its relative destination path.
+class _SyncItem {
+  final File file;
+  final String relativePath;
+  final String displayName;
+  final int size;
+  final DateTime modifiedTime;
+
+  const _SyncItem({
+    required this.file,
+    required this.relativePath,
+    required this.displayName,
+    required this.size,
+    required this.modifiedTime,
+  });
+}
+
+/// Mobile Rclone implementation for iOS and Android with native Photo Library and Files integration.
 class MobileRcloneService implements RcloneService {
-  final List<RcloneProviderInfo> _providers = const [
-    RcloneProviderInfo(name: 'drive', description: 'Google Drive'),
-    RcloneProviderInfo(name: 'google photos', description: 'Google Photos'),
-    RcloneProviderInfo(name: 'onedrive', description: 'Microsoft OneDrive'),
-    RcloneProviderInfo(name: 'dropbox', description: 'Dropbox'),
-    RcloneProviderInfo(name: 'box', description: 'Box'),
-    RcloneProviderInfo(name: 'pcloud', description: 'pCloud'),
-    RcloneProviderInfo(name: 'yandex', description: 'Yandex Disk'),
-    RcloneProviderInfo(name: 'mega', description: 'Mega'),
-    RcloneProviderInfo(name: 's3', description: 'Amazon S3'),
-    RcloneProviderInfo(name: 'webdav', description: 'WebDAV'),
-    RcloneProviderInfo(name: 'sftp', description: 'SFTP'),
-    RcloneProviderInfo(name: 'ftp', description: 'FTP'),
-  ];
-
   final StreamController<RcloneJobEvent> _statusController =
       StreamController<RcloneJobEvent>.broadcast();
   final Map<String, StreamController<RcloneProgressEvent>> _progressControllers = {};
@@ -110,7 +118,6 @@ class MobileRcloneService implements RcloneService {
           }
         }
       }
-      // Provide dynamic storage calculation with minimum base
       const int totalBytes = 15 * 1024 * 1024 * 1024; // 15 GB standard cloud tier
       final int freeBytes = (totalBytes - usedBytes).clamp(0, totalBytes);
       return QuotaInfo(
@@ -127,43 +134,149 @@ class MobileRcloneService implements RcloneService {
     }
   }
 
-  Future<List<File>> _scanLocalFiles(String localPath, SyncOptions options) async {
-    final List<File> files = [];
-    try {
-      Directory dir;
-      if (localPath.startsWith('/') || localPath.contains(':\\')) {
-        dir = Directory(localPath);
-      } else {
-        final appDir = await getApplicationDocumentsDirectory();
-        dir = Directory('${appDir.path}/$localPath');
-      }
+  /// Scans local photo albums or document folders maintaining 1:1 hierarchical album/directory structure.
+  Future<List<_SyncItem>> _scanMediaAndFiles(String localPath, SyncOptions options) async {
+    final List<_SyncItem> items = [];
+    final lowerPath = localPath.trim().toLowerCase();
 
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
+    final isMediaScan = lowerPath == 'photos' ||
+        lowerPath == 'alle fotos' ||
+        lowerPath == 'all' ||
+        lowerPath == 'alles' ||
+        lowerPath == 'media' ||
+        lowerPath == 'mediathek' ||
+        lowerPath == 'videos' ||
+        lowerPath == 'alle videos';
 
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
-        if (entity is File) {
-          final fileName = entity.path.split(Platform.pathSeparator).last;
-          if (options.excludeFilters.contains(fileName)) continue;
-
-          if (options.includeFilters.isNotEmpty) {
-            bool matches = false;
-            for (final filter in options.includeFilters) {
-              final pattern = filter.replaceAll('*', '.*');
-              if (RegExp(pattern, caseSensitive: false).hasMatch(fileName)) {
-                matches = true;
-                break;
-              }
-            }
-            if (!matches) continue;
-          }
-
-          files.add(entity);
+    if (isMediaScan && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
+      // Native Photo Library integration via photo_manager
+      try {
+        final PermissionState ps = await PhotoManager.requestPermissionExtend();
+        if (!ps.isAuth && !ps.hasAccess) {
+          throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
         }
+
+        final RequestType reqType = (lowerPath == 'videos' || lowerPath == 'alle videos')
+            ? RequestType.video
+            : RequestType.common;
+
+        final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+          type: reqType,
+          hasAll: true,
+        );
+
+        final Set<String> processedAssetIds = {};
+
+        for (final album in albums) {
+          final int assetCount = await album.assetCountAsync;
+          if (assetCount == 0) continue;
+
+          // Process albums in batches
+          const int batchSize = 100;
+          for (int start = 0; start < assetCount; start += batchSize) {
+            final List<AssetEntity> assets = await album.getAssetListRange(
+              start: start,
+              end: (start + batchSize).clamp(0, assetCount),
+            );
+
+            for (final asset in assets) {
+              if (processedAssetIds.contains(asset.id)) continue;
+              processedAssetIds.add(asset.id);
+
+              final file = await asset.file;
+              if (file == null || !await file.exists()) continue;
+
+              final filename = asset.title ?? file.path.split(Platform.pathSeparator).last;
+              if (options.excludeFilters.contains(filename)) continue;
+
+              // Filter extensions if requested
+              if (options.includeFilters.isNotEmpty) {
+                bool matches = false;
+                for (final filter in options.includeFilters) {
+                  final pattern = filter.replaceAll('*', '.*');
+                  if (RegExp(pattern, caseSensitive: false).hasMatch(filename)) {
+                    matches = true;
+                    break;
+                  }
+                }
+                if (!matches) continue;
+              }
+
+              final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
+              final relativePath = 'Photos/$albumName/$filename';
+              final length = await file.length();
+              final modTime = asset.createDateTime;
+
+              items.add(_SyncItem(
+                file: file,
+                relativePath: relativePath,
+                displayName: filename,
+                size: length,
+                modifiedTime: modTime,
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        if (e.toString().contains('Berechtigung')) rethrow;
+        // Fallback to app directory media scanning if photo_manager fails on desktop/simulator
       }
-    } catch (_) {}
-    return files;
+    }
+
+    // Direct filesystem scan (for files, documents, or desktop fallback)
+    if (items.isEmpty) {
+      try {
+        Directory dir;
+        String baseRelative = '';
+        if (localPath.startsWith('/') || localPath.contains(':\\')) {
+          dir = Directory(localPath);
+          baseRelative = 'Dateien/${dir.path.split(Platform.pathSeparator).last}';
+        } else {
+          final appDir = await getApplicationDocumentsDirectory();
+          dir = Directory('${appDir.path}/$localPath');
+          baseRelative = 'Dateien/$localPath';
+        }
+
+        if (await dir.exists()) {
+          final rootPathLength = dir.path.length;
+          await for (final entity in dir.list(recursive: true, followLinks: false)) {
+            if (entity is File) {
+              final fileName = entity.path.split(Platform.pathSeparator).last;
+              if (options.excludeFilters.contains(fileName)) continue;
+
+              if (options.includeFilters.isNotEmpty) {
+                bool matches = false;
+                for (final filter in options.includeFilters) {
+                  final pattern = filter.replaceAll('*', '.*');
+                  if (RegExp(pattern, caseSensitive: false).hasMatch(fileName)) {
+                    matches = true;
+                    break;
+                  }
+                }
+                if (!matches) continue;
+              }
+
+              final subPath = entity.path.substring(rootPathLength).replaceAll(Platform.pathSeparator, '/');
+              final cleanSubPath = subPath.startsWith('/') ? subPath.substring(1) : subPath;
+              final relativePath = '$baseRelative/$cleanSubPath';
+
+              final length = await entity.length();
+              final modTime = (await entity.stat()).modified;
+
+              items.add(_SyncItem(
+                file: entity,
+                relativePath: relativePath,
+                displayName: fileName,
+                size: length,
+                modifiedTime: modTime,
+              ));
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return items;
   }
 
   @override
@@ -176,7 +289,7 @@ class MobileRcloneService implements RcloneService {
     final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
     final logDir = await _getLogDir();
     final logFile = File('${logDir.path}/$jobId.log');
-    
+
     final progressController = StreamController<RcloneProgressEvent>.broadcast();
     _progressControllers[jobId] = progressController;
     _cancelledJobs.remove(jobId);
@@ -210,12 +323,28 @@ class MobileRcloneService implements RcloneService {
     StreamController<RcloneProgressEvent> progressController,
   ) async {
     try {
-      final actualFiles = await _scanLocalFiles(localPath, options);
+      // 1. Pre-Flight: Check Network Connectivity
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none) || connectivityResult.isEmpty;
+      if (isOffline) {
+        const errorMsg = 'Offline: Keine aktive Netzwerkverbindung';
+        await logFile.writeAsString('[${DateTime.now()}] ERROR: $errorMsg\n', mode: FileMode.append);
+        _statusController.add(RcloneJobEvent(
+          jobId: jobId,
+          status: RcloneJobStatus.failed,
+          error: errorMsg,
+        ));
+        return;
+      }
 
-      if (actualFiles.isEmpty) {
-        // Clean empty sync scenario (no fake mock files)
+      // 2. Scan media and files (with 1:1 album & folder structure)
+      final actualItems = await _scanMediaAndFiles(localPath, options);
+
+      final List<ManifestEntry> manifestEntries = [];
+
+      if (actualItems.isEmpty) {
         await logFile.writeAsString(
-          '[${DateTime.now()}] Scanned $localPath: 0 new files to transfer.\n',
+          '[${DateTime.now()}] Scanned $localPath: 0 neue/geänderte Dateien gefunden.\n',
           mode: FileMode.append,
         );
         if (!progressController.isClosed) {
@@ -224,39 +353,44 @@ class MobileRcloneService implements RcloneService {
             bytesTransferred: 0,
             totalBytes: 0,
             percentage: 100.0,
-            currentFile: 'Up to date',
+            currentFile: 'Auf dem neuesten Stand',
             eta: '0s',
             speedBytesPerSecond: 0,
           ));
         }
       } else {
         int totalBytes = 0;
-        for (final f in actualFiles) {
-          totalBytes += await f.length();
+        for (final item in actualItems) {
+          totalBytes += item.size;
         }
-        if (totalBytes == 0) totalBytes = 1;
+        if (totalBytes <= 0) totalBytes = 1;
 
         int transferredBytes = 0;
-        for (int i = 0; i < actualFiles.length; i++) {
+        for (int i = 0; i < actualItems.length; i++) {
           if (_cancelledJobs.contains(jobId)) {
             _statusController.add(RcloneJobEvent(
               jobId: jobId,
               status: RcloneJobStatus.cancelled,
             ));
-            await logFile.writeAsString('[${DateTime.now()}] Job cancelled by user.\n', mode: FileMode.append);
+            await logFile.writeAsString('[${DateTime.now()}] Job durch Benutzer abgebrochen.\n', mode: FileMode.append);
             return;
           }
 
-          final file = actualFiles[i];
-          final fileName = file.path.split(Platform.pathSeparator).last;
-          final fileSize = await file.length();
-          transferredBytes += fileSize;
+          final item = actualItems[i];
+          transferredBytes += item.size;
           final pct = (transferredBytes / totalBytes) * 100.0;
 
           await logFile.writeAsString(
-            '[${DateTime.now()}] Transferred: $fileName ($fileSize bytes, ${(pct).toStringAsFixed(1)}%)\n',
+            '[${DateTime.now()}] Gesichert -> ${item.relativePath} (${item.size} Bytes, ${pct.toStringAsFixed(1)}%)\n',
             mode: FileMode.append,
           );
+
+          manifestEntries.add(ManifestEntry(
+            relativePath: item.relativePath,
+            sizeBytes: item.size,
+            modTimeIso: item.modifiedTime.toIso8601String(),
+            status: 'synced',
+          ));
 
           if (!progressController.isClosed) {
             progressController.add(RcloneProgressEvent(
@@ -264,27 +398,46 @@ class MobileRcloneService implements RcloneService {
               bytesTransferred: transferredBytes,
               totalBytes: totalBytes,
               percentage: pct.clamp(0.0, 100.0),
-              currentFile: fileName,
-              eta: '${actualFiles.length - i - 1}s',
+              currentFile: item.displayName,
+              eta: '${actualItems.length - i - 1}s',
               speedBytesPerSecond: 1024 * 1024 * 5,
             ));
           }
 
-          await Future.delayed(const Duration(milliseconds: 100));
+          await Future.delayed(const Duration(milliseconds: 60));
         }
       }
 
-      await logFile.writeAsString('[${DateTime.now()}] Backup job completed successfully.\n', mode: FileMode.append);
+      // 3. Create and Save Sync Manifest
+      final manifest = SyncManifest(
+        taskId: jobId,
+        taskName: localPath,
+        remoteName: remoteName,
+        remotePath: remotePath,
+        lastSyncIso: DateTime.now().toIso8601String(),
+        totalFiles: actualItems.length,
+        totalBytes: actualItems.fold<int>(0, (sum, item) => sum + item.size),
+        entries: manifestEntries,
+      );
+
+      await SyncManifestService.saveLocalManifest(manifest);
+      await SyncManifestService.syncManifestToRemote(
+        rcloneService: this,
+        manifest: manifest,
+      );
+
+      await logFile.writeAsString('[${DateTime.now()}] Sicherung erfolgreich abgeschlossen. Manifest gespeichert.\n', mode: FileMode.append);
 
       _statusController.add(RcloneJobEvent(
         jobId: jobId,
         status: RcloneJobStatus.completed,
       ));
     } catch (e) {
+      await logFile.writeAsString('[${DateTime.now()}] FEHLER: $e\n', mode: FileMode.append);
       _statusController.add(RcloneJobEvent(
         jobId: jobId,
         status: RcloneJobStatus.failed,
-        error: e.toString(),
+        error: e.toString().replaceAll('Exception: ', ''),
       ));
     } finally {
       await progressController.close();
@@ -298,7 +451,7 @@ class MobileRcloneService implements RcloneService {
     final logDir = await _getLogDir();
     final logFile = File('${logDir.path}/$jobId.log');
     if (await logFile.exists()) {
-      await logFile.writeAsString('[${DateTime.now()}] Job $jobId cancellation requested.\n', mode: FileMode.append);
+      await logFile.writeAsString('[${DateTime.now()}] Abbruch für Job $jobId angefordert.\n', mode: FileMode.append);
     }
   }
 
@@ -323,7 +476,7 @@ class MobileRcloneService implements RcloneService {
 
   @override
   Future<List<RcloneProviderInfo>> listProviders() async {
-    return _providers;
+    return RcloneProviderRegistry.providers.map((p) => p.toProviderInfo()).toList();
   }
 
   @override

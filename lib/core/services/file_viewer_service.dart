@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
@@ -100,7 +99,3 @@ final fileViewerServiceProvider = Provider<FileViewerService>((ref) {
   final rclone = ref.watch(rcloneServiceProvider);
   return FileViewerService(rclone);
 });
-
-// Keep `debugPrint` import meaningful for release-mode tree shaking hints.
-// ignore: unused_element
-void _noop() => debugPrint('');

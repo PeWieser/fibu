@@ -57,6 +57,8 @@ void main() {
         // Tap on Fuyu (Winter) palette card in the Dark row
         final fuyuFinder = find.text('Fuyu (Winter)');
         expect(fuyuFinder, findsOneWidget);
+        await tester.ensureVisible(fuyuFinder);
+        await tester.pumpAndSettle();
         await tester.tap(fuyuFinder);
         await tester.pumpAndSettle();
 
@@ -66,6 +68,8 @@ void main() {
         // Tap on System Light card to revert light palette
         final standardLightFinder = find.text('System Light');
         expect(standardLightFinder, findsOneWidget);
+        await tester.ensureVisible(standardLightFinder);
+        await tester.pumpAndSettle();
         await tester.tap(standardLightFinder);
         await tester.pumpAndSettle();
         

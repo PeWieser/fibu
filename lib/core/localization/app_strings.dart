@@ -488,6 +488,45 @@ class AppStrings {
   String get cellularSyncBlockedNotice => isGerman
       ? 'Synchronisierung pausiert: Verbindung über Mobilfunk nicht erlaubt (WLAN erforderlich).'
       : 'Sync paused: Cellular data connection blocked (Wi-Fi required).';
+
+  // --- About / Über Section & System Language ---
+  String get systemLanguage => isGerman ? 'System (Automatisch)' : 'System (Automatic)';
+  String get systemLanguageSubtitle => isGerman
+      ? 'Verwendet die Sprache der iOS-/Systemeinstellungen'
+      : 'Follows iOS/System language settings';
+  String get aboutSectionTitle => isGerman ? 'Über Fibu' : 'About Fibu';
+  String get aboutAppTitle => isGerman ? 'Über Fibu' : 'About Fibu';
+  String get aboutAppSubtitle => isGerman
+      ? 'Multi-Cloud-Backup & Mediathek-Spiegelung'
+      : 'Multi-Cloud Backup & Media Library Mirror';
+  String get appVersionLabel => isGerman ? 'Version' : 'Version';
+  String get appVersionValue => '1.0.0 (Build 1)';
+  String get developerLabel => isGerman ? 'Entwickler' : 'Developer';
+  String get developerValue => 'Fibu Open Source Team';
+  String get cloudEngineLabel => isGerman ? 'Cloud-Engine' : 'Cloud Engine';
+  String get cloudEngineValue => 'rclone (70+ Provider)';
+  String get licenseLabel => isGerman ? 'Lizenz' : 'License';
+  String get licenseValue => 'MIT License';
+  String get aboutDescription => isGerman
+      ? 'Fibu ist eine dezentrale, plattformadaptive Multi-Cloud-Backup-App für iOS, Android und Windows. Deine Daten bleiben stets unter deiner Kontrolle — ohne Zwischenserver.'
+      : 'Fibu is a decentralized, platform-adaptive multi-cloud backup app for iOS, Android, and Windows. Your data remains entirely under your control — no intermediary servers.';
+
+  // --- Task Details & Actions ---
+  String get taskDetailsTitle => isGerman ? 'Aufgaben-Details' : 'Task Details';
+  String get statusActive => isGerman ? 'Aktiv' : 'Active';
+  String get statusInactive => isGerman ? 'Inaktiv' : 'Inactive';
+  String get syncTaskNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';
+  String get syncTriggeredSuccess => isGerman ? 'Synchronisierung wurde gestartet' : 'Sync started successfully';
+  String get swipeToDelete => isGerman ? 'Wischen zum Löschen' : 'Swipe to delete';
+  String get generalSection => isGerman ? 'Allgemein' : 'General';
+  String get sourceAndTargetSection => isGerman ? 'Quelle & Ziel' : 'Source & Destination';
+  String get syncSettingsSection => isGerman ? 'Synchronisation' : 'Synchronization';
+  String get scheduleAndNetworkSection => isGerman ? 'Zeitplan & Netzwerk' : 'Schedule & Network';
+  String get targetFolderLabel => isGerman ? 'Zielordner' : 'Destination Folder';
+  String get distributionLabel => isGerman ? 'Verteilung' : 'Distribution';
+  String get excludedFilesLabel => isGerman ? 'Dateifilter' : 'File Filters';
+  String get noExcludedFiles => isGerman ? 'Keine (Alle Dateien)' : 'None (All files)';
+  String get dangerZone => isGerman ? 'Aktionen' : 'Actions';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

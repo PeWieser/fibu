@@ -10,6 +10,7 @@ import '../../../theme/theme.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/localization/app_strings.dart';
 import 'tasks_controller.dart';
+import 'task_detail_screen.dart';
 
 /// Platform-adaptive Tasks and Backup Jobs screen.
 /// Renders layout dynamically based on current platform:
@@ -53,7 +54,7 @@ class TasksScreen extends ConsumerWidget {
             fluent.CommandBarButton(
               icon: Icon(fluent.FluentIcons.add, semanticLabel: strings.addTask),
               label: Text(strings.addTask),
-              onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.windows),
+              onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.windows),
             ),
           ],
         ),
@@ -63,132 +64,62 @@ class TasksScreen extends ConsumerWidget {
           : ListView.separated(
               padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
               itemCount: tasks.length,
-              separatorBuilder: (_, __) => SizedBox(height: theme.md),
+              separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
                 final task = tasks[index];
                 return MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: fluent.Card(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(top: theme.xs),
-                          child: Icon(
-                            fluent.FluentIcons.task_manager,
-                            size: 28,
-                            color: theme.accent,
-                            semanticLabel: strings.tasksTitle,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          fluent.FluentPageRoute(
+                            builder: (_) => TaskDetailScreen(taskId: task.id),
                           ),
-                        ),
-                        SizedBox(width: theme.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
+                        );
+                      },
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: Row(
+                          children: [
+                            Icon(
+                              fluent.FluentIcons.task_manager,
+                              size: 20,
+                              color: theme.accent,
+                              semanticLabel: strings.tasksTitle,
+                            ),
+                            SizedBox(width: theme.md),
+                            Expanded(
+                              child: Text(
                                 task.name,
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
-                              SizedBox(height: theme.xs),
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: '${strings.sourcePrefix} ',
-                                      style: TextStyle(
-                                        color: theme.textSecondary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: _formatSourcePath(strings, task.sourcePath),
-                                      style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                                    ),
-                                  ],
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
+                              decoration: BoxDecoration(
+                                color: (task.isActive ? theme.accent : theme.textSecondary).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(theme.radiusSm),
+                              ),
+                              child: Text(
+                                task.isActive ? strings.statusActive : strings.statusInactive,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: task.isActive ? theme.accent : theme.textSecondary,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              SizedBox(height: theme.xs / 2),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: theme.xs,
-                                runSpacing: theme.xs / 2,
-                                children: [
-                                  Text(
-                                    '${strings.destinationPrefix} ',
-                                    style: TextStyle(
-                                      color: theme.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  _buildRemoteChips(context, theme, task.targetRemotes),
-                                  Text(
-                                    '(${_formatTargetFolder(strings, task)})',
-                                    style: TextStyle(color: theme.textSecondary, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: theme.sm),
-                              Wrap(
-                                spacing: theme.sm,
-                                runSpacing: theme.xs,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  _buildSyncModeBadge(context, theme, strings, task.syncMode),
-                                  if (task.targetRemotes.length > 1)
-                                    _buildDistributionBadge(context, theme, strings, task.distributionStrategy),
-                                  _buildScheduleBadge(context, theme, strings, task),
-                                  if (task.excludedFiles.isNotEmpty)
-                                    _buildExcludedFilesBadge(context, theme, strings, task.excludedFiles),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: theme.md),
-                        SizedBox(
-                          height: 44,
-                          child: fluent.ToggleSwitch(
-                            checked: task.isActive,
-                            content: Text(task.isActive ? strings.active : strings.paused),
-                            onChanged: (_) {
-                              ref.read(tasksListProvider.notifier).toggleTaskActive(task.id);
-                            },
-                          ),
-                        ),
-                        SizedBox(width: theme.lg),
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: fluent.IconButton(
-                              icon: Icon(fluent.FluentIcons.edit, semanticLabel: strings.editTask),
-                              onPressed: () => _showAddEditTaskDialog(context, ref, task, TargetPlatform.windows),
                             ),
-                          ),
-                        ),
-                        SizedBox(width: theme.xs),
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: fluent.IconButton(
-                              icon: Icon(
-                                fluent.FluentIcons.delete,
-                                color: theme.error,
-                                semanticLabel: strings.deleteTask,
-                              ),
-                              onPressed: () => _confirmDeleteTask(context, ref, task, TargetPlatform.windows),
+                            SizedBox(width: theme.md),
+                            Icon(
+                              fluent.FluentIcons.chevron_right,
+                              size: 12,
+                              color: theme.textSecondary,
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -198,7 +129,7 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // IOS (Cupertino UI)
+  // IOS (Cupertino UI in Apple Minimalist Style)
   // =========================================================================
   Widget _buildIOS(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
@@ -213,7 +144,7 @@ class TasksScreen extends ConsumerWidget {
           height: 44,
           child: cupertino.CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS),
+            onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS),
             child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
           ),
         ),
@@ -222,103 +153,55 @@ class TasksScreen extends ConsumerWidget {
         child: tasks.isEmpty
             ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
             : SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(0, 0, 16, theme.lg),
+                padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
                 child: cupertino.CupertinoListSection.insetGrouped(
-                  header: Text(strings.backupJobsHeader),
                   children: tasks.map((task) {
-                    return cupertino.CupertinoListTile.notched(
-                      title: Text(task.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            '${strings.sourcePrefix} ${_formatSourcePath(strings, task.sourcePath)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: theme.xs,
-                            runSpacing: theme.xs / 2,
-                            children: [
-                              Text(
-                                '${strings.destinationPrefix} ',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                              _buildRemoteChips(context, theme, task.targetRemotes),
-                              Text(
-                                '(${_formatTargetFolder(strings, task)})',
-                                style: TextStyle(color: theme.textSecondary, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: theme.xs),
-                          Wrap(
-                            spacing: theme.sm,
-                            runSpacing: theme.xs,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _buildSyncModeBadge(context, theme, strings, task.syncMode),
-                              if (task.targetRemotes.length > 1)
-                                _buildDistributionBadge(context, theme, strings, task.distributionStrategy),
-                              _buildScheduleBadge(context, theme, strings, task),
-                              if (task.excludedFiles.isNotEmpty)
-                                _buildExcludedFilesBadge(context, theme, strings, task.excludedFiles),
-                            ],
-                          ),
-                        ],
+                    return Dismissible(
+                      key: ValueKey(task.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: theme.error,
+                        child: const Icon(
+                          cupertino.CupertinoIcons.trash,
+                          color: cupertino.CupertinoColors.white,
+                          size: 22,
+                        ),
                       ),
-                      leading: Icon(
-                        cupertino.CupertinoIcons.list_bullet_indent,
-                        color: theme.accent,
-                        semanticLabel: strings.tasksTitle,
-                      ),
-                      additionalInfo: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: Center(
-                              child: cupertino.CupertinoSwitch(
-                                value: task.isActive,
-                                onChanged: (_) {
-                                  ref.read(tasksListProvider.notifier).toggleTaskActive(task.id);
-                                },
-                              ),
-                            ),
+                      confirmDismiss: (_) async {
+                        return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
+                      },
+                      child: cupertino.CupertinoListTile.notched(
+                        leading: Icon(
+                          cupertino.CupertinoIcons.folder_fill,
+                          color: theme.accent,
+                          size: 22,
+                          semanticLabel: task.name,
+                        ),
+                        title: Text(
+                          task.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                        additionalInfo: Text(
+                          task.isActive ? strings.statusActive : strings.statusInactive,
+                          style: TextStyle(
+                            color: task.isActive ? theme.accent : theme.textSecondary,
+                            fontSize: 14,
                           ),
-                          SizedBox(width: theme.xs),
-                          SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: cupertino.CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () => _showAddEditTaskDialog(context, ref, task, TargetPlatform.iOS),
-                              child: Icon(
-                                cupertino.CupertinoIcons.pencil_circle,
-                                color: theme.accent,
-                                semanticLabel: strings.editTask,
-                              ),
+                        ),
+                        trailing: const Icon(
+                          cupertino.CupertinoIcons.chevron_forward,
+                          size: 18,
+                          color: cupertino.CupertinoColors.inactiveGray,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            cupertino.CupertinoPageRoute(
+                              builder: (_) => TaskDetailScreen(taskId: task.id),
                             ),
-                          ),
-                          SizedBox(width: theme.xs),
-                          SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: cupertino.CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () => _confirmDeleteTask(context, ref, task, TargetPlatform.iOS),
-                              child: Icon(
-                                cupertino.CupertinoIcons.trash_circle,
-                                color: theme.error,
-                                semanticLabel: strings.deleteTask,
-                              ),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     );
                   }).toList(),
@@ -329,7 +212,7 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // ANDROID (Material 3 UI)
+  // ANDROID (Material 3 UI in Minimalist Style)
   // =========================================================================
   Widget _buildAndroid(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
@@ -343,105 +226,61 @@ class TasksScreen extends ConsumerWidget {
       body: tasks.isEmpty
           ? _buildEmptyState(context, ref, TargetPlatform.android, theme, strings)
           : ListView.separated(
-              padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
+              padding: EdgeInsets.all(theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
                 final task = tasks[index];
-                return material.Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(theme.radiusLg),
-                    side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+                return Dismissible(
+                  key: ValueKey(task.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    decoration: BoxDecoration(
+                      color: theme.error,
+                      borderRadius: BorderRadius.circular(theme.radiusLg),
+                    ),
+                    child: const Icon(
+                      material.Icons.delete_outline,
+                      color: material.Colors.white,
+                      size: 24,
+                    ),
                   ),
-                  child: material.ListTile(
-                    leading: Icon(
-                      material.Icons.backup_outlined,
-                      color: theme.accent,
-                      semanticLabel: strings.tasksTitle,
+                  confirmDismiss: (_) async {
+                    return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.android);
+                  },
+                  child: material.Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(theme.radiusLg),
+                      side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
                     ),
-                    title: Text(task.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(height: theme.xs),
-                        Text('${strings.sourcePrefix} ${_formatSourcePath(strings, task.sourcePath)}'),
-                        SizedBox(height: theme.xs / 2),
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: theme.xs,
-                          runSpacing: theme.xs / 2,
-                          children: [
-                            Text(
-                              '${strings.destinationPrefix} ',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                            _buildRemoteChips(context, theme, task.targetRemotes),
-                            Text(
-                              '(${_formatTargetFolder(strings, task)})',
-                              style: TextStyle(color: theme.textSecondary, fontSize: 11),
-                            ),
-                          ],
+                    child: material.ListTile(
+                      leading: Icon(
+                        material.Icons.backup_outlined,
+                        color: theme.accent,
+                        semanticLabel: strings.tasksTitle,
+                      ),
+                      title: Text(task.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(
+                        task.isActive ? strings.statusActive : strings.statusInactive,
+                        style: TextStyle(
+                          color: task.isActive ? theme.accent : theme.textSecondary,
+                          fontSize: 12,
                         ),
-                        SizedBox(height: theme.xs),
-                        Wrap(
-                          spacing: theme.sm,
-                          runSpacing: theme.xs,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            _buildSyncModeBadge(context, theme, strings, task.syncMode),
-                            if (task.targetRemotes.length > 1)
-                              _buildDistributionBadge(context, theme, strings, task.distributionStrategy),
-                            _buildScheduleBadge(context, theme, strings, task),
-                            if (task.excludedFiles.isNotEmpty)
-                              _buildExcludedFilesBadge(context, theme, strings, task.excludedFiles),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: Center(
-                            child: material.Switch(
-                              value: task.isActive,
-                              onChanged: (_) {
-                                ref.read(tasksListProvider.notifier).toggleTaskActive(task.id);
-                              },
-                            ),
+                      ),
+                      trailing: Icon(
+                        material.Icons.chevron_right,
+                        color: theme.textSecondary,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          material.MaterialPageRoute(
+                            builder: (_) => TaskDetailScreen(taskId: task.id),
                           ),
-                        ),
-                        SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: material.PopupMenuButton<String>(
-                            icon: Icon(
-                              material.Icons.more_vert,
-                              semanticLabel: strings.editTask,
-                            ),
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _showAddEditTaskDialog(context, ref, task, TargetPlatform.android);
-                              } else if (value == 'delete') {
-                                _confirmDeleteTask(context, ref, task, TargetPlatform.android);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              material.PopupMenuItem(
-                                value: 'edit',
-                                child: Text(strings.editTask),
-                              ),
-                              material.PopupMenuItem(
-                                value: 'delete',
-                                child: Text(strings.deleteTask, style: TextStyle(color: theme.error)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 );
@@ -453,7 +292,7 @@ class TasksScreen extends ConsumerWidget {
         child: material.FloatingActionButton(
           tooltip: strings.addTask,
           backgroundColor: theme.accent,
-          onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
+          onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
           child: const Icon(material.Icons.add, color: Color(0xFFFFFFFF), semanticLabel: 'Add Task'),
         ),
       ),
@@ -559,305 +398,6 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // REMOTE CHIPS (Multiple Cloud Remotes Tags)
-  // =========================================================================
-  Widget _buildRemoteChips(
-    BuildContext context,
-    AppThemeData theme,
-    List<String> remotes,
-  ) {
-    if (remotes.isEmpty) return const SizedBox.shrink();
-
-    final IconData cloudIcon;
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      cloudIcon = fluent.FluentIcons.cloud;
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      cloudIcon = cupertino.CupertinoIcons.cloud_fill;
-    } else {
-      cloudIcon = material.Icons.cloud_outlined;
-    }
-
-    return Wrap(
-      spacing: theme.xs,
-      runSpacing: theme.xs / 2,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: remotes.map((remote) {
-        final cleanName = remote.split(':').first;
-        return Container(
-          padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs / 3),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(theme.radiusSm),
-            border: Border.all(color: theme.textSecondary.withValues(alpha: 0.25), width: 1),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                cloudIcon,
-                size: 11,
-                color: theme.accent,
-                semanticLabel: cleanName,
-              ),
-              SizedBox(width: theme.xs / 2),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 120),
-                child: Text(
-                  cleanName,
-                  style: TextStyle(
-                    color: theme.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // =========================================================================
-  // DISTRIBUTION STRATEGY BADGE
-  // =========================================================================
-  Widget _buildDistributionBadge(
-    BuildContext context,
-    AppThemeData theme,
-    AppStrings strings,
-    DistributionStrategy strategy,
-  ) {
-    final isMirrorAll = strategy == DistributionStrategy.mirrorAll;
-    final badgeColor = theme.accent;
-    final labelText = isMirrorAll ? strings.distributionBadgeMirrorAll : strings.distributionBadgeBalance;
-    final tooltipText = isMirrorAll ? strings.distributionMirrorAllDesc : strings.distributionBalanceDesc;
-
-    final IconData badgeIcon;
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      badgeIcon = isMirrorAll ? fluent.FluentIcons.copy : fluent.FluentIcons.split;
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      badgeIcon = isMirrorAll ? cupertino.CupertinoIcons.square_on_square : cupertino.CupertinoIcons.arrow_branch;
-    } else {
-      badgeIcon = isMirrorAll ? material.Icons.content_copy : material.Icons.alt_route;
-    }
-
-    final child = Container(
-      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-      decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            badgeIcon,
-            size: 11,
-            color: badgeColor,
-            semanticLabel: labelText,
-          ),
-          SizedBox(width: theme.xs),
-          Text(
-            labelText,
-            style: TextStyle(
-              color: theme.textPrimary,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return Semantics(
-        label: tooltipText,
-        child: GestureDetector(
-          onTap: () {
-            // Optional: Provide a small haptic or visual feedback
-          },
-          child: child,
-        ),
-      );
-    }
-
-    return material.Tooltip(
-      message: tooltipText,
-      waitDuration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.5), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: theme.canvas.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      textStyle: TextStyle(
-        color: theme.textPrimary,
-        fontSize: 11,
-        fontWeight: FontWeight.normal,
-      ),
-      child: child,
-    );
-  }
-
-  // =========================================================================
-  // SYNC MODE BADGE (Incremental vs Mirror/Echo)
-  // =========================================================================
-  Widget _buildSyncModeBadge(
-    BuildContext context,
-    AppThemeData theme,
-    AppStrings strings,
-    SyncMode mode,
-  ) {
-    final isMirror = mode == SyncMode.mirror;
-    final badgeColor = isMirror ? theme.warning : theme.accent;
-    final labelText = isMirror ? strings.syncModeBadgeMirror : strings.syncModeBadgeIncremental;
-    final tooltipText = isMirror ? strings.syncModeTooltipMirror : strings.syncModeTooltipIncremental;
-
-    final IconData badgeIcon;
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      badgeIcon = isMirror ? fluent.FluentIcons.warning : fluent.FluentIcons.sync;
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      badgeIcon = isMirror ? cupertino.CupertinoIcons.exclamationmark_triangle_fill : cupertino.CupertinoIcons.arrow_2_circlepath;
-    } else {
-      badgeIcon = isMirror ? material.Icons.warning_amber_rounded : material.Icons.sync;
-    }
-
-    final child = Container(
-      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-      decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            badgeIcon,
-            size: 11,
-            color: badgeColor,
-            semanticLabel: labelText,
-          ),
-          SizedBox(width: theme.xs),
-          Text(
-            labelText,
-            style: TextStyle(
-              color: isMirror ? theme.warning : theme.textPrimary,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return Semantics(
-        label: tooltipText,
-        child: GestureDetector(
-          onTap: () {},
-          child: child,
-        ),
-      );
-    }
-
-    return material.Tooltip(
-      message: tooltipText,
-      waitDuration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.5), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: theme.canvas.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      textStyle: TextStyle(
-        color: theme.textPrimary,
-        fontSize: 11,
-        fontWeight: FontWeight.normal,
-      ),
-      child: child,
-    );
-  }
-
-  // =========================================================================
-  // SCHEDULE BADGE
-  // =========================================================================
-  Widget _buildScheduleBadge(
-    BuildContext context,
-    AppThemeData theme,
-    AppStrings strings,
-    BackupTask task,
-  ) {
-    final scheduleText = _formatScheduleDescription(strings, task);
-    final child = Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: theme.sm,
-        vertical: theme.xs / 2,
-      ),
-      decoration: BoxDecoration(
-        color: theme.accent.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-      ),
-      child: Text(
-        scheduleText,
-        style: TextStyle(
-          color: theme.textPrimary,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return Semantics(
-        label: strings.tooltipSchedule,
-        child: GestureDetector(
-          onTap: () {},
-          child: child,
-        ),
-      );
-    }
-
-    return material.Tooltip(
-      message: strings.tooltipSchedule,
-      waitDuration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: theme.textSecondary.withValues(alpha: 0.3), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: theme.canvas.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      textStyle: TextStyle(
-        color: theme.textPrimary,
-        fontSize: 11,
-        fontWeight: FontWeight.normal,
-      ),
-      child: child,
-    );
-  }
-
-  // =========================================================================
   // CONTEXTUAL INFO TOOLTIP (ℹ️)
   // =========================================================================
   static Widget _buildInfoTooltip(
@@ -922,104 +462,44 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // EXCLUDED FILES BADGE INDICATOR
-  // =========================================================================
-  Widget _buildExcludedFilesBadge(
-    BuildContext context,
-    AppThemeData theme,
-    AppStrings strings,
-    List<String> excludedFiles,
-  ) {
-    if (excludedFiles.isEmpty) return const SizedBox.shrink();
-
-    final count = excludedFiles.length;
-    final tooltipText = '${strings.excludedFilesTooltip(count)}:\n${excludedFiles.map((f) => '• $f').join('\n')}';
-
-    final IconData badgeIcon;
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      badgeIcon = fluent.FluentIcons.blocked;
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      badgeIcon = cupertino.CupertinoIcons.minus_circle;
-    } else {
-      badgeIcon = material.Icons.filter_alt_outlined;
-    }
-
-    final child = Container(
-      padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-      decoration: BoxDecoration(
-        color: theme.warning.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: theme.warning.withValues(alpha: 0.35), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            badgeIcon,
-            size: 11,
-            color: theme.warning,
-            semanticLabel: strings.excludedFilesTooltip(count),
-          ),
-          SizedBox(width: theme.xs),
-          Text(
-            strings.excludedFilesBadge(count),
-            style: TextStyle(
-              color: theme.textPrimary,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return Semantics(
-        label: tooltipText,
-        child: GestureDetector(
-          onTap: () {},
-          child: child,
-        ),
-      );
-    }
-
-    return material.Tooltip(
-      message: tooltipText,
-      waitDuration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: theme.warning.withValues(alpha: 0.5), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: theme.canvas.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      textStyle: TextStyle(
-        color: theme.textPrimary,
-        fontSize: 11,
-        fontWeight: FontWeight.normal,
-      ),
-      child: child,
-    );
-  }
-
-  // =========================================================================
   // DESTRUCTIVE ACTION CONFIRMATION DIALOG (Rule 6 Guard)
   // =========================================================================
-  void _confirmDeleteTask(BuildContext context, WidgetRef ref, BackupTask task, TargetPlatform platform) {
+  Future<bool> _confirmDeleteTaskAsync(BuildContext context, WidgetRef ref, BackupTask task, TargetPlatform platform) async {
     final strings = ref.read(stringsProvider);
     final theme = context.theme;
     final title = strings.deleteTaskConfirmTitle;
     final message = '${strings.deleteTaskPrompt(task.name)}\n\n${strings.deleteTaskRule6Notice}';
 
-    if (platform == TargetPlatform.windows) {
-      fluent.showDialog(
+    if (platform == TargetPlatform.iOS) {
+      final result = await cupertino.showCupertinoDialog<bool>(
         context: context,
-        builder: (context) => fluent.ContentDialog(
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          title: Text(title),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(message),
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              child: Text(strings.cancel),
+              onPressed: () => Navigator.pop(dialogCtx, false),
+            ),
+            cupertino.CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () {
+                ref.read(tasksListProvider.notifier).removeTask(task.id);
+                Navigator.pop(dialogCtx, true);
+              },
+              child: Text(strings.delete),
+            ),
+          ],
+        ),
+      );
+      return result ?? false;
+    } else if (platform == TargetPlatform.windows) {
+      final result = await fluent.showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
           title: fluent.Text(title),
           content: Text(message),
           actions: [
@@ -1029,7 +509,7 @@ class TasksScreen extends ConsumerWidget {
               ),
               onPressed: () {
                 ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(context);
+                Navigator.pop(dialogCtx, true);
               },
               child: Text(
                 strings.delete,
@@ -1037,46 +517,22 @@ class TasksScreen extends ConsumerWidget {
               ),
             ),
             fluent.Button(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx, false),
               child: Text(strings.cancel),
             ),
           ],
         ),
       );
-    } else if (platform == TargetPlatform.iOS) {
-      cupertino.showCupertinoDialog(
-        context: context,
-        builder: (context) => cupertino.CupertinoAlertDialog(
-          title: Text(title),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(message),
-          ),
-          actions: [
-            cupertino.CupertinoDialogAction(
-              isDestructiveAction: true,
-              onPressed: () {
-                ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(context);
-              },
-              child: Text(strings.delete),
-            ),
-            cupertino.CupertinoDialogAction(
-              onPressed: () => Navigator.pop(context),
-              child: Text(strings.cancel),
-            ),
-          ],
-        ),
-      );
+      return result ?? false;
     } else {
-      material.showDialog(
+      final result = await material.showDialog<bool>(
         context: context,
-        builder: (context) => material.AlertDialog(
+        builder: (dialogCtx) => material.AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             material.TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx, false),
               child: Text(strings.cancel),
             ),
             material.FilledButton(
@@ -1085,7 +541,7 @@ class TasksScreen extends ConsumerWidget {
               ),
               onPressed: () {
                 ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(context);
+                Navigator.pop(dialogCtx, true);
               },
               child: Text(
                 strings.delete,
@@ -1095,6 +551,7 @@ class TasksScreen extends ConsumerWidget {
           ],
         ),
       );
+      return result ?? false;
     }
   }
 
@@ -1107,32 +564,7 @@ class TasksScreen extends ConsumerWidget {
     BackupTask? existingTask,
     TargetPlatform platform,
   ) {
-    if (platform == TargetPlatform.windows) {
-      fluent.showDialog(
-        context: context,
-        builder: (dialogCtx) => TaskWizardDialog(
-          existingTask: existingTask,
-          platform: TargetPlatform.windows,
-        ),
-      );
-    } else if (platform == TargetPlatform.iOS) {
-      cupertino.showCupertinoModalPopup(
-        context: context,
-        barrierDismissible: true,
-        builder: (sheetCtx) => TaskWizardDialog(
-          existingTask: existingTask,
-          platform: TargetPlatform.iOS,
-        ),
-      );
-    } else {
-      material.showDialog(
-        context: context,
-        builder: (dialogCtx) => TaskWizardDialog(
-          existingTask: existingTask,
-          platform: TargetPlatform.android,
-        ),
-      );
-    }
+    showAddEditTaskDialog(context, ref, existingTask, platform);
   }
 
   void showTaskDialog(
@@ -1210,32 +642,6 @@ class TasksScreen extends ConsumerWidget {
         return key;
     }
   }
-
-  static String _formatSourcePath(AppStrings strings, String rawPath) {
-    if (rawPath == 'all' || rawPath == 'Alles') return strings.allMedia;
-    if (rawPath == 'photos' || rawPath == 'Alle Fotos') return strings.allPhotos;
-    if (rawPath == 'videos' || rawPath == 'Alle Videos') return strings.allVideos;
-    return rawPath;
-  }
-
-  static String _formatTargetFolder(AppStrings strings, BackupTask task) {
-    if (task.targetFolderMode == TargetFolderMode.root) {
-      return '/ (Root)';
-    }
-    final folder = task.targetFolderName.trim();
-    if (folder.isEmpty || folder == '/') return '/ (Root)';
-    return folder.startsWith('/') ? folder : '/$folder';
-  }
-
-  static String _formatScheduleDescription(AppStrings strings, BackupTask task) {
-    if (task.scheduleDay == 'Manual') {
-      return strings.dayManual;
-    } else if (task.scheduleDay == 'Daily') {
-      return strings.scheduleDisplay(day: 'Daily', time: task.scheduleTime);
-    } else {
-      return strings.scheduleDisplay(day: _getDayLabel(strings, task.scheduleDay), time: task.scheduleTime);
-    }
-  }
 }
 
 /// Public dialog dispatcher for creating or editing backup tasks across platforms.
@@ -1245,7 +651,33 @@ void showAddEditTaskDialog(
   BackupTask? existingTask,
   TargetPlatform? platform,
 ]) {
-  const TasksScreen().showTaskDialog(context, ref, existingTask, platform);
+  final targetPlatform = platform ?? defaultTargetPlatform;
+  if (targetPlatform == TargetPlatform.windows) {
+    fluent.showDialog(
+      context: context,
+      builder: (dialogCtx) => TaskWizardDialog(
+        existingTask: existingTask,
+        platform: TargetPlatform.windows,
+      ),
+    );
+  } else if (targetPlatform == TargetPlatform.iOS) {
+    cupertino.showCupertinoModalPopup(
+      context: context,
+      barrierDismissible: true,
+      builder: (sheetCtx) => TaskWizardDialog(
+        existingTask: existingTask,
+        platform: TargetPlatform.iOS,
+      ),
+    );
+  } else {
+    material.showDialog(
+      context: context,
+      builder: (dialogCtx) => TaskWizardDialog(
+        existingTask: existingTask,
+        platform: TargetPlatform.android,
+      ),
+    );
+  }
 }
 
 // ===========================================================================

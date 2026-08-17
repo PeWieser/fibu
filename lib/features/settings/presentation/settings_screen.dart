@@ -12,13 +12,12 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
 
-/// Platform-adaptive Settings screen.
-/// Contains the Appearance / Design Menu enabling switching between:
-/// - Sync with System theme mode or manual Light/Dark overrides.
-/// - Two separate rows of Sanzo Wada color palettes (4 Light palettes & 4 Dark palettes).
-/// - Manage Cloud Drives sub-page navigation.
-/// - Functional Language configuration (German & English) with immediate UI update.
-/// Enriched with accessible contextual tooltips across theme toggles, palettes, and language selectors.
+/// Platform-adaptive Settings screen structured according to Apple HIG:
+/// 1. Cloud Storage (Manage Cloud Drives)
+/// 2. Network & Cellular (Wi-Fi Only Sync toggle)
+/// 3. Appearance & Design (Sync with System, Dark mode, Sanzo Wada palettes)
+/// 4. Language (System Auto / Deutsch / English)
+/// 5. About (App Version, Developer, Cloud Engine, License, Credits)
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -32,23 +31,24 @@ class SettingsScreen extends ConsumerWidget {
     Navigator.of(context).push(route);
   }
 
-  void _showIOSLanguagePicker(BuildContext context, WidgetRef ref, AppLocale currentLocale, AppStrings strings) {
+  void _showIOSLanguagePicker(BuildContext context, WidgetRef ref, AppLocaleMode currentMode, AppStrings strings) {
     cupertino.showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => cupertino.CupertinoActionSheet(
         title: Text(strings.languageSection),
-        actions: AppLocale.values.map((loc) {
-          final isSelected = loc == currentLocale;
+        message: Text(strings.systemLanguageSubtitle),
+        actions: AppLocaleMode.values.map((mode) {
+          final isSelected = mode == currentMode;
           return cupertino.CupertinoActionSheetAction(
             onPressed: () {
-              ref.read(localeProvider.notifier).setLocale(loc);
+              ref.read(localeModeProvider.notifier).setLocaleMode(mode);
               Navigator.of(ctx).pop();
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  loc.displayName,
+                  mode.displayName,
                   style: TextStyle(
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -74,9 +74,85 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _showAboutDialog(BuildContext context, AppStrings strings, AppThemeData theme) {
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.iOS) {
+      cupertino.showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => cupertino.CupertinoAlertDialog(
+          title: Text(strings.aboutSectionTitle),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(
+              '${strings.aboutAppSubtitle}\n\n'
+              '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
+              '${strings.developerLabel}: ${strings.developerValue}\n'
+              '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
+              '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
+              '${strings.aboutDescription}',
+              textAlign: TextAlign.start,
+            ),
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text(strings.close),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+      );
+    } else if (platform == TargetPlatform.windows) {
+      fluent.showDialog<void>(
+        context: context,
+        builder: (ctx) => fluent.ContentDialog(
+          title: Text(strings.aboutSectionTitle),
+          content: Text(
+            '${strings.aboutAppSubtitle}\n\n'
+            '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
+            '${strings.developerLabel}: ${strings.developerValue}\n'
+            '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
+            '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
+            '${strings.aboutDescription}',
+          ),
+          actions: [
+            fluent.FilledButton(
+              child: Text(strings.close),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+      );
+    } else {
+      material.showDialog<void>(
+        context: context,
+        builder: (ctx) => material.AlertDialog(
+          title: Text(strings.aboutSectionTitle),
+          content: Text(
+            '${strings.aboutAppSubtitle}\n\n'
+            '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
+            '${strings.developerLabel}: ${strings.developerValue}\n'
+            '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
+            '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
+            '${strings.aboutDescription}',
+          ),
+          actions: [
+            material.FilledButton(
+              child: Text(strings.close),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(appThemeProvider);
+    ref.watch(themeConfigProvider);
     final platform = defaultTargetPlatform;
+
     if (platform == TargetPlatform.windows) {
       return _buildWindows(context, ref);
     } else if (platform == TargetPlatform.iOS) {
@@ -86,11 +162,13 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  // --- Windows (Fluent Design Settings) ---
+  // =========================================================================
+  // WINDOWS (Fluent Design Settings)
+  // =========================================================================
   Widget _buildWindows(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
-    final currentLocale = ref.watch(localeProvider);
+    final currentLocaleMode = ref.watch(localeModeProvider);
     final config = ref.watch(themeConfigProvider);
 
     return fluent.ScaffoldPage.scrollable(
@@ -103,6 +181,7 @@ class SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 1. Cloud Drives
               fluent.Text(strings.cloudStorage, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
               fluent.Card(
@@ -113,7 +192,7 @@ class SettingsScreen extends ConsumerWidget {
                     constraints: const BoxConstraints(minHeight: 44),
                     child: Row(
                       children: [
-                        Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 16, semanticLabel: strings.manageCloudDrives),
+                        Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 18, semanticLabel: strings.manageCloudDrives),
                         const SizedBox(width: 12),
                         Text(strings.manageCloudDrives, style: const TextStyle(fontWeight: FontWeight.bold)),
                         const Spacer(),
@@ -123,7 +202,43 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              SizedBox(height: theme.lg),
+              SizedBox(height: theme.xl),
+
+              // 2. Network & Cellular
+              fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
+              SizedBox(height: theme.md),
+              fluent.Tooltip(
+                message: strings.wifiOnlySyncDescription,
+                child: fluent.Card(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              SizedBox(height: theme.xs / 2),
+                              Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+                            ],
+                          ),
+                        ),
+                        fluent.ToggleSwitch(
+                          checked: ref.watch(wifiOnlySyncProvider),
+                          onChanged: (val) {
+                            ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: theme.xl),
+
+              // 3. Appearance & Design
               fluent.Text(strings.appearanceSection, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
               fluent.Tooltip(
@@ -186,6 +301,8 @@ class SettingsScreen extends ConsumerWidget {
               SizedBox(height: theme.sm),
               _buildWadaPaletteRow(context, ref, config, true, strings),
               SizedBox(height: theme.xl),
+
+              // 4. Language
               fluent.Text(strings.appConfiguration, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
               fluent.Tooltip(
@@ -197,17 +314,17 @@ class SettingsScreen extends ConsumerWidget {
                       children: [
                         Text(strings.languageSection),
                         const Spacer(),
-                        fluent.ComboBox<AppLocale>(
-                          value: currentLocale,
-                          items: AppLocale.values.map((loc) {
-                            return fluent.ComboBoxItem<AppLocale>(
-                              value: loc,
-                              child: Text(loc.displayName),
+                        fluent.ComboBox<AppLocaleMode>(
+                          value: currentLocaleMode,
+                          items: AppLocaleMode.values.map((mode) {
+                            return fluent.ComboBoxItem<AppLocaleMode>(
+                              value: mode,
+                              child: Text(mode.displayName),
                             );
                           }).toList(),
-                          onChanged: (loc) {
-                            if (loc != null) {
-                              ref.read(localeProvider.notifier).setLocale(loc);
+                          onChanged: (mode) {
+                            if (mode != null) {
+                              ref.read(localeModeProvider.notifier).setLocaleMode(mode);
                             }
                           },
                         ),
@@ -217,35 +334,27 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               SizedBox(height: theme.xl),
-              fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
+
+              // 5. About
+              fluent.Text(strings.aboutSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
-              fluent.Tooltip(
-                message: strings.wifiOnlySyncDescription,
-                child: fluent.Card(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              SizedBox(height: theme.xs / 2),
-                              Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        fluent.ToggleSwitch(
-                          checked: ref.watch(wifiOnlySyncProvider),
-                          onChanged: (val) {
-                            ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+              fluent.Card(
+                child: Column(
+                  children: [
+                    _buildInfoRow(strings.appVersionLabel, strings.appVersionValue, theme),
+                    const SizedBox(height: 8),
+                    const fluent.Divider(),
+                    const SizedBox(height: 8),
+                    _buildInfoRow(strings.developerLabel, strings.developerValue, theme),
+                    const SizedBox(height: 8),
+                    const fluent.Divider(),
+                    const SizedBox(height: 8),
+                    _buildInfoRow(strings.cloudEngineLabel, strings.cloudEngineValue, theme),
+                    const SizedBox(height: 8),
+                    const fluent.Divider(),
+                    const SizedBox(height: 8),
+                    _buildInfoRow(strings.licenseLabel, strings.licenseValue, theme),
+                  ],
                 ),
               ),
               SizedBox(height: theme.xl),
@@ -256,11 +365,13 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  // --- iOS (Cupertino Design Settings) ---
+  // =========================================================================
+  // IOS (Cupertino Design Settings)
+  // =========================================================================
   Widget _buildIOS(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
-    final currentLocale = ref.watch(localeProvider);
+    final currentLocaleMode = ref.watch(localeModeProvider);
     final config = ref.watch(themeConfigProvider);
 
     return cupertino.CupertinoPageScaffold(
@@ -271,71 +382,78 @@ class SettingsScreen extends ConsumerWidget {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              cupertino.CupertinoFormSection.insetGrouped(
+              // 1. Cloud Drives Section
+              cupertino.CupertinoListSection.insetGrouped(
                 header: Text(strings.cloudStorage.toUpperCase()),
                 children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
+                  cupertino.CupertinoListTile(
+                    leading: Icon(
+                      cupertino.CupertinoIcons.cloud,
+                      color: theme.accent,
+                      size: 22,
+                      semanticLabel: strings.manageCloudDrives,
+                    ),
+                    title: Text(
+                      strings.manageCloudDrives,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    ),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
                     onTap: () => _navigateToCloudDrives(context),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: cupertino.CupertinoFormRow(
-                        prefix: Row(
-                          children: [
-                            Icon(
-                              cupertino.CupertinoIcons.cloud,
-                              color: theme.accent,
-                              size: 20,
-                              semanticLabel: strings.manageCloudDrives,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(strings.manageCloudDrives, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        child: const Icon(
-                          cupertino.CupertinoIcons.chevron_forward,
-                          size: 18,
-                          color: cupertino.CupertinoColors.inactiveGray,
-                          semanticLabel: 'Chevron forward',
-                        ),
-                      ),
+                  ),
+                ],
+              ),
+
+              // 2. Network & Cellular Section
+              cupertino.CupertinoListSection.insetGrouped(
+                header: Text(strings.networkSectionTitle.toUpperCase()),
+                children: [
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 16)),
+                    subtitle: Text(strings.wifiOnlySyncDescription, style: const TextStyle(fontSize: 12)),
+                    trailing: cupertino.CupertinoSwitch(
+                      value: ref.watch(wifiOnlySyncProvider),
+                      onChanged: (val) {
+                        ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
+                      },
                     ),
                   ),
                 ],
               ),
+
+              // 3. Appearance & Design Section
               Semantics(
                 label: strings.tooltipThemeMode,
-                child: cupertino.CupertinoFormSection.insetGrouped(
+                child: cupertino.CupertinoListSection.insetGrouped(
                   header: Text(strings.themeMode.toUpperCase()),
                   children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: cupertino.CupertinoFormRow(
-                        prefix: Text(strings.syncWithSystem),
-                        child: cupertino.CupertinoSwitch(
-                          value: config.syncWithSystem,
-                          onChanged: (val) {
-                            ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                          },
-                        ),
+                    cupertino.CupertinoListTile(
+                      title: Text(strings.syncWithSystem, style: const TextStyle(fontSize: 16)),
+                      trailing: cupertino.CupertinoSwitch(
+                        value: config.syncWithSystem,
+                        onChanged: (val) {
+                          ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
+                        },
                       ),
                     ),
                     if (!config.syncWithSystem)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 44),
-                        child: cupertino.CupertinoFormRow(
-                          prefix: Text(strings.useDarkMode),
-                          child: cupertino.CupertinoSwitch(
-                            value: config.forceDarkMode,
-                            onChanged: (val) {
-                              ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
-                            },
-                          ),
+                      cupertino.CupertinoListTile(
+                        title: Text(strings.useDarkMode, style: const TextStyle(fontSize: 16)),
+                        trailing: cupertino.CupertinoSwitch(
+                          value: config.forceDarkMode,
+                          onChanged: (val) {
+                            ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
+                          },
                         ),
                       ),
                   ],
                 ),
               ),
+
+              // Sanzo Wada Palette Swatches
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.sm),
                 child: Column(
@@ -371,54 +489,66 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+
+              // 4. Language Section
               Semantics(
                 label: strings.tooltipLanguage,
-                child: cupertino.CupertinoFormSection.insetGrouped(
+                child: cupertino.CupertinoListSection.insetGrouped(
                   header: Text(strings.preferences.toUpperCase()),
                   children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showIOSLanguagePicker(context, ref, currentLocale, strings),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 44),
-                        child: cupertino.CupertinoFormRow(
-                          prefix: Text(strings.languageSection),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(currentLocale.displayName, style: const TextStyle(color: cupertino.CupertinoColors.activeBlue)),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                cupertino.CupertinoIcons.chevron_up_chevron_down,
-                                size: 14,
-                                color: cupertino.CupertinoColors.inactiveGray,
-                                semanticLabel: 'Select language',
-                              ),
-                            ],
+                    cupertino.CupertinoListTile(
+                      title: Text(strings.languageSection, style: const TextStyle(fontSize: 16)),
+                      subtitle: Text(strings.systemLanguageSubtitle, style: const TextStyle(fontSize: 12)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(currentLocaleMode.displayName, style: TextStyle(color: theme.accent, fontSize: 15)),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            cupertino.CupertinoIcons.chevron_up_chevron_down,
+                            size: 14,
+                            color: cupertino.CupertinoColors.inactiveGray,
                           ),
-                        ),
+                        ],
                       ),
+                      onTap: () => _showIOSLanguagePicker(context, ref, currentLocaleMode, strings),
                     ),
                   ],
                 ),
               ),
-              cupertino.CupertinoFormSection.insetGrouped(
-                header: Text(strings.networkSectionTitle.toUpperCase()),
+
+              // 5. About / Über Fibu Section
+              cupertino.CupertinoListSection.insetGrouped(
+                header: Text(strings.aboutSectionTitle.toUpperCase()),
                 children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: cupertino.CupertinoFormRow(
-                      prefix: Text(strings.wifiOnlySyncLabel),
-                      child: cupertino.CupertinoSwitch(
-                        value: ref.watch(wifiOnlySyncProvider),
-                        onChanged: (val) {
-                          ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                        },
-                      ),
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.appVersionLabel, style: const TextStyle(fontSize: 16)),
+                    trailing: Text(strings.appVersionValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
+                  ),
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.developerLabel, style: const TextStyle(fontSize: 16)),
+                    trailing: Text(strings.developerValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
+                  ),
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.cloudEngineLabel, style: const TextStyle(fontSize: 16)),
+                    trailing: Text(strings.cloudEngineValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
+                  ),
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.licenseLabel, style: const TextStyle(fontSize: 16)),
+                    trailing: Text(strings.licenseValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
+                  ),
+                  cupertino.CupertinoListTile(
+                    title: Text(strings.aboutAppTitle, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600, fontSize: 16)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.info_circle,
+                      size: 20,
+                      color: cupertino.CupertinoColors.inactiveGray,
                     ),
+                    onTap: () => _showAboutDialog(context, strings, theme),
                   ),
                 ],
               ),
+              SizedBox(height: theme.xl),
             ],
           ),
         ),
@@ -426,11 +556,13 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  // --- Android (Material 3 Settings) ---
+  // =========================================================================
+  // ANDROID (Material 3 Settings)
+  // =========================================================================
   Widget _buildAndroid(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
-    final currentLocale = ref.watch(localeProvider);
+    final currentLocaleMode = ref.watch(localeModeProvider);
     final config = ref.watch(themeConfigProvider);
 
     return material.Scaffold(
@@ -443,6 +575,7 @@ class SettingsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1. Cloud Storage
             Text(strings.cloudStorage, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
             material.Card(
@@ -460,38 +593,57 @@ class SettingsScreen extends ConsumerWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
               ),
             ),
-            SizedBox(height: theme.lg),
+            SizedBox(height: theme.xl),
+
+            // 2. Network & Cellular
+            Text(strings.networkSectionTitle, style: material.Theme.of(context).textTheme.titleSmall),
+            SizedBox(height: theme.md),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.SwitchListTile(
+                title: Text(strings.wifiOnlySyncLabel),
+                subtitle: Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+                value: ref.watch(wifiOnlySyncProvider),
+                onChanged: (val) {
+                  ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
+                },
+              ),
+            ),
+            SizedBox(height: theme.xl),
+
+            // 3. Appearance & Design
             Text(strings.appearanceSection, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
-            material.Tooltip(
-              message: strings.tooltipThemeMode,
-              child: material.Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(theme.radiusLg),
-                  side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-                ),
-                child: Column(
-                  children: [
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                children: [
+                  material.SwitchListTile(
+                    title: Text(strings.syncWithSystem),
+                    value: config.syncWithSystem,
+                    onChanged: (val) {
+                      ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
+                    },
+                  ),
+                  if (!config.syncWithSystem) ...[
+                    const material.Divider(height: 1),
                     material.SwitchListTile(
-                      title: Text(strings.syncWithSystem),
-                      value: config.syncWithSystem,
+                      title: Text(strings.useDarkMode),
+                      value: config.forceDarkMode,
                       onChanged: (val) {
-                        ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
+                        ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
                       },
                     ),
-                    if (!config.syncWithSystem) ...[
-                      const material.Divider(height: 1),
-                      material.SwitchListTile(
-                        title: Text(strings.useDarkMode),
-                        value: config.forceDarkMode,
-                        onChanged: (val) {
-                          ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
-                        },
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
             SizedBox(height: theme.lg),
@@ -509,62 +661,96 @@ class SettingsScreen extends ConsumerWidget {
             SizedBox(height: theme.sm),
             _buildWadaPaletteRow(context, ref, config, true, strings),
             SizedBox(height: theme.xl),
+
+            // 4. Language
             Text(strings.preferences, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
-            material.Tooltip(
-              message: strings.tooltipLanguage,
-              child: material.Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(theme.radiusLg),
-                  side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.ListTile(
+                minTileHeight: 48,
+                title: Text(strings.languageSection),
+                subtitle: Text(strings.systemLanguageSubtitle, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+                trailing: material.DropdownButton<AppLocaleMode>(
+                  value: currentLocaleMode,
+                  underline: const SizedBox.shrink(),
+                  items: AppLocaleMode.values.map((mode) {
+                    return material.DropdownMenuItem(
+                      value: mode,
+                      child: Text(mode.displayName),
+                    );
+                  }).toList(),
+                  onChanged: (mode) {
+                    if (mode != null) {
+                      ref.read(localeModeProvider.notifier).setLocaleMode(mode);
+                    }
+                  },
                 ),
-                child: material.ListTile(
-                  minTileHeight: 48,
-                  title: Text(strings.languageSection),
-                  trailing: material.DropdownButton<AppLocale>(
-                    value: currentLocale,
-                    underline: const SizedBox.shrink(),
-                    items: AppLocale.values.map((loc) {
-                      return material.DropdownMenuItem(
-                        value: loc,
-                        child: Text(loc.displayName),
-                      );
-                    }).toList(),
-                    onChanged: (loc) {
-                      if (loc != null) {
-                        ref.read(localeProvider.notifier).setLocale(loc);
-                      }
-                    },
-                  ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
               ),
             ),
             SizedBox(height: theme.xl),
-            Text(strings.networkSectionTitle, style: material.Theme.of(context).textTheme.titleSmall),
+
+            // 5. About
+            Text(strings.aboutSectionTitle, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.md),
-            material.Tooltip(
-              message: strings.wifiOnlySyncDescription,
-              child: material.Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(theme.radiusLg),
-                  side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-                ),
-                child: material.SwitchListTile(
-                  title: Text(strings.wifiOnlySyncLabel),
-                  subtitle: Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
-                  value: ref.watch(wifiOnlySyncProvider),
-                  onChanged: (val) {
-                    ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                  },
-                ),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                children: [
+                  material.ListTile(
+                    title: Text(strings.appVersionLabel),
+                    trailing: Text(strings.appVersionValue, style: TextStyle(color: theme.textSecondary)),
+                  ),
+                  const material.Divider(height: 1),
+                  material.ListTile(
+                    title: Text(strings.developerLabel),
+                    trailing: Text(strings.developerValue, style: TextStyle(color: theme.textSecondary)),
+                  ),
+                  const material.Divider(height: 1),
+                  material.ListTile(
+                    title: Text(strings.cloudEngineLabel),
+                    trailing: Text(strings.cloudEngineValue, style: TextStyle(color: theme.textSecondary)),
+                  ),
+                  const material.Divider(height: 1),
+                  material.ListTile(
+                    title: Text(strings.licenseLabel),
+                    trailing: Text(strings.licenseValue, style: TextStyle(color: theme.textSecondary)),
+                  ),
+                  const material.Divider(height: 1),
+                  material.ListTile(
+                    title: Text(strings.aboutAppTitle, style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold)),
+                    trailing: const Icon(material.Icons.info_outline),
+                    onTap: () => _showAboutDialog(context, strings, theme),
+                  ),
+                ],
               ),
             ),
             SizedBox(height: theme.xl),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- Helper Row for Windows Info Card ---
+  Widget _buildInfoRow(String label, String value, AppThemeData theme) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 28),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const Spacer(),
+          Text(value, style: TextStyle(color: theme.textSecondary)),
+        ],
       ),
     );
   }
@@ -580,7 +766,6 @@ class SettingsScreen extends ConsumerWidget {
     final theme = context.theme;
     final platform = defaultTargetPlatform;
 
-    // Build items: Standard/Default first, then the 4 curated palettes
     final palettes = isDarkRow
         ? [null, ...SanzoWadaPalette.darkPalettes]
         : [null, ...SanzoWadaPalette.lightPalettes];
@@ -603,7 +788,6 @@ class SettingsScreen extends ConsumerWidget {
               ? palette.textPrimary
               : (isDarkRow ? const Color(0xffffffff) : const Color(0xff1c1a17));
 
-          // Compute static color dots for the standard cards (null palette) to prevent bleed-through
           final dot1Color = palette?.primary ?? (isDarkRow ? const Color(0xff0a84ff) : const Color(0xff007aff));
           final dot2Color = palette?.accent ?? (isDarkRow ? const Color(0xff30d158) : const Color(0xff34c759));
           final dot3Color = palette?.background ?? (isDarkRow ? const Color(0xff0c0c0e) : const Color(0xfffcfbfa));

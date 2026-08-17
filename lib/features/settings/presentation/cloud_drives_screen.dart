@@ -387,23 +387,40 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final type = _getProviderType(remote);
         final isDeleting = _deletingRemote == remote;
 
-        return cupertino.CupertinoListTile(
-          title: Text(remote),
-          subtitle: Text(type),
-          leading: Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, semanticLabel: 'Cloud Remote'),
-          trailing: isDeleting
-              ? const cupertino.CupertinoActivityIndicator()
-              : MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                    child: cupertino.CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      child: Icon(cupertino.CupertinoIcons.trash, color: theme.error, size: 20, semanticLabel: strings.delete),
-                      onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.iOS),
+        return Dismissible(
+          key: ValueKey(remote),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: theme.error,
+            child: const Icon(
+              cupertino.CupertinoIcons.trash,
+              color: cupertino.CupertinoColors.white,
+              size: 22,
+            ),
+          ),
+          confirmDismiss: (_) async {
+            return await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.iOS);
+          },
+          child: cupertino.CupertinoListTile(
+            title: Text(remote),
+            subtitle: Text(type),
+            leading: Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, semanticLabel: 'Cloud Remote'),
+            trailing: isDeleting
+                ? const cupertino.CupertinoActivityIndicator()
+                : MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                      child: cupertino.CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        child: Icon(cupertino.CupertinoIcons.trash, color: theme.error, size: 20, semanticLabel: strings.delete),
+                        onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.iOS),
+                      ),
                     ),
                   ),
-                ),
+          ),
         );
       }).toList(),
     );
@@ -470,21 +487,33 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: material.CircularProgressIndicator()),
               ),
-              error: (err, _) => Center(
-                child: Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+              error: (err, _) => material.MaterialBanner(
+                content: Text(err.toString()),
+                backgroundColor: theme.error.withValues(alpha: 0.15),
+                leading: Icon(material.Icons.error_outline, color: theme.error, semanticLabel: 'Error'),
+                actions: [
+                  material.TextButton(
+                    onPressed: _handleRefresh,
+                    child: Text(strings.retry),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: theme.xl),
+            Center(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
+                  child: material.FilledButton.icon(
+                    icon: const Icon(material.Icons.add, semanticLabel: 'Add Drive'),
+                    label: Text(strings.addCloudDrive),
+                    onPressed: () => _openAddRemoteWizard(context, TargetPlatform.android),
+                  ),
+                ),
               ),
             ),
           ],
-        ),
-      ),
-      floatingActionButton: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: material.FloatingActionButton(
-            onPressed: () => _openAddRemoteWizard(context, TargetPlatform.android),
-            child: const Icon(material.Icons.add, semanticLabel: 'Add Remote'),
-          ),
         ),
       ),
     );
@@ -498,7 +527,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         padding: EdgeInsets.symmetric(vertical: theme.xxl),
         child: Column(
           children: [
-            Icon(material.Icons.cloud_off, size: 56, color: theme.textSecondary, semanticLabel: 'No Drives'),
+            Icon(material.Icons.cloud_off_outlined, size: 56, color: theme.textSecondary, semanticLabel: 'No Drives'),
             SizedBox(height: theme.md),
             Text(
               strings.noDrivesConnected,
@@ -525,33 +554,53 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final type = _getProviderType(remote);
         final isDeleting = _deletingRemote == remote;
 
-        return material.Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(theme.radiusSm),
-            side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+        return Dismissible(
+          key: ValueKey(remote),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            decoration: BoxDecoration(
+              color: theme.error,
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+            child: const Icon(
+              material.Icons.delete_outline,
+              color: material.Colors.white,
+              size: 24,
+            ),
           ),
-          child: material.ListTile(
-            contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
-            leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: 'Cloud Remote'),
-            title: Text(remote),
-            subtitle: Text(type),
-            trailing: isDeleting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: material.CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                      child: material.IconButton(
-                        icon: Icon(material.Icons.delete_outline, color: theme.error, semanticLabel: strings.delete),
-                        onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.android),
+          confirmDismiss: (_) async {
+            return await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.android);
+          },
+          child: material.Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+            ),
+            child: material.ListTile(
+              contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
+              leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: 'Cloud Remote'),
+              title: Text(remote),
+              subtitle: Text(type),
+              trailing: isDeleting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: material.CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                        child: material.IconButton(
+                          icon: Icon(material.Icons.delete_outline, color: theme.error, semanticLabel: strings.delete),
+                          onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.android),
+                        ),
                       ),
                     ),
-                  ),
+            ),
           ),
         );
       },
@@ -600,14 +649,14 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   }
 
   // --- Remote Deletion Confirmation (Destructive Action Rule 6) ---
-  void _confirmDeleteRemote(
-      BuildContext context, String remoteName, TargetPlatform platform) {
+  Future<bool> _confirmDeleteRemoteAsync(
+      BuildContext context, String remoteName, TargetPlatform platform) async {
     final strings = context.strings;
     final title = strings.deleteDriveConfirmTitle;
     final message = '${strings.deleteDrivePrompt(remoteName)}\n\n${strings.deleteDriveRule6Notice}';
 
     if (platform == TargetPlatform.windows) {
-      fluent.showDialog(
+      final result = await fluent.showDialog<bool>(
         context: context,
         builder: (dialogCtx) => fluent.ContentDialog(
           title: fluent.Text(title),
@@ -619,7 +668,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
                 child: fluent.FilledButton(
                   onPressed: () async {
-                    Navigator.pop(dialogCtx);
+                    Navigator.pop(dialogCtx, true);
                     await _performDelete(remoteName);
                   },
                   child: Text(
@@ -634,7 +683,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
                 child: fluent.Button(
-                  onPressed: () => Navigator.pop(dialogCtx),
+                  onPressed: () => Navigator.pop(dialogCtx, false),
                   child: Text(strings.cancel),
                 ),
               ),
@@ -642,8 +691,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           ],
         ),
       );
+      return result ?? false;
     } else if (platform == TargetPlatform.iOS) {
-      cupertino.showCupertinoDialog(
+      final result = await cupertino.showCupertinoDialog<bool>(
         context: context,
         builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
           title: Text(title),
@@ -654,12 +704,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           actions: [
             cupertino.CupertinoDialogAction(
               child: Text(strings.cancel),
-              onPressed: () => Navigator.pop(dialogCtx),
+              onPressed: () => Navigator.pop(dialogCtx, false),
             ),
             cupertino.CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () async {
-                Navigator.pop(dialogCtx);
+                Navigator.pop(dialogCtx, true);
                 await _performDelete(remoteName);
               },
               child: Text(strings.disconnect),
@@ -667,23 +717,22 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           ],
         ),
       );
+      return result ?? false;
     } else {
-      material.showDialog(
+      final result = await material.showDialog<bool>(
         context: context,
         builder: (dialogCtx) => material.AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             material.TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
+              onPressed: () => Navigator.pop(dialogCtx, false),
               child: Text(strings.cancel),
             ),
             material.FilledButton(
-              style: material.FilledButton.styleFrom(
-                backgroundColor: material.Theme.of(context).colorScheme.error,
-              ),
+              style: material.FilledButton.styleFrom(backgroundColor: context.theme.error),
               onPressed: () async {
-                Navigator.pop(dialogCtx);
+                Navigator.pop(dialogCtx, true);
                 await _performDelete(remoteName);
               },
               child: Text(
@@ -694,7 +743,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           ],
         ),
       );
+      return result ?? false;
     }
+  }
+
+  void _confirmDeleteRemote(
+      BuildContext context, String remoteName, TargetPlatform platform) {
+    _confirmDeleteRemoteAsync(context, remoteName, platform);
   }
 
   Future<void> _performDelete(String remoteName) async {
@@ -1964,40 +2019,57 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             }
 
             return Container(
-              height: 220,
               decoration: BoxDecoration(
                 color: theme.surface,
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                border: Border.all(color: theme.textSecondary.withValues(alpha: 0.2)),
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
               ),
-              child: ListView.builder(
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: filtered.length,
+                separatorBuilder: (_, __) => Container(
+                  height: 0.5,
+                  margin: EdgeInsets.only(left: theme.xl),
+                  color: theme.textSecondary.withValues(alpha: 0.15),
+                ),
                 itemBuilder: (context, index) {
                   final provider = filtered[index];
                   final isSelected = _selectedProvider == provider.name;
 
                   return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => setState(() {
                       _selectedProvider = provider.name;
                       _providerError = null;
                     }),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
-                      color: isSelected ? theme.accent.withValues(alpha: 0.15) : null,
+                      padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.md),
+                      color: isSelected ? theme.accent.withValues(alpha: 0.12) : null,
                       child: Row(
                         children: [
                           Icon(
                             isSelected ? cupertino.CupertinoIcons.checkmark_circle_fill : cupertino.CupertinoIcons.circle,
                             color: isSelected ? theme.accent : theme.textSecondary,
-                            size: 20,
+                            size: 22,
                           ),
-                          SizedBox(width: theme.sm),
+                          SizedBox(width: theme.md),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(provider.description, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
-                                Text(provider.name, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                                Text(
+                                  provider.description,
+                                  style: TextStyle(
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                SizedBox(height: theme.xs / 2),
+                                Text(
+                                  provider.name,
+                                  style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                                ),
                               ],
                             ),
                           ),

@@ -14,29 +14,30 @@ import '../../settings/presentation/settings_screen.dart';
 
 /// Platform-adaptive root navigation shell for Fibu.
 /// Automatically renders NavigationView on Windows, CupertinoTabScaffold on iOS,
-/// and material NavigationBar on Android/fallback with active Sanzo Wada theme styling.
+/// and material NavigationBar on Android/fallback with immediate live theme reactivity.
 class ShellScreen extends ConsumerWidget {
   const ShellScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Explicitly watch appThemeProvider and themeConfigProvider for immediate live theme propagation
+    final theme = ref.watch(appThemeProvider);
+    ref.watch(themeConfigProvider);
     final platform = defaultTargetPlatform;
     final activeIndex = ref.watch(shellIndexProvider);
     final strings = ref.watch(stringsProvider);
 
     if (platform == TargetPlatform.windows) {
-      return _buildWindows(context, ref, activeIndex, strings);
+      return _buildWindows(context, ref, activeIndex, strings, theme);
     } else if (platform == TargetPlatform.iOS) {
-      return _buildIOS(context, ref, activeIndex, strings);
+      return _buildIOS(context, ref, activeIndex, strings, theme);
     } else {
-      return _buildAndroid(context, ref, activeIndex, strings);
+      return _buildAndroid(context, ref, activeIndex, strings, theme);
     }
   }
 
   // --- Windows (Fluent NavigationView) ---
-  Widget _buildWindows(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
-    final theme = context.theme;
-
+  Widget _buildWindows(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings, AppThemeData theme) {
     return fluent.NavigationView(
       titleBar: fluent.TitleBar(
         title: Text(
@@ -78,10 +79,8 @@ class ShellScreen extends ConsumerWidget {
     );
   }
 
-  // --- iOS (Cupertino Tab Scaffold) ---
-  Widget _buildIOS(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
-    final theme = context.theme;
-
+  // --- iOS (Cupertino Tab Scaffold with Symmetrical Vertical Padding) ---
+  Widget _buildIOS(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings, AppThemeData theme) {
     return cupertino.CupertinoTabScaffold(
       controller: cupertino.CupertinoTabController(initialIndex: activeIndex),
       tabBar: cupertino.CupertinoTabBar(
@@ -89,20 +88,43 @@ class ShellScreen extends ConsumerWidget {
         activeColor: theme.accent,
         inactiveColor: theme.textSecondary,
         backgroundColor: theme.surface,
+        iconSize: 22.0,
+        height: 52.0,
         onTap: (index) => ref.read(shellIndexProvider.notifier).state = index,
         items: [
           BottomNavigationBarItem(
-            icon: Icon(cupertino.CupertinoIcons.square_grid_2x2, semanticLabel: strings.navDashboard),
+            icon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.square_grid_2x2, semanticLabel: 'Dashboard'),
+            ),
+            activeIcon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.square_grid_2x2_fill, semanticLabel: 'Dashboard Active'),
+            ),
             label: strings.navDashboard,
             tooltip: strings.navDashboard,
           ),
           BottomNavigationBarItem(
-            icon: Icon(cupertino.CupertinoIcons.list_bullet, semanticLabel: strings.navTasks),
+            icon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.list_bullet, semanticLabel: 'Tasks'),
+            ),
+            activeIcon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.list_bullet_indent, semanticLabel: 'Tasks Active'),
+            ),
             label: strings.navTasks,
             tooltip: strings.navTasks,
           ),
           BottomNavigationBarItem(
-            icon: Icon(cupertino.CupertinoIcons.settings, semanticLabel: strings.navSettings),
+            icon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.settings, semanticLabel: 'Settings'),
+            ),
+            activeIcon: const Padding(
+              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
+              child: Icon(cupertino.CupertinoIcons.settings_solid, semanticLabel: 'Settings Active'),
+            ),
             label: strings.navSettings,
             tooltip: strings.navSettings,
           ),
@@ -124,9 +146,7 @@ class ShellScreen extends ConsumerWidget {
   }
 
   // --- Android (Material 3 Scaffold + Bottom Navigation) ---
-  Widget _buildAndroid(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings) {
-    final theme = context.theme;
-
+  Widget _buildAndroid(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings, AppThemeData theme) {
     return material.Scaffold(
       body: IndexedStack(
         index: activeIndex,

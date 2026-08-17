@@ -20,6 +20,10 @@ dependencies:
   connectivity_plus: ^7.3.1
   permission_handler: ^13.0.1
   photo_manager: ^3.12.0
+  # Opens locally-cached remote files with the system handler (Quick Look on iOS).
+  open_filex: ^4.5.0
+  # In-app browser for cloud provider OAuth (Google Drive, OneDrive, Dropbox, ...).
+  flutter_web_auth_2: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'rclone_service.dart';
 import 'mock_rclone_service.dart';
 import 'rclone_service_impl.dart';
-import 'mobile_rclone_service.dart';
+import 'ios_rclone_service.dart';
 
 /// Riverpod provider for the [RcloneService].
 /// Automatically swaps implementations depending on runtime platform or debug config.
@@ -17,8 +17,11 @@ final rcloneServiceProvider = Provider<RcloneService>((ref) {
     return WindowsRcloneService();
   }
 
-  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
-    return MobileRcloneService();
+  // iOS and Android are backed by the real gomobile `librclone` engine.
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android)) {
+    return IosRcloneService();
   }
 
   return MockRcloneService();

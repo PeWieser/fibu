@@ -19,6 +19,10 @@ set -euo pipefail
 
 # Statt: RCLONE_VERSION="${1:-v1.68.2}"
 RCLONE_VERSION="${1:-$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)}"
+if [ -z "${RCLONE_VERSION}" ]; then
+  echo "WARN: Could not fetch latest rclone version via GitHub API (rate limit?), using fallback v1.70.0"
+  RCLONE_VERSION="v1.70.0"
+fi
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/build/librclone"
 OUT_DIR="${ROOT_DIR}/ios/Frameworks"
@@ -30,10 +34,20 @@ mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 
 if [ ! -d "${BUILD_DIR}/rclone" ]; then
   git clone --depth 1 --branch "${RCLONE_VERSION}" https://github.com/rclone/rclone.git "${BUILD_DIR}/rclone"
+else
+  echo "==> Existing rclone checkout found at ${BUILD_DIR}/rclone, checking version..."
+  CURRENT_TAG=$(git -C "${BUILD_DIR}/rclone" describe --tags --exact-match 2>/dev/null || git -C "${BUILD_DIR}/rclone" rev-parse --abbrev-ref HEAD || echo "unknown")
+  if [ "${CURRENT_TAG}" != "${RCLONE_VERSION}" ]; then
+    echo "==> Version mismatch (current: ${CURRENT_TAG}, wanted: ${RCLONE_VERSION}), re-cloning..."
+    rm -rf "${BUILD_DIR}/rclone"
+    git clone --depth 1 --branch "${RCLONE_VERSION}" https://github.com/rclone/rclone.git "${BUILD_DIR}/rclone"
+  else
+    echo "==> Using existing rclone ${CURRENT_TAG}"
+  fi
 fi
 
 cd "${BUILD_DIR}/rclone"
-go mod edit -replace=github.com/shoenig/go-m1cpu=github.com/shoenig/go-m1cpu@v0.1.7
+go mod edit -replace=github.com/shoenig/go-m1cpu=github.com/shoenig/go-m1cpu@v0.1.7 || echo "WARN: go mod edit failed (maybe already set)"
 
 # gomobile bind produces an XCFramework named after the package output.
 # The generated Swift module is `Rclone`, matching `import Rclone` in RcloneBridge.swift.

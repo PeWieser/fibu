@@ -33,6 +33,7 @@ if [ ! -d "${BUILD_DIR}/rclone" ]; then
 fi
 
 cd "${BUILD_DIR}/rclone"
+go mod edit -replace=github.com/shoenig/go-m1cpu=github.com/shoenig/go-m1cpu@v0.1.7
 
 # gomobile bind produces an XCFramework named after the package output.
 # The generated Swift module is `Rclone`, matching `import Rclone` in RcloneBridge.swift.

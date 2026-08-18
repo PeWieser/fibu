@@ -13,7 +13,6 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
-		A1B2C3D4E5F6000000000001 /* Rclone.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000000000002 /* Rclone.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
@@ -36,7 +35,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				A1B2C3D4E5F6000000000001 /* Rclone.xcframework in Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -61,7 +59,6 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A1B2C3D4E5F6000000000002 /* Rclone.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Rclone.xcframework; path = Frameworks/Rclone.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,7 +67,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
-				A1B2C3D4E5F6000000000001 /* Rclone.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,7 +100,6 @@
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
-				A1B2C3D4E5F6000000000002 /* Rclone.xcframework */,
 			);
 			sourceTree = "<group>";
 		};
@@ -586,6 +581,11 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					Rclone,
+				);
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -611,6 +611,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					Rclone,
 				);
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

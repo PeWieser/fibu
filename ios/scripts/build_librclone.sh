@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # Statt: RCLONE_VERSION="${1:-v1.68.2}"
-RCLONE_VERSION="${1:-$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)}"
+RCLONE_VERSION="${1:-$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4 || echo "")}"
 if [ -z "${RCLONE_VERSION}" ]; then
   echo "WARN: Could not fetch latest rclone version via GitHub API (rate limit?), using fallback v1.70.0"
   RCLONE_VERSION="v1.70.0"

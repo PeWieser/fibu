@@ -44,7 +44,7 @@ class IosTheme {
         letterSpacing: -0.5,
       ),
       primaryColor: theme.accent,
-      secondaryColor: theme.textSecondary,
+      actionColor: theme.textSecondary,
     );
 
     return cupertino.CupertinoThemeData(

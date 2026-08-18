@@ -79,10 +79,10 @@ class MirrorSyncResult {
 /// Tombstones werden lokal und remote unter `.fibu/tombstones.json` geführt.
 class MirrorSyncEngine {
   final RcloneService _rclone;
-  final String _deviceId;
+  final String deviceId;
 
   MirrorSyncEngine(this._rclone, {String? deviceId})
-      : _deviceId = deviceId ?? 'device_${DateTime.now().millisecondsSinceEpoch}';
+      : deviceId = deviceId ?? 'device_${DateTime.now().millisecondsSinceEpoch}';
 
   static const String tombstonesSubPath = '.fibu/tombstones.json';
 
@@ -211,7 +211,7 @@ class MirrorSyncEngine {
       if (merged.containsKey(rel)) continue;
       if (localFiles.containsKey(rel)) continue;
 
-      final dest = File('${localRoot}${Platform.pathSeparator}${_localRel(rel)}');
+      final dest = File('$localRoot${Platform.pathSeparator}${_localRel(rel)}');
       try {
         await dest.parent.create(recursive: true);
         await _rclone.downloadFile(remoteName, _joinRemote(remotePath, rel), dest.path);
@@ -287,7 +287,7 @@ class MirrorSyncEngine {
   // -------------------------------------------------------------------------
 
   Future<File> _localTombstoneFile(String localRoot) async {
-    final dir = Directory('${localRoot}${Platform.pathSeparator}.fibu');
+    final dir = Directory('$localRoot${Platform.pathSeparator}.fibu');
     if (!await dir.exists()) await dir.create(recursive: true);
     return File('${dir.path}${Platform.pathSeparator}tombstones.json');
   }

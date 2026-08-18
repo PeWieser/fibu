@@ -14,7 +14,6 @@ import '../../../theme/theme.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/rclone_provider.dart';
-import '../../../core/services/rclone_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../core/localization/app_strings.dart';
 import 'tasks_controller.dart';

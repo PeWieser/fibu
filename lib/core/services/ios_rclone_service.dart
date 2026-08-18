@@ -330,7 +330,7 @@ class IosRcloneService implements RcloneService {
         if (wasMedia) {
           localDeletions = await bridge.detectLocalDeletions(srcFs);
           for (final rel in localDeletions) {
-            final f = File('${srcFs}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+            final f = File('$srcFs${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
             try {
               if (await f.exists()) await f.delete();
             } catch (_) {}
@@ -374,7 +374,7 @@ class IosRcloneService implements RcloneService {
 
       // Inkrementeller Upload (copy): einseitig lokal→remote.
       final group = 'job/$jobId';
-      final method = 'sync/copy';
+      const method = 'sync/copy';
       final startRes = await _rc.rpc(method, {
         'srcFs': srcFs,
         'dstFs': '$remoteName:$remotePath',
@@ -500,7 +500,7 @@ class IosRcloneService implements RcloneService {
   ) async {
     final bridge = PhotoKitBridge();
     for (final rel in result.downloadedPaths) {
-      final f = File('${localRoot}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+      final f = File('$localRoot${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
       if (!await f.exists()) continue;
       await bridge.importIntoLibrary(f, mimeHint: PhotoKitBridge.mimeHintFor(rel));
     }

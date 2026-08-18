@@ -156,7 +156,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
-				A1B2C3D4E5F6000000000003 /* Build librclone (if missing) */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -270,23 +269,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
-		};
-		A1B2C3D4E5F6000000000003 /* Build librclone (if missing) */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/scripts/build_librclone.sh",
-			);
-			name = "Build librclone (if missing)";
-			outputPaths = (
-				"$(SRCROOT)/Frameworks/Rclone.xcframework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\n# Baut librclone (gomobile) nur dann, wenn das Rclone.xcframework fehlt.\n# Dadurch verschwindet der Laufzeitfehler \"librclone_missing\" bei frischen Checkouts.\nFW=\"${SRCROOT}/Frameworks/Rclone.xcframework\"\nSCRIPT=\"${SRCROOT}/scripts/build_librclone.sh\"\nif [ ! -d \"$FW\" ]; then\n  echo \"==> Rclone.xcframework fehlt. Baue librclone ...\"\n  if [ -x \"$SCRIPT\" ] || [ -f \"$SCRIPT\" ]; then\n    /bin/sh \"$SCRIPT\" || { echo \"ERROR: build_librclone.sh fehlgeschlagen. Voraussetzungen: macOS, Go >= 1.21, gomobile, Xcode.\"; exit 1; }\n  else\n    echo \"ERROR: $SCRIPT nicht gefunden.\"\n    exit 1\n  fi\nelse\n  echo \"==> Rclone.xcframework vorhanden. Ueberspringe Build.\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Mediathek-first Brücke zwischen der iOS-Foto-Bibliothek (PhotoKit) und dem
@@ -54,7 +53,7 @@ class PhotoKitBridge {
   /// Lädt den zuletzt gespeicherten Snapshot (Asset-ID → Pfad).
   Future<Map<String, String>> loadSnapshot(String localRoot) async {
     try {
-      final f = File('${localRoot}${Platform.pathSeparator}$snapshotSubPath');
+      final f = File('$localRoot${Platform.pathSeparator}$snapshotSubPath');
       if (!await f.exists()) return {};
       final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
       return data.map((k, v) => MapEntry(k, v as String));
@@ -66,9 +65,9 @@ class PhotoKitBridge {
   /// Speichert den aktuellen Snapshot.
   Future<void> saveSnapshot(String localRoot, Map<String, String> snapshot) async {
     try {
-      final dir = Directory('${localRoot}${Platform.pathSeparator}.fibu');
+      final dir = Directory('$localRoot${Platform.pathSeparator}.fibu');
       if (!await dir.exists()) await dir.create(recursive: true);
-      final f = File('${localRoot}${Platform.pathSeparator}$snapshotSubPath');
+      final f = File('$localRoot${Platform.pathSeparator}$snapshotSubPath');
       await f.writeAsString(jsonEncode(snapshot));
     } catch (_) {}
   }
@@ -100,11 +99,11 @@ class PhotoKitBridge {
       if (!ps.isAuth && !ps.hasAccess) return false;
 
       if (mimeHint.startsWith('video')) {
-        final saved = await PhotoManager.editor.saveVideo(file);
-        return saved != null;
+        await PhotoManager.editor.saveVideo(file);
+        return true;
       }
-      final saved = await PhotoManager.editor.saveImageWithPath(file.path, title: file.path.split('/').last);
-      return saved != null;
+      await PhotoManager.editor.saveImageWithPath(file.path, title: file.path.split('/').last);
+      return true;
     } catch (_) {
       return false;
     }

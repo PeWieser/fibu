@@ -377,9 +377,9 @@ class SettingsScreen extends ConsumerWidget {
     final config = ref.watch(themeConfigProvider);
 
     return cupertino.CupertinoPageScaffold(
-      navigationBar: cupertino.CupertinoNavigationBar(
+      navigationBar: const cupertino.CupertinoNavigationBar(
         // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
-        middle: const SizedBox.shrink(),
+        middle: SizedBox.shrink(),
       ),
       child: SafeArea(
         child: SingleChildScrollView(

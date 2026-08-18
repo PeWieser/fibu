@@ -6,7 +6,6 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
-import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import 'onboarding_controller.dart';

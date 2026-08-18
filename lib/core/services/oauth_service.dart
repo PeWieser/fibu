@@ -8,15 +8,13 @@ class OAuthResult {
   final String? token;
   final String? error;
 
-  const OAuthResult.success(String token)
+  const OAuthResult.success(this.token)
       : success = true,
-        token = token,
         error = null;
 
-  const OAuthResult.failure(String error)
+  const OAuthResult.failure(this.error)
       : success = false,
-        token = null,
-        error = error;
+        token = null;
 }
 
 /// Wires the native in-app browser OAuth flow (flutter_web_auth_2) to the

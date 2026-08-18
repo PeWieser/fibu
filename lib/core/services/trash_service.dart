@@ -24,7 +24,7 @@ class TrashService {
   // -------------------------------------------------------------------------
 
   Directory _localTrashDir(String localRoot) =>
-      Directory('${localRoot}${Platform.pathSeparator}$localTrashSub');
+      Directory('$localRoot${Platform.pathSeparator}$localTrashSub');
 
   /// Verschiebt eine lokale Datei (relativ [rel], mit '/') in den lokalen
   /// Papierkorb. Gibt den Zielpfad zurück oder '' bei Fehler.
@@ -32,7 +32,7 @@ class TrashService {
     try {
       final trash = _localTrashDir(localRoot);
       if (!await trash.exists()) await trash.create(recursive: true);
-      final src = File('${localRoot}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+      final src = File('$localRoot${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
       if (!await src.exists()) return '';
       final name =
           '${DateTime.now().millisecondsSinceEpoch}_${rel.replaceAll(RegExp(r'[/\\]'), '__')}';

@@ -39,6 +39,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
   String? _bannerMessage;
   bool _isBannerError = false;
   bool _isDownloading = false;
+  bool get isDownloading => _isDownloading;
   late final AnimationController _rotationController;
 
   @override

@@ -1652,8 +1652,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           SizedBox(height: theme.md),
           fluent.Button(
-            child: Text(_isOAuthWorking ? '…' : strings.authorizeInBrowser),
             onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
+            child: Text(_isOAuthWorking ? '…' : strings.authorizeInBrowser),
           ),
           if (_isOAuthAuthorized) ...[
             SizedBox(height: theme.sm),
@@ -2259,10 +2259,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           SizedBox(height: theme.md),
           cupertino.CupertinoButton.filled(
+            onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
             child: _isOAuthWorking
                 ? const cupertino.CupertinoActivityIndicator(color: cupertino.CupertinoColors.white)
                 : Text(strings.authorizeInBrowser),
-            onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
           ),
           if (_isOAuthAuthorized) ...[
             SizedBox(height: theme.sm),

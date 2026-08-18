@@ -17,7 +17,8 @@
 #
 set -euo pipefail
 
-RCLONE_VERSION="${1:-v1.68.2}"
+# Statt: RCLONE_VERSION="${1:-v1.68.2}"
+RCLONE_VERSION="${1:-$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)}"
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/build/librclone"
 OUT_DIR="${ROOT_DIR}/ios/Frameworks"

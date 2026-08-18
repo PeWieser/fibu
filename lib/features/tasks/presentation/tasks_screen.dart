@@ -5,9 +5,15 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
+import '../../../theme/ios_theme.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/rclone_service.dart';
+import '../../../core/services/sync_config_service.dart';
 import '../../../core/localization/app_strings.dart';
 import 'tasks_controller.dart';
 import 'task_detail_screen.dart';
@@ -138,13 +144,17 @@ class TasksScreen extends ConsumerWidget {
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
-        middle: Text(strings.tasksTitle),
+        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
+        middle: const SizedBox.shrink(),
         trailing: SizedBox(
           width: 44,
           height: 44,
           child: cupertino.CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS),
+            onPressed: () {
+              IosHaptics.light();
+              showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS);
+            },
             child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
           ),
         ),
@@ -154,7 +164,11 @@ class TasksScreen extends ConsumerWidget {
             ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
             : SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
-                child: cupertino.CupertinoListSection.insetGrouped(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    IosTheme.largeTitle(strings.tasksTitle, theme),
+                    cupertino.CupertinoListSection.insetGrouped(
                   children: tasks.map((task) {
                     return Dismissible(
                       key: ValueKey(task.id),
@@ -170,7 +184,12 @@ class TasksScreen extends ConsumerWidget {
                         ),
                       ),
                       confirmDismiss: (_) async {
+                        // Nur Bestätigung erfragen; das Entfernen erfolgt in onDismissed,
+                        // damit die Dismissible-Animation sauber abschließen kann.
                         return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
+                      },
+                      onDismissed: (_) {
+                        ref.read(tasksListProvider.notifier).removeTask(task.id);
                       },
                       child: cupertino.CupertinoListTile.notched(
                         leading: Icon(
@@ -205,6 +224,8 @@ class TasksScreen extends ConsumerWidget {
                       ),
                     );
                   }).toList(),
+                ),
+                  ],
                 ),
               ),
       ),
@@ -249,6 +270,9 @@ class TasksScreen extends ConsumerWidget {
                   ),
                   confirmDismiss: (_) async {
                     return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.android);
+                  },
+                  onDismissed: (_) {
+                    ref.read(tasksListProvider.notifier).removeTask(task.id);
                   },
                   child: material.Card(
                     elevation: 0,
@@ -463,6 +487,11 @@ class TasksScreen extends ConsumerWidget {
 
   // =========================================================================
   // DESTRUCTIVE ACTION CONFIRMATION DIALOG (Rule 6 Guard)
+  //
+  // Fragt NUR die Bestätigung ab (true = löschen bestätigt). Das eigentliche
+  // Entfernen aus dem State passiert in onDismissed des Dismissible, damit die
+  // Swipe-to-Delete-Animation sauber abschließen kann (kein
+  // "A dismissed Dismissible widget is still part of the tree"-Fehler).
   // =========================================================================
   Future<bool> _confirmDeleteTaskAsync(BuildContext context, WidgetRef ref, BackupTask task, TargetPlatform platform) async {
     final strings = ref.read(stringsProvider);
@@ -486,10 +515,7 @@ class TasksScreen extends ConsumerWidget {
             ),
             cupertino.CupertinoDialogAction(
               isDestructiveAction: true,
-              onPressed: () {
-                ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(dialogCtx, true);
-              },
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: Text(strings.delete),
             ),
           ],
@@ -507,10 +533,7 @@ class TasksScreen extends ConsumerWidget {
               style: fluent.ButtonStyle(
                 backgroundColor: WidgetStateProperty.resolveWith((states) => theme.error),
               ),
-              onPressed: () {
-                ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(dialogCtx, true);
-              },
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: Text(
                 strings.delete,
                 style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
@@ -539,10 +562,7 @@ class TasksScreen extends ConsumerWidget {
               style: material.FilledButton.styleFrom(
                 backgroundColor: theme.error,
               ),
-              onPressed: () {
-                ref.read(tasksListProvider.notifier).removeTask(task.id);
-                Navigator.pop(dialogCtx, true);
-              },
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: Text(
                 strings.delete,
                 style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
@@ -715,8 +735,26 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   late bool _isActive;
   late bool _wifiOnly;
 
-  // Mobile categories: 'all', 'photos', 'videos', 'folders'
+  // Mobile categories: 'all', 'photos', 'videos', 'folders' (Windows/Android)
   late String _selectedSourceCategory;
+
+  // Neue Quell-Auswahl (iOS): Reiter "Fotos & Videos" / "Dateien".
+  late String _sourceTab; // 'media' | 'files'
+  List<String> _albums = [];
+  final Set<String> _selectedAlbums = {};
+  List<String> _localFolders = [];
+  final Set<String> _selectedFolders = {};
+  bool _loadingAlbums = false;
+  bool _loadingFolders = false;
+
+  // Zielordner: vorhandene Cloud-Ordner (Remote) durchsuchen.
+  List<String> _remoteTargetFolders = [];
+  bool _loadingRemoteFolders = false;
+  String? _remoteFoldersError;
+  String _selectedRemoteTargetFolder = '';
+  // Pfad der aktuell durchsuchten Remote-Ebene ("" = Root).
+  String _remoteFolderPath = '';
+  final List<String> _remoteFolderHistory = [];
 
   String? _nameError;
   String? _sourceError;
@@ -755,6 +793,9 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     _isActive = task?.isActive ?? true;
     _wifiOnly = task?.wifiOnly ?? true;
 
+    // iOS nutzt standardmäßig den Reiter "Fotos & Videos".
+    _sourceTab = (widget.platform == TargetPlatform.iOS ? 'media' : 'folders');
+
     if (task != null) {
       if (task.sourcePath == 'all' || task.sourcePath == 'Alles') {
         _selectedSourceCategory = 'all';
@@ -762,12 +803,123 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         _selectedSourceCategory = 'photos';
       } else if (task.sourcePath == 'videos' || task.sourcePath == 'Alle Videos') {
         _selectedSourceCategory = 'videos';
+      } else if (task.sourcePath.startsWith('photos:') ||
+          task.sourcePath.startsWith('videos:') ||
+          task.sourcePath.startsWith('all:')) {
+        // Codierte Album-Auswahl aus der Persistenz wiederherstellen.
+        _sourceTab = 'media';
+        _selectedSourceCategory = task.sourcePath.split(':').first;
+        _selectedAlbums.addAll(task.selectedAlbums);
+      } else if (task.sourcePath.startsWith('files:')) {
+        _sourceTab = 'files';
+        _selectedSourceCategory = 'folders';
+        _selectedFolders.addAll(task.selectedFolders);
       } else {
         _selectedSourceCategory = 'folders';
       }
     } else {
       _selectedSourceCategory = 'all';
     }
+
+    if (widget.platform == TargetPlatform.iOS) {
+      _loadAlbums();
+      _loadLocalFolders();
+    }
+  }
+
+  Future<void> _loadAlbums() async {
+    try {
+      setState(() => _loadingAlbums = true);
+      final ps = await PhotoManager.requestPermissionExtend();
+      final List<AssetPathEntity> paths = ps.isAuth || ps.hasAccess
+          ? await PhotoManager.getAssetPathList(type: RequestType.common, hasAll: true)
+          : [];
+      if (mounted) {
+        setState(() {
+          _albums = paths.map((p) => p.name).toList();
+          _loadingAlbums = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingAlbums = false);
+    }
+  }
+
+  Future<void> _loadLocalFolders() async {
+    try {
+      setState(() => _loadingFolders = true);
+      final dir = await getApplicationDocumentsDirectory();
+      final List<String> folders = [];
+      if (await dir.exists()) {
+        await for (final e in dir.list(followLinks: false)) {
+          if (e is Directory) {
+            folders.add(e.path);
+          }
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _localFolders = folders;
+          _loadingFolders = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingFolders = false);
+    }
+  }
+
+  /// Lädt die vorhandenen Cloud-Ordner (Remote) für die Zielordner-Auswahl.
+  Future<void> _loadRemoteTargetFolders() async {
+    if (_selectedRemotes.isEmpty) return;
+    setState(() {
+      _loadingRemoteFolders = true;
+      _remoteFoldersError = null;
+    });
+    try {
+      final remote = _selectedRemotes.first;
+      // Nur das Remote-Verzeichnis (aktueller Unterordner), niemals lokal.
+      final files = await ref.read(rcloneServiceProvider).listFiles(remote, _remoteFolderPath);
+      if (mounted) {
+        setState(() {
+          _remoteTargetFolders = files
+              .where((f) => f.isDir)
+              .map((f) => f.name)
+              .toList();
+          _loadingRemoteFolders = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _remoteFoldersError = stringsRemoteFoldersError();
+          _loadingRemoteFolders = false;
+        });
+      }
+    }
+  }
+
+  void _openRemoteFolder(String folderName) {
+    _remoteFolderHistory.add(_remoteFolderPath);
+    _remoteFolderPath = _remoteFolderPath.isEmpty
+        ? folderName
+        : '$_remoteFolderPath/$folderName';
+    _selectedRemoteTargetFolder = '';
+    _loadRemoteTargetFolders();
+  }
+
+  void _goUpRemoteFolder() {
+    if (_remoteFolderHistory.isNotEmpty) {
+      _remoteFolderPath = _remoteFolderHistory.removeLast();
+    } else {
+      _remoteFolderPath = '';
+    }
+    _selectedRemoteTargetFolder = '';
+    _loadRemoteTargetFolders();
+  }
+
+  String stringsRemoteFoldersError() {
+    final strings = ref.read(stringsProvider);
+    return strings.remoteFoldersLoadError;
   }
 
   @override
@@ -982,7 +1134,13 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       hasError = true;
     }
 
-    if (widget.platform == TargetPlatform.windows || _selectedSourceCategory == 'folders') {
+    if (widget.platform == TargetPlatform.iOS) {
+      // iOS: Quelle muss gewählt sein (mind. ein Album/Ordner ODER "alle").
+      if (_sourceTab == 'files' && _selectedFolders.isEmpty) {
+        newSourceError = strings.sourcePathRequiredError;
+        hasError = true;
+      }
+    } else if (widget.platform == TargetPlatform.windows || _selectedSourceCategory == 'folders') {
       if (sourcePath.isEmpty) {
         newSourceError = strings.sourcePathRequiredError;
         hasError = true;
@@ -1040,7 +1198,24 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
     final name = _nameController.text.trim();
     String finalSourcePath = _srcController.text.trim();
-    if (widget.platform != TargetPlatform.windows && _selectedSourceCategory != 'folders') {
+
+    // Gespeicherte Album-/Ordner-Auswahl.
+    final List<String> selectedAlbums = List<String>.from(_selectedAlbums);
+    final List<String> selectedFolders = List<String>.from(_selectedFolders);
+
+    if (widget.platform == TargetPlatform.iOS) {
+      if (_sourceTab == 'files') {
+        // Dateien: lokale Ordner codiert übergeben.
+        finalSourcePath = 'files:${selectedFolders.join('|')}';
+      } else {
+        // Fotos & Videos: "all:Album1|Album2"; leer = alle Alben.
+        if (selectedAlbums.isEmpty) {
+          finalSourcePath = 'all';
+        } else {
+          finalSourcePath = 'all:${selectedAlbums.join('|')}';
+        }
+      }
+    } else if (widget.platform != TargetPlatform.windows && _selectedSourceCategory != 'folders') {
       finalSourcePath = _selectedSourceCategory;
     }
 
@@ -1074,6 +1249,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       targetFolderMode: _selectedTargetFolderMode,
       targetFolderName: finalTargetFolder,
       wifiOnly: _wifiOnly,
+      selectedAlbums: selectedAlbums,
+      selectedFolders: selectedFolders,
     );
 
     if (widget.existingTask == null) {
@@ -1082,7 +1259,26 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       ref.read(tasksListProvider.notifier).updateTask(widget.existingTask!.id, task);
     }
 
+    // Fibu-Config aufs Remote schreiben, damit ein Neuaufsetzen / weiteres Gerät
+    // diese Task automatisch übernehmen kann (.fibu/config.json).
+    _writeRemoteConfigFor(task);
+
+    if (widget.platform == TargetPlatform.iOS) IosHaptics.medium();
     Navigator.pop(context);
+  }
+
+  /// Schreibt die aktuelle Task-Konfiguration für das erste Ziel-Remote auf.
+  Future<void> _writeRemoteConfigFor(BackupTask task) async {
+    if (task.targetRemotes.isEmpty) return;
+    final remote = task.targetRemotes.first;
+    final allTasks = ref.read(tasksListProvider);
+    try {
+      await ref
+          .read(syncConfigServiceProvider)
+          .writeConfigToRemote(remote, allTasks, task.targetFolderName);
+    } catch (_) {
+      // Nicht-blockierend: schlägt das Schreiben fehl, stört es die Task-Erstellung nicht.
+    }
   }
 
   @override
@@ -2008,6 +2204,547 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     );
   }
 
+  // =========================================================================
+  // IOS STEP 0: QUELLE (Fotos & Videos / Dateien)
+  // =========================================================================
+  Widget _buildIOSStep0Source(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(strings.taskNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        SizedBox(height: theme.xs),
+        cupertino.CupertinoTextField(
+          controller: _nameController,
+          placeholder: strings.taskNameHint,
+          padding: EdgeInsets.all(theme.md),
+          decoration: BoxDecoration(
+            color: theme.surface,
+            border: Border.all(
+              color: _nameError != null ? theme.error : cupertino.CupertinoColors.separator,
+              width: _nameError != null ? 1.5 : 0.5,
+            ),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+          ),
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+        ),
+        if (_nameError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+        SizedBox(height: theme.lg),
+        Row(
+          children: [
+            Text(strings.sourceCategoryLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSourcePath),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        cupertino.CupertinoSlidingSegmentedControl<String>(
+          groupValue: _sourceTab,
+          children: {
+            'media': Padding(
+              padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+              child: Text(strings.sourceTabPhotosVideos, style: const TextStyle(fontSize: 12)),
+            ),
+            'files': Padding(
+              padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+              child: Text(strings.sourceTabFiles, style: const TextStyle(fontSize: 12)),
+            ),
+          },
+          onValueChanged: (v) {
+            if (v != null) setState(() => _sourceTab = v);
+          },
+        ),
+        SizedBox(height: theme.md),
+        if (_sourceTab == 'media')
+          _buildIOSMediaSource(theme, strings)
+        else
+          _buildIOSFilesSource(theme, strings),
+      ],
+    );
+  }
+
+  Widget _buildIOSMediaSource(AppThemeData theme, AppStrings strings) {
+    if (_loadingAlbums) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: cupertino.CupertinoActivityIndicator()),
+      );
+    }
+    if (_albums.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: theme.lg),
+        child: Text(
+          strings.noAlbumsFound,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: theme.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+
+    final allSelected = _albums.length == _selectedAlbums.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // "Alle auswählen" Umschalter
+        cupertino.CupertinoListTile(
+          leading: Icon(
+            allSelected ? cupertino.CupertinoIcons.check_mark_circled_solid : cupertino.CupertinoIcons.circle,
+            color: allSelected ? theme.accent : theme.textSecondary,
+            size: 22,
+            semanticLabel: strings.selectAllAlbums,
+          ),
+          title: Text(
+            strings.selectAllAlbums,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+          onTap: () {
+            setState(() {
+              if (allSelected) {
+                _selectedAlbums.clear();
+              } else {
+                _selectedAlbums
+                  ..clear()
+                  ..addAll(_albums);
+              }
+            });
+          },
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusLg),
+            border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+          ),
+          child: Column(
+            children: _albums.map((album) {
+              final checked = _selectedAlbums.contains(album);
+              return Semantics(
+                checked: checked,
+                toggled: true,
+                button: true,
+                label: album,
+                child: cupertino.CupertinoListTile(
+                  title: Text(album, style: const TextStyle(fontSize: 14)),
+                  trailing: checked
+                      ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
+                      : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
+                  onTap: () {
+                    setState(() {
+                      if (checked) {
+                        _selectedAlbums.remove(album);
+                      } else {
+                        _selectedAlbums.add(album);
+                      }
+                    });
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        // Leere-Auswahl-Hinweis: keine Auswahl = alle Alben werden gesichert.
+        if (_selectedAlbums.isEmpty) ...[
+          SizedBox(height: theme.sm),
+          Container(
+            padding: EdgeInsets.all(theme.sm),
+            decoration: BoxDecoration(
+              color: theme.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+            child: Text(
+              strings.emptySelectionAlbumsHint,
+              style: TextStyle(color: theme.textSecondary, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildIOSFilesSource(AppThemeData theme, AppStrings strings) {
+    if (_loadingFolders) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: cupertino.CupertinoActivityIndicator()),
+      );
+    }
+    if (_localFolders.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: theme.lg),
+        child: Text(
+          strings.noFoldersFound,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: theme.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+
+    final allSelected = _localFolders.length == _selectedFolders.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        cupertino.CupertinoListTile(
+          leading: Icon(
+            allSelected ? cupertino.CupertinoIcons.check_mark_circled_solid : cupertino.CupertinoIcons.circle,
+            color: allSelected ? theme.accent : theme.textSecondary,
+            size: 22,
+            semanticLabel: strings.selectAllFolders,
+          ),
+          title: Text(
+            strings.selectAllFolders,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+          onTap: () {
+            setState(() {
+              if (allSelected) {
+                _selectedFolders.clear();
+              } else {
+                _selectedFolders
+                  ..clear()
+                  ..addAll(_localFolders);
+              }
+            });
+          },
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusLg),
+            border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+          ),
+          child: Column(
+            children: _localFolders.map((folder) {
+              final checked = _selectedFolders.contains(folder);
+              return Semantics(
+                checked: checked,
+                toggled: true,
+                button: true,
+                label: folder.split('/').last,
+                child: cupertino.CupertinoListTile(
+                  title: Text(folder.split('/').last, style: const TextStyle(fontSize: 14)),
+                  subtitle: Text(folder, style: const TextStyle(fontSize: 11)),
+                  trailing: checked
+                      ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
+                      : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
+                  onTap: () {
+                    setState(() {
+                      if (checked) {
+                        _selectedFolders.remove(folder);
+                      } else {
+                        _selectedFolders.add(folder);
+                      }
+                    });
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        // Leere-Auswahl-Hinweis für Dateien.
+        if (_selectedFolders.isEmpty) ...[
+          SizedBox(height: theme.sm),
+          Container(
+            padding: EdgeInsets.all(theme.sm),
+            decoration: BoxDecoration(
+              color: theme.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+            child: Text(
+              strings.emptySelectionFoldersHint,
+              style: TextStyle(color: theme.textSecondary, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // =========================================================================
+  // IOS STEP 1: ZIEL (Cloud-Laufwerk + Zielordner)
+  // =========================================================================
+  Widget _buildIOSStep1Destination(
+    BuildContext context,
+    AppThemeData theme,
+    AppStrings strings,
+    List<String> remotesList,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(strings.destinationRemoteLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusLg),
+            border: Border.all(
+              color: _remotesError != null ? theme.error : cupertino.CupertinoColors.separator,
+              width: _remotesError != null ? 1.5 : 0.5,
+            ),
+          ),
+          child: Column(
+            children: remotesList.map((remote) {
+              final isChecked = _selectedRemotes.contains(remote);
+              return cupertino.CupertinoListTile(
+                title: Text(remote, style: const TextStyle(fontSize: 14)),
+                trailing: isChecked
+                    ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
+                    : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
+                onTap: () {
+                  setState(() {
+                    if (isChecked) {
+                      _selectedRemotes.remove(remote);
+                    } else {
+                      _selectedRemotes.add(remote);
+                    }
+                    if (_selectedRemotes.isNotEmpty) _remotesError = null;
+                    _remoteTargetFolders = [];
+                    _selectedRemoteTargetFolder = '';
+                    _remoteFolderPath = '';
+                    _remoteFolderHistory.clear();
+                  });
+                  if (_selectedRemotes.isNotEmpty) _loadRemoteTargetFolders();
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        if (_remotesError != null) ...[
+          SizedBox(height: theme.xs),
+          Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+        if (_selectedRemotes.length > 1) ...[
+          SizedBox(height: theme.lg),
+          Row(
+            children: [
+              Text(strings.distributionStrategyLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              SizedBox(width: theme.xs),
+              TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoSlidingSegmentedControl<DistributionStrategy>(
+            groupValue: _selectedDistribution,
+            children: {
+              DistributionStrategy.mirrorAll: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                child: Text(strings.distributionBadgeMirrorAll, style: const TextStyle(fontSize: 11)),
+              ),
+              DistributionStrategy.balance: Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
+                child: Text(strings.distributionBadgeBalance, style: const TextStyle(fontSize: 11)),
+              ),
+            },
+            onValueChanged: (val) {
+              if (val != null) setState(() => _selectedDistribution = val);
+            },
+          ),
+        ],
+        SizedBox(height: theme.lg),
+        // Zielordner – klar & verständlich: Root / Vorhandener Ordner / Neuer Ordner
+        Row(
+          children: [
+            Text(strings.targetFolderModeLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            SizedBox(width: theme.xs),
+            TasksScreen._buildInfoTooltip(context, theme, strings.targetFolderTooltip),
+          ],
+        ),
+        SizedBox(height: theme.xs),
+        _buildTargetFolderOptions(theme, strings),
+        SizedBox(height: theme.md),
+        if (_selectedTargetFolderMode == TargetFolderMode.root) ...[
+          Container(
+            padding: EdgeInsets.all(theme.md),
+            decoration: BoxDecoration(
+              color: theme.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+            child: Text(
+              strings.targetFolderRoot,
+              style: TextStyle(color: theme.textPrimary, fontSize: 13),
+            ),
+          ),
+        ] else if (_selectedTargetFolderMode == TargetFolderMode.custom) ...[
+          _buildIOSRemoteFolderPicker(theme, strings),
+        ] else ...[
+          Text(strings.targetFolderNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoTextField(
+            controller: _targetFolderController,
+            placeholder: strings.newFolderNameHint,
+            padding: EdgeInsets.all(theme.md),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Drei klare Optionen für den Zielordner.
+  Widget _buildTargetFolderOptions(AppThemeData theme, AppStrings strings) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(theme.radiusLg),
+        border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          cupertino.CupertinoListTile(
+            leading: Icon(cupertino.CupertinoIcons.circle_lefthalf_fill, color: theme.accent, size: 22),
+            title: Text(strings.targetFolderRoot, style: const TextStyle(fontSize: 14)),
+            subtitle: Text(
+              strings.isGerman ? 'Direkt ins Hauptverzeichnis der Cloud.' : 'Directly into the cloud root directory.',
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: _selectedTargetFolderMode == TargetFolderMode.root
+                ? Icon(cupertino.CupertinoIcons.check_mark, color: theme.accent)
+                : null,
+            onTap: () => setState(() => _selectedTargetFolderMode = TargetFolderMode.root),
+          ),
+          cupertino.CupertinoListTile(
+            leading: Icon(cupertino.CupertinoIcons.folder, color: theme.accent, size: 22),
+            title: Text(strings.targetFolderExistingLabel, style: const TextStyle(fontSize: 14)),
+            subtitle: Text(
+              strings.isGerman ? 'In einen vorhandenen Cloud-Ordner.' : 'Into an existing cloud folder.',
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: _selectedTargetFolderMode == TargetFolderMode.custom
+                ? Icon(cupertino.CupertinoIcons.check_mark, color: theme.accent)
+                : null,
+            onTap: () {
+              setState(() => _selectedTargetFolderMode = TargetFolderMode.custom);
+              if (_remoteTargetFolders.isEmpty) _loadRemoteTargetFolders();
+            },
+          ),
+          cupertino.CupertinoListTile(
+            leading: Icon(cupertino.CupertinoIcons.folder_badge_plus, color: theme.accent, size: 22),
+            title: Text(strings.targetFolderNew, style: const TextStyle(fontSize: 14)),
+            subtitle: Text(
+              strings.isGerman ? 'Einen neuen Ordner in der Cloud anlegen.' : 'Create a new folder in the cloud.',
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: _selectedTargetFolderMode == TargetFolderMode.newFolder
+                ? Icon(cupertino.CupertinoIcons.check_mark, color: theme.accent)
+                : null,
+            onTap: () => setState(() => _selectedTargetFolderMode = TargetFolderMode.newFolder),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Listet die vorhandenen Cloud-Ordner (Remote) – niemals lokale Ordner.
+  /// Bietet Navigation in Unterordner an.
+  Widget _buildIOSRemoteFolderPicker(AppThemeData theme, AppStrings strings) {
+    if (_loadingRemoteFolders) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: cupertino.CupertinoActivityIndicator()),
+      );
+    }
+    if (_remoteFoldersError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_remoteFoldersError!, style: TextStyle(color: theme.error, fontSize: 12)),
+          SizedBox(height: theme.xs),
+          cupertino.CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: _loadRemoteTargetFolders,
+            child: Text(strings.retry, style: TextStyle(color: theme.accent)),
+          ),
+        ],
+      );
+    }
+
+    final List<Widget> tiles = [];
+
+    // "Eine Ebene höher" (falls in einem Unterordner)
+    if (_remoteFolderPath.isNotEmpty) {
+      tiles.add(cupertino.CupertinoListTile(
+        leading: Icon(cupertino.CupertinoIcons.arrow_up_circle, color: theme.accent, size: 22),
+        title: Text(strings.targetFolderUp, style: const TextStyle(fontSize: 14)),
+        onTap: () {
+          IosHaptics.light();
+          _goUpRemoteFolder();
+        },
+      ));
+      tiles.add(Container(height: 1, color: cupertino.CupertinoColors.separator));
+    }
+
+    if (_remoteTargetFolders.isEmpty && _remoteFolderPath.isEmpty) {
+      return Text(
+        strings.remoteFolderEmpty,
+        style: TextStyle(color: theme.textSecondary, fontSize: 13),
+      );
+    }
+
+    if (_remoteTargetFolders.isEmpty) {
+      // Unterordner ohne weitere Unterordner: Aktuellen Pfad wählbar machen.
+      tiles.add(cupertino.CupertinoListTile(
+        title: Text(
+          _remoteFolderPath,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(strings.targetFolderCurrentPath, style: const TextStyle(fontSize: 11)),
+        trailing: Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22),
+        onTap: () {
+          setState(() {
+            _selectedRemoteTargetFolder = _remoteFolderPath;
+            _targetFolderController.text = _remoteFolderPath;
+          });
+        },
+      ));
+    }
+
+    tiles.addAll(_remoteTargetFolders.map((folder) {
+      final folderPath = _remoteFolderPath.isEmpty ? folder : '$_remoteFolderPath/$folder';
+      final checked = folderPath == _selectedRemoteTargetFolder;
+      return cupertino.CupertinoListTile(
+        leading: Icon(cupertino.CupertinoIcons.folder, color: theme.accent, size: 22),
+        title: Text(folder, style: const TextStyle(fontSize: 14)),
+        trailing: checked
+            ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
+            : Icon(cupertino.CupertinoIcons.chevron_forward, color: theme.textSecondary, size: 18),
+        onTap: () {
+          // Tap öffnet den Unterordner (nicht sofort auswählen).
+          IosHaptics.light();
+          _openRemoteFolder(folder);
+        },
+      );
+    }).toList());
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(theme.radiusLg),
+        border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
+      ),
+      child: Column(children: tiles),
+    );
+  }
+
   Widget _buildIOSStepContent(
     BuildContext context,
     AppThemeData theme,
@@ -2015,203 +2752,9 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     List<String> remotesList,
   ) {
     if (_currentStep == 0) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildPresetSelectionCards(context, theme, strings),
-          Text(strings.taskNameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoTextField(
-            controller: _nameController,
-            placeholder: strings.taskNameHint,
-            padding: EdgeInsets.all(theme.md),
-            decoration: BoxDecoration(
-              color: theme.surface,
-              border: Border.all(
-                color: _nameError != null ? theme.error : cupertino.CupertinoColors.separator,
-                width: _nameError != null ? 1.5 : 0.5,
-              ),
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-            ),
-            onChanged: (_) {
-              if (_nameError != null) setState(() => _nameError = null);
-            },
-          ),
-          if (_nameError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(_nameError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
-          ],
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text(strings.sourceCategoryLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipSourcePath),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoSlidingSegmentedControl<String>(
-            groupValue: _selectedSourceCategory,
-            children: {
-              'all': Text(strings.allMedia, style: const TextStyle(fontSize: 11)),
-              'photos': Text(strings.allPhotos, style: const TextStyle(fontSize: 11)),
-              'videos': Text(strings.allVideos, style: const TextStyle(fontSize: 11)),
-              'folders': Text(strings.specificFoldersShort, style: const TextStyle(fontSize: 11)),
-            },
-            onValueChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  _selectedSourceCategory = val;
-                  if (val != 'folders') _sourceError = null;
-                });
-              }
-            },
-          ),
-          if (_selectedSourceCategory == 'folders') ...[
-            SizedBox(height: theme.sm),
-            cupertino.CupertinoTextField(
-              controller: _srcController,
-              placeholder: strings.specificFoldersHint,
-              padding: EdgeInsets.all(theme.md),
-              decoration: BoxDecoration(
-                color: theme.surface,
-                border: Border.all(
-                  color: _sourceError != null ? theme.error : cupertino.CupertinoColors.separator,
-                  width: _sourceError != null ? 1.5 : 0.5,
-                ),
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-              ),
-              onChanged: (_) {
-                if (_sourceError != null) setState(() => _sourceError = null);
-              },
-            ),
-            if (_sourceError != null) ...[
-              SizedBox(height: theme.xs),
-              Text(_sourceError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
-          ],
-        ],
-      );
+      return _buildIOSStep0Source(context, theme, strings);
     } else if (_currentStep == 1) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(strings.destinationRemoteLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.tooltipDestinationRemote),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          Container(
-            decoration: BoxDecoration(
-              color: theme.surface,
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              border: Border.all(
-                color: _remotesError != null ? theme.error : cupertino.CupertinoColors.separator,
-                width: _remotesError != null ? 1.5 : 0.5,
-              ),
-            ),
-            child: Column(
-              children: remotesList.map((remote) {
-                final isChecked = _selectedRemotes.contains(remote);
-                return cupertino.CupertinoListTile(
-                  title: Text(remote, style: const TextStyle(fontSize: 13)),
-                  trailing: isChecked
-                      ? Icon(cupertino.CupertinoIcons.checkmark_alt_circle_fill, color: theme.accent, size: 22)
-                      : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
-                  onTap: () {
-                    setState(() {
-                      if (isChecked) {
-                        _selectedRemotes.remove(remote);
-                      } else {
-                        _selectedRemotes.add(remote);
-                      }
-                      if (_selectedRemotes.isNotEmpty) _remotesError = null;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-          if (_remotesError != null) ...[
-            SizedBox(height: theme.xs),
-            Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
-          ],
-          if (_selectedRemotes.length > 1) ...[
-            SizedBox(height: theme.lg),
-            Row(
-              children: [
-                Text(strings.distributionStrategyLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                SizedBox(width: theme.xs),
-                TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
-              ],
-            ),
-            SizedBox(height: theme.xs),
-            cupertino.CupertinoSlidingSegmentedControl<DistributionStrategy>(
-              groupValue: _selectedDistribution,
-              children: {
-                DistributionStrategy.mirrorAll: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                  child: Text(strings.distributionBadgeMirrorAll, style: const TextStyle(fontSize: 11)),
-                ),
-                DistributionStrategy.balance: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                  child: Text(strings.distributionBadgeBalance, style: const TextStyle(fontSize: 11)),
-                ),
-              },
-              onValueChanged: (val) {
-                if (val != null) setState(() => _selectedDistribution = val);
-              },
-            ),
-          ],
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text(strings.targetFolderModeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.targetFolderTooltip),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoSlidingSegmentedControl<TargetFolderMode>(
-            groupValue: _selectedTargetFolderMode,
-            children: {
-              TargetFolderMode.root: Padding(
-                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                child: Text(strings.targetFolderRoot, style: const TextStyle(fontSize: 10), maxLines: 1),
-              ),
-              TargetFolderMode.custom: Padding(
-                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                child: Text(strings.targetFolderCustom, style: const TextStyle(fontSize: 10), maxLines: 1),
-              ),
-              TargetFolderMode.newFolder: Padding(
-                padding: EdgeInsets.symmetric(horizontal: theme.xs, vertical: theme.xs),
-                child: Text(strings.targetFolderNew, style: const TextStyle(fontSize: 10), maxLines: 1),
-              ),
-            },
-            onValueChanged: (val) {
-              if (val != null) setState(() => _selectedTargetFolderMode = val);
-            },
-          ),
-          if (_selectedTargetFolderMode != TargetFolderMode.root) ...[
-            SizedBox(height: theme.sm),
-            cupertino.CupertinoTextField(
-              controller: _targetFolderController,
-              placeholder: _selectedTargetFolderMode == TargetFolderMode.newFolder
-                  ? strings.newFolderNameHint
-                  : 'fibu-backup',
-              padding: EdgeInsets.all(theme.md),
-              decoration: BoxDecoration(
-                color: theme.surface,
-                border: Border.all(color: cupertino.CupertinoColors.separator, width: 0.5),
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-              ),
-            ),
-          ],
-        ],
-      );
+      return _buildIOSStep1Destination(context, theme, strings, remotesList);
     } else {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

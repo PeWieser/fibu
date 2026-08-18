@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
@@ -35,6 +38,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
   String? _errorMessage;
   String? _bannerMessage;
   bool _isBannerError = false;
+  bool _isDownloading = false;
   late final AnimationController _rotationController;
 
   @override
@@ -202,6 +206,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
     Navigator.of(context).push(route);
   }
 
+  String fullPathOf(RcloneFileInfo file) {
+    return _currentPath.isEmpty ? file.name : '$_currentPath/${file.name}';
+  }
+
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -229,8 +237,37 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
     }
   }
 
-  void _simulateDownload(RcloneFileInfo file, AppStrings strings) {
-    _showNotification('${file.name}: ${strings.downloadFile} ${strings.success.toLowerCase()}.', isError: false);
+  /// Lädt eine einzelne Cloud-Datei real herunter (in die App-Dokumente,
+  /// auf iOS via File-Sharing in der Dateien-App sichtbar).
+  Future<void> _downloadFile(RcloneFileInfo file, AppStrings strings) async {
+    final remote = _selectedRemote;
+    if (remote == null) return;
+
+    setState(() => _isDownloading = true);
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final downloadDir = Directory('${dir.path}/Downloads');
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+      final localPath = '${downloadDir.path}/${file.name}';
+
+      // Remote-/Cloud-Datei herunterladen (niemals lokal).
+      await ref.read(rcloneServiceProvider).downloadFile(remote, fullPathOf(file), localPath);
+
+      if (mounted) {
+        _showNotification(
+          '${file.name}: ${strings.downloadComplete} $localPath',
+          isError: false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showNotification('${file.name}: ${strings.downloadFailed} $e', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
   }
 
   Future<void> _executeDeleteAndExclude(String fileName, String fullFilePath, AppStrings strings) async {
@@ -589,7 +626,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                     child: fluent.Button(
                       onPressed: () {
                         Navigator.pop(dialogCtx);
-                        _simulateDownload(file, strings);
+                        _downloadFile(file, strings);
                       },
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -742,7 +779,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
           cupertino.CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(modalCtx);
-              _simulateDownload(file, strings);
+              _downloadFile(file, strings);
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -889,7 +926,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                           ),
                           onPressed: () {
                             Navigator.pop(sheetCtx);
-                            _simulateDownload(file, strings);
+                            _downloadFile(file, strings);
                           },
                           icon: const Icon(material.Icons.download, color: material.Colors.white, semanticLabel: 'Download'),
                           label: Text(strings.downloadFile, style: const TextStyle(color: material.Colors.white, fontWeight: FontWeight.w600)),

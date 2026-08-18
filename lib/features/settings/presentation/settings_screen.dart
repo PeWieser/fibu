@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
+import '../../../theme/ios_theme.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/sanzo_wada_palettes.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
@@ -376,12 +378,15 @@ class SettingsScreen extends ConsumerWidget {
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
-        middle: Text(strings.settingsTitle),
+        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
+        middle: const SizedBox.shrink(),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              IosTheme.largeTitle(strings.settingsTitle, theme),
               // 1. Cloud Drives Section
               cupertino.CupertinoListSection.insetGrouped(
                 header: Text(strings.cloudStorage.toUpperCase()),
@@ -417,6 +422,7 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: cupertino.CupertinoSwitch(
                       value: ref.watch(wifiOnlySyncProvider),
                       onChanged: (val) {
+                        IosHaptics.selection();
                         ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
                       },
                     ),
@@ -435,6 +441,7 @@ class SettingsScreen extends ConsumerWidget {
                       trailing: cupertino.CupertinoSwitch(
                         value: config.syncWithSystem,
                         onChanged: (val) {
+                          IosHaptics.selection();
                           ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
                         },
                       ),
@@ -445,6 +452,7 @@ class SettingsScreen extends ConsumerWidget {
                         trailing: cupertino.CupertinoSwitch(
                           value: config.forceDarkMode,
                           onChanged: (val) {
+                            IosHaptics.selection();
                             ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
                           },
                         ),

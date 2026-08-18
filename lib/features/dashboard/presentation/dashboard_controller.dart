@@ -59,6 +59,130 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     return '[${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}]';
   }
 
+  /// Synchronisiert eine einzelne Aufgabe. Gibt true bei Erfolg, false bei
+  /// Abbruch oder Fehler zurück. Setzt dabei den Job-State selbst.
+  Future<bool> _syncSingleTask(BackupTask task) async {
+    final parts = task.targetRemote.split(':');
+    final remoteName = parts[0];
+    final targetFolder = task.targetFolderMode == TargetFolderMode.root
+        ? ''
+        : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');
+    final remotePath = parts.length > 1 && parts[1].isNotEmpty
+        ? (targetFolder.isNotEmpty ? '${parts[1]}/$targetFolder' : parts[1])
+        : targetFolder;
+
+    final List<String> includeFilters = [];
+    final srcLower = task.sourcePath.toLowerCase();
+    final srcBase = srcLower.startsWith('photos:')
+        ? 'photos'
+        : (srcLower.startsWith('videos:')
+            ? 'videos'
+            : (srcLower.startsWith('all:') ? 'all' : srcLower));
+    if (srcBase == 'photos' || srcBase == 'alle fotos') {
+      includeFilters.addAll(['*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif']);
+    } else if (srcBase == 'videos' || srcBase == 'alle videos') {
+      includeFilters.addAll(['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp']);
+    } else if (srcBase == 'all' || srcBase == 'alles' || srcBase == 'media' || srcBase == 'mediathek') {
+      includeFilters.addAll([
+        '*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif',
+        '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp',
+      ]);
+    }
+
+    final isEcho = task.syncMode == SyncMode.mirror;
+    final modeLabel = isEcho ? '2-Way Mirror (Echo)' : 'Incremental';
+    final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
+    state = state.copyWith(
+      logs: [...state.logs, startMsg],
+    );
+
+    try {
+      final jobId = await _rcloneService.startBackupJob(
+        localPath: task.sourcePath,
+        remoteName: remoteName,
+        remotePath: remotePath,
+        options: SyncOptions(
+          isEchoMode: isEcho,
+          includeFilters: includeFilters,
+          excludeFilters: task.excludedFiles,
+        ),
+      );
+
+      if (!mounted) return false;
+      state = state.copyWith(
+        jobId: jobId,
+        status: RcloneJobStatus.pending,
+        percentage: 0.0,
+        currentFile: 'Starting: ${task.name}...',
+      );
+
+      // Subscribe to this job's progress
+      _progressSub?.cancel();
+      _progressSub = _rcloneService.watchJobProgress(jobId).listen((event) {
+        if (!mounted) return;
+        if (event.jobId == state.jobId) {
+          final t = _timestamp();
+          final logLine = '$t [Progress] ${event.percentage.toStringAsFixed(1)}% - ${event.currentFile}';
+
+          final newLogs = List<String>.from(state.logs);
+          if (newLogs.isEmpty || !newLogs.last.contains(event.currentFile)) {
+            newLogs.add(logLine);
+          } else {
+            newLogs[newLogs.length - 1] = logLine;
+          }
+
+          state = state.copyWith(
+            percentage: event.percentage,
+            currentFile: '[${task.name}] ${event.currentFile}',
+            eta: event.eta,
+            logs: newLogs,
+          );
+        }
+      });
+
+      // Wait for this job to finish
+      final completer = Completer<void>();
+      final statusSub = _rcloneService.watchJobStatus().listen((event) {
+        if (event.jobId == jobId) {
+          if (event.status == RcloneJobStatus.completed) {
+            if (!completer.isCompleted) completer.complete();
+          } else if (event.status == RcloneJobStatus.failed) {
+            if (!completer.isCompleted) completer.completeError(event.error ?? 'Sync process failed');
+          } else if (event.status == RcloneJobStatus.cancelled) {
+            if (!completer.isCompleted) completer.completeError('Backup cancelled');
+          }
+        }
+      });
+
+      try {
+        await completer.future;
+        if (!mounted) {
+          await statusSub.cancel();
+          return false;
+        }
+        final endMsg = '${_timestamp()} Task "${task.name}" completed successfully!';
+        state = state.copyWith(
+          logs: [...state.logs, endMsg],
+        );
+      } finally {
+        await statusSub.cancel();
+      }
+      return true;
+    } catch (e) {
+      _progressSub?.cancel();
+      _progressSub = null;
+      if (!mounted) return false;
+      final failMsg = '${_timestamp()} Task "${task.name}" failed: $e';
+      state = state.copyWith(
+        status: e.toString() == 'Backup cancelled' || _isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
+        currentFile: 'Backup stopped: $e',
+        logs: [...state.logs, failMsg],
+      );
+      return false;
+    }
+  }
+
+  /// Synchronisiert die gesamte aktive Warteschlange.
   Future<void> triggerSyncAll() async {
     // Prevent duplicate triggers
     if (state.status == RcloneJobStatus.syncing || state.status == RcloneJobStatus.pending) {
@@ -87,117 +211,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     for (final task in activeTasks) {
       if (_isCancelled) break;
       if (!mounted) return;
-
-      final parts = task.targetRemote.split(':');
-      final remoteName = parts[0];
-      final targetFolder = task.targetFolderMode == TargetFolderMode.root
-          ? ''
-          : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');
-      final remotePath = parts.length > 1 && parts[1].isNotEmpty
-          ? (targetFolder.isNotEmpty ? '${parts[1]}/$targetFolder' : parts[1])
-          : targetFolder;
-
-      final List<String> includeFilters = [];
-      final srcLower = task.sourcePath.toLowerCase();
-      if (srcLower == 'photos' || srcLower == 'alle fotos') {
-        includeFilters.addAll(['*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif']);
-      } else if (srcLower == 'videos' || srcLower == 'alle videos') {
-        includeFilters.addAll(['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp']);
-      } else if (srcLower == 'all' || srcLower == 'alles' || srcLower == 'media' || srcLower == 'mediathek') {
-        includeFilters.addAll([
-          '*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif',
-          '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp',
-        ]);
-      }
-
-      final isEcho = task.syncMode == SyncMode.mirror;
-      final modeLabel = isEcho ? '2-Way Mirror (Echo)' : 'Incremental';
-      final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
-      state = state.copyWith(
-        logs: [...state.logs, startMsg],
-      );
-
-      try {
-        final jobId = await _rcloneService.startBackupJob(
-          localPath: task.sourcePath,
-          remoteName: remoteName,
-          remotePath: remotePath,
-          options: SyncOptions(
-            isEchoMode: isEcho,
-            includeFilters: includeFilters,
-            excludeFilters: task.excludedFiles,
-          ),
-        );
-
-        if (!mounted) return;
-        state = state.copyWith(
-          jobId: jobId,
-          status: RcloneJobStatus.pending,
-          percentage: 0.0,
-          currentFile: 'Starting: ${task.name}...',
-        );
-
-        // Subscribe to this job's progress
-        _progressSub?.cancel();
-        _progressSub = _rcloneService.watchJobProgress(jobId).listen((event) {
-          if (!mounted) return;
-          if (event.jobId == state.jobId) {
-            final t = _timestamp();
-            final logLine = '$t [Progress] ${event.percentage.toStringAsFixed(1)}% - ${event.currentFile}';
-
-            final newLogs = List<String>.from(state.logs);
-            if (newLogs.isEmpty || !newLogs.last.contains(event.currentFile)) {
-              newLogs.add(logLine);
-            } else {
-              newLogs[newLogs.length - 1] = logLine;
-            }
-
-            state = state.copyWith(
-              percentage: event.percentage,
-              currentFile: '[${task.name}] ${event.currentFile}',
-              eta: event.eta,
-              logs: newLogs,
-            );
-          }
-        });
-
-        // Wait for this job to finish
-        final completer = Completer<void>();
-        final statusSub = _rcloneService.watchJobStatus().listen((event) {
-          if (event.jobId == jobId) {
-            if (event.status == RcloneJobStatus.completed) {
-              if (!completer.isCompleted) completer.complete();
-            } else if (event.status == RcloneJobStatus.failed) {
-              if (!completer.isCompleted) completer.completeError(event.error ?? 'Sync process failed');
-            } else if (event.status == RcloneJobStatus.cancelled) {
-              if (!completer.isCompleted) completer.completeError('Backup cancelled');
-            }
-          }
-        });
-
-        try {
-          await completer.future;
-          if (!mounted) {
-            await statusSub.cancel();
-            return;
-          }
-          final endMsg = '${_timestamp()} Task "${task.name}" completed successfully!';
-          state = state.copyWith(
-            logs: [...state.logs, endMsg],
-          );
-        } finally {
-          await statusSub.cancel();
-        }
-      } catch (e) {
+      final ok = await _syncSingleTask(task);
+      if (!ok) {
+        // Ein Task ist fehlgeschlagen/abgebrochen → Queue beenden (wie bisher).
         _progressSub?.cancel();
         _progressSub = null;
-        if (!mounted) return;
-        final failMsg = '${_timestamp()} Task "${task.name}" failed: $e';
-        state = state.copyWith(
-          status: e.toString() == 'Backup cancelled' || _isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
-          currentFile: 'Backup stopped: $e',
-          logs: [...state.logs, failMsg],
-        );
         return;
       }
     }
@@ -211,6 +229,52 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       state = const ActiveJobState(
         status: RcloneJobStatus.completed,
         currentFile: 'All active backup tasks completed successfully!',
+      ).copyWith(
+        logs: [...state.logs, doneMsg],
+      );
+    }
+  }
+
+  /// Synchronisiert ausschließlich die angegebene Aufgabe (für die Detail-Ansicht).
+  Future<void> triggerSyncTask(String taskId) async {
+    // Prevent duplicate triggers
+    if (state.status == RcloneJobStatus.syncing || state.status == RcloneJobStatus.pending) {
+      return;
+    }
+
+    _isCancelled = false;
+    BackupTask? task;
+    for (final t in _ref.read(tasksListProvider)) {
+      if (t.id == taskId) {
+        task = t;
+        break;
+      }
+    }
+    if (task == null) {
+      state = ActiveJobState(
+        status: RcloneJobStatus.failed,
+        currentFile: 'Task not found.',
+        logs: [...state.logs, '${_timestamp()} Error: Task not found.'],
+      );
+      return;
+    }
+
+    final timestamp = _timestamp();
+    state = ActiveJobState(
+      status: RcloneJobStatus.pending,
+      currentFile: 'Preparing ${task.name}...',
+      logs: ['$timestamp Task sync started. Preparing "${task.name}"...'],
+    );
+
+    final ok = await _syncSingleTask(task);
+    _progressSub?.cancel();
+    _progressSub = null;
+    if (!mounted) return;
+    if (ok) {
+      final doneMsg = '${_timestamp()} Task "${task.name}" synchronized successfully.';
+      state = const ActiveJobState(
+        status: RcloneJobStatus.completed,
+        currentFile: 'Task synchronized successfully!',
       ).copyWith(
         logs: [...state.logs, doneMsg],
       );

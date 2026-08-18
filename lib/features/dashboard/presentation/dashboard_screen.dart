@@ -6,9 +6,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
+import '../../../theme/ios_theme.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../settings/presentation/cloud_drives_screen.dart';
 import 'dashboard_controller.dart';
 import 'widgets/storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
@@ -45,6 +48,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
 
   Future<void> _handleRefresh(BuildContext context, AppStrings strings) async {
     if (_isRefreshing) return;
+    IosHaptics.light();
     setState(() => _isRefreshing = true);
     _spinController.repeat();
 
@@ -334,7 +338,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
-        middle: Text(strings.navDashboard),
+        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
+        middle: const SizedBox.shrink(),
         trailing: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           child: Semantics(
@@ -354,48 +359,84 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(theme.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              IosTheme.largeTitle(strings.navDashboard, theme),
+              Padding(
+                padding: EdgeInsets.fromLTRB(theme.lg, 0, theme.lg, theme.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
               _buildClickableStatusBanner(context, activeJob, strings),
               SizedBox(height: theme.lg),
               quotaAsync.when(
                 data: (quota) {
                   if (quota == null) {
-                    return Semantics(
-                      label: strings.tooltipStorageCard,
-                      child: Container(
-                        padding: EdgeInsets.all(theme.lg),
-                        decoration: BoxDecoration(
-                          color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
-                          borderRadius: BorderRadius.circular(theme.radiusLg),
-                          border: Border.all(
-                            color: cupertino.CupertinoColors.separator.resolveFrom(context),
-                            width: 0.5,
+                    // Nativer, aktionsfähiger Leerzustand: CTA öffnet die Cloud-Laufwerke.
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(theme.lg),
+                          decoration: BoxDecoration(
+                            color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+                            borderRadius: BorderRadius.circular(theme.radiusLg),
+                            border: Border.all(
+                              color: cupertino.CupertinoColors.separator.resolveFrom(context),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                cupertino.CupertinoIcons.cloud,
+                                color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                size: 24,
+                                semanticLabel: strings.noDrivesConfigured,
+                              ),
+                              SizedBox(width: theme.md),
+                              Expanded(
+                                child: Text(
+                                  strings.noDrivesConfigured,
+                                  style: TextStyle(
+                                    color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              cupertino.CupertinoIcons.cloud,
-                              color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-                              size: 24,
-                              semanticLabel: strings.noDrivesConfigured,
-                            ),
-                            SizedBox(width: theme.md),
-                            Expanded(
+                        SizedBox(height: theme.md),
+                        Semantics(
+                          label: strings.manageCloudDrives,
+                          button: true,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            child: cupertino.CupertinoButton(
+                              color: theme.accent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              borderRadius: BorderRadius.circular(theme.radiusSm),
+                              onPressed: () {
+                                IosHaptics.light();
+                                Navigator.push(
+                                  context,
+                                  cupertino.CupertinoPageRoute(
+                                      builder: (_) => const CloudDrivesScreen()),
+                                );
+                              },
                               child: Text(
-                                strings.noDrivesConfigured,
-                                style: TextStyle(
-                                  color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-                                  fontSize: 14,
+                                strings.manageCloudDrives,
+                                style: const TextStyle(
+                                  color: cupertino.CupertinoColors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   }
                   return Semantics(
@@ -420,7 +461,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                       color: theme.error,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       borderRadius: BorderRadius.circular(theme.radiusSm),
-                      onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+                      onPressed: () {
+                        IosHaptics.light();
+                        ref.read(activeJobProvider.notifier).cancelActiveSync();
+                      },
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -448,7 +492,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                     child: cupertino.CupertinoButton.filled(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       borderRadius: BorderRadius.circular(theme.radiusSm),
-                      onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                      onPressed: () {
+                        IosHaptics.medium();
+                        ref.read(activeJobProvider.notifier).triggerSyncAll();
+                      },
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -499,9 +546,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                   ),
                 ),
               ),
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
       ),
     );
   }

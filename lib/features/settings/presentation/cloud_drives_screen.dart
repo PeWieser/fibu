@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/ios_rclone_service.dart';
+import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
 import '../../tasks/presentation/tasks_controller.dart';
@@ -376,6 +378,29 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: theme.textSecondary),
             ),
+            SizedBox(height: theme.lg),
+            // Aktionsfähiger Leerzustand (Apple HIG): CTA zum Hinzufügen.
+            Semantics(
+              label: strings.addCloudDrive,
+              button: true,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: cupertino.CupertinoButton(
+                  color: theme.accent,
+                  padding: const EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.sm),
+                  borderRadius: BorderRadius.circular(theme.radiusSm),
+                  onPressed: () => _openAddRemoteWizard(context, TargetPlatform.iOS),
+                  child: Text(
+                    strings.addCloudDrive,
+                    style: const TextStyle(
+                      color: cupertino.CupertinoColors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -401,7 +426,15 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             ),
           ),
           confirmDismiss: (_) async {
-            return await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.iOS);
+            final confirmed =
+                await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.iOS);
+            if (confirmed) {
+              // Löschung läuft asynchron über Provider-Invalidierung. return false,
+              // damit Dismissible die Zeile NICHT selbst animiert/entfernt
+              // (kein "dismissed Dismissible still part of tree"-Fehler).
+              _performDelete(remote);
+            }
+            return false;
           },
           child: cupertino.CupertinoListTile(
             title: Text(remote),
@@ -973,6 +1006,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   bool _isAdding = false;
   String? _addError;
   bool _isOAuthAuthorized = false;
+  bool _isOAuthWorking = false;
+  String? _oauthError;
 
   @override
   void dispose() {
@@ -1076,7 +1111,96 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _testMessage = null;
       _addError = null;
       _isOAuthAuthorized = false;
+      _oauthError = null;
     });
+  }
+
+  /// Opens the provider OAuth page in an in-app browser and stores the token.
+  Future<void> _handleOAuthAuthorize() async {
+    final strings = context.strings;
+    final remoteName = _nameController.text.trim();
+    if (remoteName.isEmpty) {
+      setState(() => _oauthError = strings.nameRequiredError);
+      return;
+    }
+
+    setState(() {
+      _isOAuthWorking = true;
+      _oauthError = null;
+      _isOAuthAuthorized = false;
+    });
+
+    final providerId = _selectedProvider.toLowerCase();
+    final rclone = ref.read(rcloneServiceProvider);
+    Map<String, String> creds = const {'client_id': '', 'client_secret': ''};
+    if (rclone is IosRcloneService) {
+      // rclone liefert eigene Standard-Credentials (z. B. Google Drive).
+      creds = await rclone.getProviderClientCredentials(providerId);
+    }
+    final clientId = creds['client_id'] ?? '';
+    if (clientId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isOAuthWorking = false;
+          _oauthError =
+              'Für diesen Anbieter sind keine rclone-Standard-Credentials verfügbar. Bitte client_id/client_secret in den Einstellungen hinterlegen.';
+        });
+      }
+      return;
+    }
+
+    final result = await ref.read(oauthServiceProvider).authorize(
+          providerId: providerId,
+          remoteName: remoteName,
+          authUrl: _buildOAuthUrl(providerId, remoteName, creds),
+        );
+
+    if (mounted) {
+      setState(() {
+        _isOAuthWorking = false;
+        if (result.success) {
+          _isOAuthAuthorized = true;
+          _oauthError = null;
+        } else {
+          _oauthError = result.error;
+        }
+      });
+    }
+  }
+
+  /// Builds the provider OAuth authorization URL using rclone's shipped client
+  /// credentials ([creds]) when available.
+  ///
+  /// rclone bundles public `client_id`/`client_secret` for several providers
+  /// (e.g. Google Drive, OneDrive, Dropbox), fetched via
+  /// `IosRcloneService.getProviderClientCredentials`. If none are found, a
+  /// clear message is shown so the developer can supply a custom client.
+  Uri _buildOAuthUrl(String providerId, String remoteName, Map<String, String> creds) {
+    final state = Uri.encodeQueryComponent(remoteName);
+    final clientId = creds['client_id'] ?? '';
+    final redirect = Uri.encodeComponent('${OAuthService.callbackScheme}://callback');
+
+    // Ohne Client-ID kann die Browser-Autorisierung nicht starten.
+    if (clientId.isEmpty) {
+      return Uri.parse(
+          'https://rclone.org/oauth/?provider=$providerId&state=$state&redirect_uri=$redirect');
+    }
+
+    switch (providerId) {
+      case 'drive':
+      case 'google_photos':
+        return Uri.parse(
+            'https://accounts.google.com/o/oauth2/v2/auth?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
+      case 'onedrive':
+        return Uri.parse(
+            'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?scope=offline_access%20files.readwrite.all&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
+      case 'dropbox':
+        return Uri.parse(
+            'https://www.dropbox.com/oauth2/authorize?response_type=code&state=$state&client_id=$clientId&redirect_uri=$redirect');
+      default:
+        return Uri.parse(
+            'https://rclone.org/oauth/?provider=$providerId&state=$state&redirect_uri=$redirect');
+    }
   }
 
   Future<void> _handleTestConnection() async {
@@ -1190,8 +1314,11 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       Map<String, String> config = {};
 
       if (_isOAuthProvider) {
-        // OAuth providers connect safely via browser tokens
-        config = {};
+        // OAuth providers use the securely stored browser token.
+        final token = await ref.read(oauthServiceProvider).getToken(name);
+        config = {
+          if (token != null && token.isNotEmpty) 'token': '{"access_token":"$token","token_type":"Bearer","expiry":"0001-01-01T00:00:00Z"}',
+        };
       } else if (_isMegaProvider) {
         final plainPass = _passController.text;
         final obscured = await ref.read(rcloneServiceProvider).obscurePassword(plainPass);
@@ -1525,12 +1652,16 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           SizedBox(height: theme.md),
           fluent.Button(
-            child: Text(strings.authorizeInBrowser),
-            onPressed: () => setState(() => _isOAuthAuthorized = true),
+            child: Text(_isOAuthWorking ? '…' : strings.authorizeInBrowser),
+            onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
           ),
           if (_isOAuthAuthorized) ...[
             SizedBox(height: theme.sm),
             Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+          if (_oauthError != null) ...[
+            SizedBox(height: theme.sm),
+            Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -1807,11 +1938,15 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           material.FilledButton.icon(
             icon: const Icon(material.Icons.open_in_browser, size: 18),
             label: Text(strings.authorizeInBrowser),
-            onPressed: () => setState(() => _isOAuthAuthorized = true),
+            onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
           ),
           if (_isOAuthAuthorized) ...[
             SizedBox(height: theme.sm),
             Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+          if (_oauthError != null) ...[
+            SizedBox(height: theme.sm),
+            Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -2124,12 +2259,18 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           Text(strings.oauthInfoNotice, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           SizedBox(height: theme.md),
           cupertino.CupertinoButton.filled(
-            child: Text(strings.authorizeInBrowser),
-            onPressed: () => setState(() => _isOAuthAuthorized = true),
+            child: _isOAuthWorking
+                ? const cupertino.CupertinoActivityIndicator(color: cupertino.CupertinoColors.white)
+                : Text(strings.authorizeInBrowser),
+            onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
           ),
           if (_isOAuthAuthorized) ...[
             SizedBox(height: theme.sm),
             Text(strings.authorizedSuccess, style: TextStyle(color: theme.success, fontWeight: FontWeight.bold)),
+          ],
+          if (_oauthError != null) ...[
+            SizedBox(height: theme.sm),
+            Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),

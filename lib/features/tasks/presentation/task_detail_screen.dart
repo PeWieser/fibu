@@ -37,7 +37,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     });
 
     try {
-      await ref.read(activeJobProvider.notifier).triggerSyncAll();
+      // Nur diesen einzelnen Task synchronisieren (nicht die ganze Queue).
+      await ref.read(activeJobProvider.notifier).triggerSyncTask(task.id);
       if (mounted) {
         setState(() {
           _isSyncing = false;
@@ -156,6 +157,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (path == 'all' || path == 'Alles') return strings.allMedia;
     if (path == 'photos' || path == 'Alle Fotos') return strings.allPhotos;
     if (path == 'videos' || path == 'Alle Videos') return strings.allVideos;
+    if (path.startsWith('files:')) return strings.sourceTabFiles;
+    if (path.startsWith('all:')) return '${strings.sourceTabPhotosVideos} (${path.split(':')[1].split('|').length} Alben)';
+    if (path.startsWith('photos:')) return '${strings.allPhotos} (${path.split(':')[1].split('|').length})';
+    if (path.startsWith('videos:')) return '${strings.allVideos} (${path.split(':')[1].split('|').length})';
     return path;
   }
 

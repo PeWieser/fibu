@@ -157,5 +157,8 @@ abstract class RcloneService {
 
   /// Downloads files from a remote path to a local directory.
   Future<void> downloadDirectory(String remoteName, String remotePath, String localPath);
+
+  /// Downloads a single remote file to a local path (including file name).
+  Future<void> downloadFile(String remoteName, String remotePath, String localPath);
 }
 

@@ -63,6 +63,26 @@
 	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um Fotos und Videos 1:1 in Ihrer Cloud zu sichern.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um wiederhergestellte Medien zu speichern.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.example.fibu.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fibuoauth</string>
+			</array>
+		</dict>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>workmanager.background.task</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

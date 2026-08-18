@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../core/localization/app_strings.dart';
 import 'shell_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
@@ -15,11 +16,27 @@ import '../../settings/presentation/settings_screen.dart';
 /// Platform-adaptive root navigation shell for Fibu.
 /// Automatically renders NavigationView on Windows, CupertinoTabScaffold on iOS,
 /// and material NavigationBar on Android/fallback with immediate live theme reactivity.
-class ShellScreen extends ConsumerWidget {
+class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShellScreen> createState() => _ShellScreenState();
+}
+
+class _ShellScreenState extends ConsumerState<ShellScreen> {
+  // Der iOS-TabController wird einmal erzeugt und überlebt Rebuilds,
+  // damit Tab-Inhalte (Scroll-Position etc.) erhalten bleiben.
+  final cupertino.CupertinoTabController _tabController =
+      cupertino.CupertinoTabController();
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Explicitly watch appThemeProvider and themeConfigProvider for immediate live theme propagation
     final theme = ref.watch(appThemeProvider);
     ref.watch(themeConfigProvider);
@@ -82,7 +99,7 @@ class ShellScreen extends ConsumerWidget {
   // --- iOS (Cupertino Tab Scaffold with Symmetrical Vertical Padding) ---
   Widget _buildIOS(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings, AppThemeData theme) {
     return cupertino.CupertinoTabScaffold(
-      controller: cupertino.CupertinoTabController(initialIndex: activeIndex),
+      controller: _tabController,
       tabBar: cupertino.CupertinoTabBar(
         currentIndex: activeIndex,
         activeColor: theme.accent,
@@ -90,7 +107,10 @@ class ShellScreen extends ConsumerWidget {
         backgroundColor: theme.surface,
         iconSize: 22.0,
         height: 52.0,
-        onTap: (index) => ref.read(shellIndexProvider.notifier).state = index,
+        onTap: (index) {
+          IosHaptics.selection();
+          ref.read(shellIndexProvider.notifier).state = index;
+        },
         items: [
           BottomNavigationBarItem(
             icon: const Padding(

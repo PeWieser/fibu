@@ -344,5 +344,18 @@ class WindowsRcloneService implements RcloneService {
       throw Exception('Failed to download directory: $e');
     }
   }
+
+  @override
+  Future<void> downloadFile(String remoteName, String remotePath, String localPath) async {
+    try {
+      final target = remotePath.isEmpty ? '$remoteName:' : '$remoteName:$remotePath';
+      final result = await Process.run(_executablePath, ['copyto', target, localPath]);
+      if (result.exitCode != 0) {
+        throw Exception('Rclone failed to download file: ${result.stderr}');
+      }
+    } catch (e) {
+      throw Exception('Failed to download file: $e');
+    }
+  }
 }
 

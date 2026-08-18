@@ -246,6 +246,11 @@ class MockRcloneService implements RcloneService {
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
+  @override
+  Future<void> downloadFile(String remoteName, String remotePath, String localPath) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
   /// Helper to clear mock states in tests
   void dispose() {
     for (var timer in _jobTimers.values) {

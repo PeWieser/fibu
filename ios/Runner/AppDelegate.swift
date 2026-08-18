@@ -28,7 +28,9 @@ import Rclone
       GeneratedPluginRegistrant.register(with: registry)
     }
     // Hintergrund-Task für geplante Syncs (Identifier siehe Info.plist).
-    WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "workmanager.background.task")
+    // Hinweis: registerBGProcessingTask ist in workmanager >=0.5 nicht mehr nötig
+    // bzw. wurde entfernt; die Registrierung erfolgt automatisch.
+    // WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "workmanager.background.task")
     #endif
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

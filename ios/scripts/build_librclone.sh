@@ -60,6 +60,18 @@ GO111MODULE=on gomobile bind \
 
 echo "==> Done: ${OUT_FRAMEWORK}"
 echo ""
+echo "=== Verifying Rclone.xcframework ==="
+ls -lh "${OUT_FRAMEWORK}" || echo "Rclone.xcframework not found at ${OUT_FRAMEWORK}"
+ls -R "${OUT_FRAMEWORK}" 2>&1 | head -n 100 || true
+if [ -f "${OUT_FRAMEWORK}/Info.plist" ]; then
+  echo "--- Info.plist ---"
+  cat "${OUT_FRAMEWORK}/Info.plist" | head -n 100
+else
+  echo "Info.plist not found"
+fi
+echo "=== project.pbxproj linking ==="
+grep -A2 -B2 "OTHER_LDFLAGS\\|FRAMEWORK_SEARCH_PATHS" "${ROOT_DIR}/ios/Runner.xcodeproj/project.pbxproj" | head -n 60
+echo ""
 echo "Next steps (one-time, in Xcode):"
 echo "  1. Open ios/Runner.xcworkspace"
 echo "  2. Drag ios/Frameworks/Rclone.xcframework into the Runner target"

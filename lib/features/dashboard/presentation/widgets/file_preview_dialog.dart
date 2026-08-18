@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -408,7 +409,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
           Container(height: 1, color: cupertino.CupertinoColors.separator),
           SizedBox(height: theme.xs),
           // Monospace-Ansicht (scrollbar im äußeren CustomScrollView)
-          SelectableText(
+          material.SelectableText(
             content,
             style: TextStyle(
               fontFamily: 'monospace',

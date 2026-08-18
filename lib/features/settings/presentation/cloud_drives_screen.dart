@@ -387,7 +387,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 constraints: const BoxConstraints(minHeight: 44),
                 child: cupertino.CupertinoButton(
                   color: theme.accent,
-                  padding: const EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.sm),
+                  padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.sm),
                   borderRadius: BorderRadius.circular(theme.radiusSm),
                   onPressed: () => _openAddRemoteWizard(context, TargetPlatform.iOS),
                   child: Text(

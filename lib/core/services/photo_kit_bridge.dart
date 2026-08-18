@@ -103,7 +103,7 @@ class PhotoKitBridge {
         final saved = await PhotoManager.editor.saveVideo(file);
         return saved != null;
       }
-      final saved = await PhotoManager.editor.saveImage(file);
+      final saved = await PhotoManager.editor.saveImageWithPath(file.path, title: file.path.split('/').last);
       return saved != null;
     } catch (_) {
       return false;

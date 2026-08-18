@@ -37,7 +37,7 @@ class IosTheme {
         fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
       ),
-      largeTitleTextStyle: TextStyle(
+      navLargeTitleTextStyle: TextStyle(
         color: theme.textPrimary,
         fontSize: 34,
         fontWeight: FontWeight.w700,

@@ -48,7 +48,7 @@ class SchedulerService {
         constraints: Constraints(
           networkType: NetworkType.connected,
         ),
-        existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+        existingWorkPolicy: ExistingWorkPolicy.keep,
       );
     } catch (_) {
       // Background scheduling is best-effort; it must never crash the UI.

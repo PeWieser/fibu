@@ -43,7 +43,7 @@ jobs:
       - name: Build librclone framework (Rclone.xcframework)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          ./ios/scripts/build_librclone.sh
+          bash ios/scripts/build_librclone.sh
 
       - name: Build iOS App (Unsigned Release)
         run: flutter build ios --release --no-codesign

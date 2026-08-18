@@ -172,7 +172,35 @@ class AppStrings {
   String get scheduleLabel => isGerman ? 'Zeitplan' : 'Schedule';
   String get scheduleDayLabel => isGerman ? 'Wiederholung' : 'Repeat Frequency';
   String get scheduleTimeLabel => isGerman ? 'Uhrzeit' : 'Time';
-  String get sourceCategoryLabel => isGerman ? 'Kategorie (Medien)' : 'Media Category';
+  String get sourceCategoryLabel => isGerman ? 'Was soll gesichert werden?' : 'What should be backed up?';
+  String get sourceTabPhotosVideos => isGerman ? 'Fotos & Videos' : 'Photos & Videos';
+  String get sourceTabFiles => isGerman ? 'Dateien' : 'Files';
+  String get selectAllAlbums => isGerman ? 'Alle auswählen' : 'Select All';
+  String get selectAllFolders => isGerman ? 'Alle auswählen' : 'Select All';
+  String get emptySelectionAlbumsHint => isGerman
+      ? 'Keine Alben ausgewählt – es werden alle Alben gesichert.'
+      : 'No albums selected – all albums will be backed up.';
+  String get emptySelectionFoldersHint => isGerman
+      ? 'Keine Ordner ausgewählt – bitte mindestens einen Ordner wählen.'
+      : 'No folders selected – please choose at least one folder.';
+  String get targetFolderUp => isGerman ? 'Eine Ebene höher' : 'Up one level';
+  String get targetFolderCurrentPath => isGerman ? 'Aktueller Ordner' : 'Current folder';
+  String get albumSelectionLabel => isGerman ? 'Alben auswählen' : 'Select Albums';
+  String get folderSelectionLabel => isGerman ? 'Lokale Ordner auswählen' : 'Select Local Folders';
+  String get noAlbumsFound => isGerman
+      ? 'Keine Alben gefunden. Erteile Fotos-Zugriff, um deine Alben zu sehen.'
+      : 'No albums found. Grant photo access to see your albums.';
+  String get noFoldersFound => isGerman
+      ? 'Keine lokalen Ordner gefunden.'
+      : 'No local folders found.';
+  String get chooseLocalFolder => isGerman ? 'Ordner aus Dateien-App wählen' : 'Choose Folder from Files';
+  String get targetFolderExistingLabel => isGerman ? 'Vorhandener Ordner (in der Cloud)' : 'Existing Folder (in cloud)';
+  String get targetFolderRemoteHint => isGerman
+      ? 'Durchsuche die vorhandenen Ordner in der Cloud (Remote).'
+      : 'Browse existing folders in the cloud (remote).';
+  String get remoteFolderEmpty => isGerman ? 'Kein Ordner im Cloud-Laufwerk gefunden.' : 'No folders found in this cloud drive.';
+  String get remoteFoldersLoadError => isGerman ? 'Cloud-Ordner konnten nicht geladen werden.' : 'Could not load cloud folders.';
+  String get targetFolderNameLabel => isGerman ? 'Neuer Ordnername in der Cloud' : 'New cloud folder name';
   String get catchUpNotice => isGerman
       ? 'Verpasste Backups werden automatisch beim nächsten Systemstart nachgeholt.'
       : 'Missed scheduled backups are caught up automatically on next system startup.';
@@ -288,6 +316,8 @@ class AppStrings {
   String get fileModTime => isGerman ? 'Zuletzt geändert:' : 'Last Modified:';
   String get filePath => isGerman ? 'Pfad:' : 'Path:';
   String get downloadFile => isGerman ? 'Herunterladen' : 'Download';
+  String get downloadComplete => isGerman ? 'Heruntergeladen nach' : 'Downloaded to';
+  String get downloadFailed => isGerman ? 'Download fehlgeschlagen:' : 'Download failed:';
   String get deleteFile => isGerman ? 'Datei löschen' : 'Delete File';
   String get deleteFileConfirmTitle => isGerman ? 'Datei in der Cloud löschen' : 'Delete Cloud File';
   String deleteFileRule6Notice(String name) => isGerman
@@ -370,6 +400,26 @@ class AppStrings {
   // --- Onboarding ---
   String get onboardingWelcomeTitle => isGerman ? 'Willkommen bei Fibu' : 'Welcome to Fibu';
   String get onboardingWelcomeSubtitle => isGerman ? 'Deine persönliche Multi-Cloud Backup-Zentrale' : 'Your Personal Multi-Cloud Backup Hub';
+  String get onboardingWelcomeIntro => isGerman
+      ? 'Deine Fotos und Dateien – sicher in deiner eigenen Cloud gespiegelt. In drei kurzen Schritten bist du startklar.'
+      : 'Your photos and files – safely mirrored to your own cloud. You will be set up in three quick steps.';
+  String get onboardingConnectCloudTitle => isGerman ? 'Cloud verbinden' : 'Connect a Cloud';
+  String get onboardingConnectCloudSubtitle => isGerman
+      ? 'Verbinde einen Cloud-Speicher (z. B. Google Drive, OneDrive, Dropbox), damit Fibu deine Daten dorthin sichern kann.'
+      : 'Connect a cloud storage (e.g. Google Drive, OneDrive, Dropbox) so Fibu can back up your data there.';
+  String onboardingConnectedCount(int count) => isGerman
+      ? '$count Cloud${count == 1 ? '' : 's'} verbunden. Du kannst weitere später in den Einstellungen hinzufügen.'
+      : '$count cloud${count == 1 ? '' : 's'} connected. You can add more later in Settings.';
+  String get onboardingConnectMoreCloud => isGerman ? 'Weitere Cloud verbinden' : 'Connect Another Cloud';
+  String get onboardingConnectCloud => isGerman ? 'Cloud verbinden' : 'Connect a Cloud';
+  String get onboardingGrantAccessTitle => isGerman ? 'Zugriff erlauben' : 'Grant Access';
+  String get onboardingGrantAccessSubtitle => isGerman
+      ? 'Fibu braucht Zugriff auf deine Fotos und Dateien, um sie zu sichern. Der Zugriff bleibt lokal auf deinem Gerät.'
+      : 'Fibu needs access to your photos and files to back them up. Access stays on your device.';
+  String get onboardingPhotosGranted => isGerman ? 'Fotozugriff erteilt ✓' : 'Photo access granted ✓';
+  String get onboardingAllowPhotos => isGerman ? 'Fotos erlauben' : 'Allow Photos';
+  String get onboardingNext => isGerman ? 'Weiter' : 'Next';
+  String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
   String get onboardingFeature1Title => isGerman ? 'Multi-Cloud Backup' : 'Multi-Cloud Backup';
   String get onboardingFeature1Desc => isGerman
       ? 'Verbinde beliebige Cloud-Speicher (Google Drive, OneDrive, S3, Mega, WebDAV etc.) und sichere deine Dateien flexibel.'
@@ -393,7 +443,6 @@ class AppStrings {
       : 'Choose a local folder on your computer to automate your first backup.';
   String get onboardingCreateTaskButton => isGerman ? 'Erste Aufgabe erstellen' : 'Create First Task';
   String get onboardingSkip => isGerman ? 'Später einrichten' : 'Set Up Later';
-  String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
   String get onboardingDoneTitle => isGerman ? 'Du bist startklar!' : 'You are all set!';
   String get onboardingDoneSubtitle => isGerman
       ? 'Fibu ist eingerichtet und bereit für deine Backups.'

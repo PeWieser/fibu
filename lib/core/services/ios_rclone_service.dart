@@ -7,8 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'librclone_channel.dart';
+import 'mirror_sync_engine.dart';
+import 'photo_kit_bridge.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
+import 'trash_service.dart';
 
 /// Real rclone-backed service for iOS (and Android) using the gomobile
 /// `librclone` engine through [LibrcloneChannel].
@@ -168,11 +171,30 @@ class IosRcloneService implements RcloneService {
     await _ensureEngine();
     final fileName = localFilePath.split(Platform.pathSeparator).last;
     final srcDir = localFilePath.substring(0, localFilePath.length - fileName.length - 1);
+
+    // remotePath kann ein reiner Ordner (copyFileToRemote general) oder ein
+    // voller Dateipfad inkl. Dateiname sein (z.B. writeConfigToRemote).
+    final remoteClean = remotePath.endsWith('/') ? remotePath.substring(0, remotePath.length - 1) : remotePath;
+    final remoteSegments = remoteClean.split('/').where((s) => s.isNotEmpty).toList();
+    final String dstFs;
+    final String dstRemote;
+    if (remoteSegments.isNotEmpty && remoteSegments.last.contains('.')) {
+      // Letztes Segment ist ein Dateiname (enthält '.'), Rest ist Ordner.
+      dstRemote = remoteSegments.last;
+      dstFs = remoteSegments.length > 1
+          ? '$remoteName:${remoteSegments.sublist(0, remoteSegments.length - 1).join('/')}'
+          : '$remoteName:';
+    } else {
+      // remotePath ist nur ein Ordner → Dateiname beibehalten.
+      dstRemote = fileName;
+      dstFs = remoteClean.isEmpty ? '$remoteName:' : '$remoteName:$remoteClean';
+    }
+
     await _rc.rpc('operations/copyfile', {
       'srcFs': srcDir,
       'srcRemote': fileName,
-      'dstFs': '$remoteName:$remotePath',
-      'dstRemote': fileName,
+      'dstFs': dstFs,
+      'dstRemote': dstRemote,
     });
   }
 
@@ -190,9 +212,56 @@ class IosRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> downloadFile(
+    String remoteName,
+    String remotePath,
+    String localPath,
+  ) async {
+    await _ensureEngine();
+    final fileName = remotePath.split('/').last;
+    final srcDir = remotePath.contains('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '';
+    final dstDir = localPath.substring(0, localPath.lastIndexOf('/'));
+    await _rc.rpc('operations/copyfile', {
+      'srcFs': '$remoteName:$srcDir',
+      'srcRemote': fileName,
+      'dstFs': dstDir,
+      'dstRemote': fileName,
+    });
+  }
+
+  @override
   Future<List<RcloneProviderInfo>> listProviders() async {
     // The static registry is the curated, localized provider list used by the UI.
     return RcloneProviderRegistry.providers.map((p) => p.toProviderInfo()).toList();
+  }
+
+  /// Returns the provider's default OAuth `client_id`/`client_secret` shipped by
+  /// rclone (e.g. Google Drive ships public credentials). These come from
+  /// `config/providers` option defaults, so no user-provided client is required.
+  Future<Map<String, String>> getProviderClientCredentials(String providerId) async {
+    try {
+      await _ensureEngine();
+      final res = await _rc.rpc('config/providers');
+      final list = (res['providers'] as List<dynamic>?) ?? const [];
+      for (final raw in list) {
+        final m = raw as Map<String, dynamic>;
+        if ((m['Name'] as String? ?? '').toLowerCase() == providerId.toLowerCase()) {
+          final opts = (m['Options'] as List<dynamic>?) ?? const [];
+          String clientId = '';
+          String clientSecret = '';
+          for (final o in opts) {
+            final om = o as Map<String, dynamic>;
+            final name = om['Name'];
+            if (name == 'client_id') clientId = om['Default']?.toString() ?? '';
+            if (name == 'client_secret') clientSecret = om['Default']?.toString() ?? '';
+          }
+          return {'client_id': clientId, 'client_secret': clientSecret};
+        }
+      }
+    } catch (_) {
+      // Fall through: no credentials available.
+    }
+    return const {'client_id': '', 'client_secret': ''};
   }
 
   // ---------------------------------------------------------------------------
@@ -233,12 +302,79 @@ class IosRcloneService implements RcloneService {
         return;
       }
 
-      // Resolve the local source. Media backups are staged from PhotoKit into a
-      // temp directory that mirrors the album hierarchy, then synced as a folder.
+      // Resolve the local source. Media backups are staged into a persistent
+      // local mirror (FibuMirror) that mirrors the album hierarchy.
       final String srcFs = await _resolveLocalSource(localPath, options);
 
+      // Mirror/Echo-Modus: Mediathek-first, Löschprotokoll-basierter
+      // bidirektionaler Sync mit Papierkorb. Lokal hat Vorrang.
+      if (options.isEchoMode) {
+        if (!progress.isClosed) {
+          progress.add(RcloneProgressEvent(
+            jobId: jobId,
+            bytesTransferred: 0,
+            totalBytes: 0,
+            percentage: 0,
+            currentFile: 'Mirror-Sync (Löschprotokoll) wird ausgeführt…',
+            eta: '',
+            speedBytesPerSecond: 0,
+          ));
+        }
+
+        // 0) Mediathek-first: lokal gelöschte Fotos (in der Fotos-App entfernt)
+        //    werden aus dem Spiegel entfernt, damit sie als Tombstone
+        //    propagieren. Läuft nur auf iOS/Android mit Mediathek-Quelle.
+        final wasMedia = _isMediaSource(localPath);
+        final bridge = PhotoKitBridge();
+        List<String> localDeletions = [];
+        if (wasMedia) {
+          localDeletions = await bridge.detectLocalDeletions(srcFs);
+          for (final rel in localDeletions) {
+            final f = File('${srcFs}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+            try {
+              if (await f.exists()) await f.delete();
+            } catch (_) {}
+          }
+        }
+
+        final engine = MirrorSyncEngine(this);
+        final trash = TrashService(this);
+        final result = await engine.sync(
+          localRoot: srcFs,
+          remoteName: remoteName,
+          remotePath: remotePath,
+          trash: trash,
+        );
+
+        // Nach dem Sync: neu heruntergeladene remote-Dateien in die Mediathek
+        // importieren (damit sie in der Fotos-App erscheinen) und Papierkorb
+        // nach Ablauf der Aufbewahrungsfrist bereinigen.
+        if (wasMedia) {
+          await _importNewRemoteIntoLibrary(srcFs, result, engine);
+          await trash.purgeLocal(srcFs);
+        }
+
+        if (!progress.isClosed) {
+          progress.add(RcloneProgressEvent(
+            jobId: jobId,
+            bytesTransferred: 0,
+            totalBytes: 0,
+            percentage: 100,
+            currentFile:
+                'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+                '🗑${result.trashedLocal}/${result.trashedRemote} + '
+                '${result.deletedLocal}/${result.deletedRemote})',
+            eta: '0s',
+            speedBytesPerSecond: 0,
+          ));
+        }
+        _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
+        return;
+      }
+
+      // Inkrementeller Upload (copy): einseitig lokal→remote.
       final group = 'job/$jobId';
-      final method = options.isEchoMode ? 'sync/sync' : 'sync/copy';
+      final method = 'sync/copy';
       final startRes = await _rc.rpc(method, {
         'srcFs': srcFs,
         'dstFs': '$remoteName:$remotePath',
@@ -333,6 +469,43 @@ class IosRcloneService implements RcloneService {
     }
   }
 
+  /// Führt einen echten bidirektionalen Sync (rclone `bisync`) zwischen dem
+  /// lokalen Spiegel (path1) und dem Remote (path2) aus.
+  ///
+  /// Bisync propagiert Löschungen in BEIDE Richtungen, erkennt Konflikte und
+  /// löst sie per `--conflict-resolve newer` auf. `--max-delete` begrenzt die
+  /// Löschungen als Sicherheitsnetz. Erfordert einen persistenten lokalen
+  /// Spiegel (bei Medien `FibuMirror`), sonst wäre ein "transient" Spiegel
+  /// destruktiv.
+
+  /// True, wenn die Quelle eine Mediathek-Auswahl ist (nur dann läuft die
+  /// PhotoKit-Erkennung/der Import).
+  bool _isMediaSource(String localPath) {
+    final lower = localPath.trim().toLowerCase();
+    return lower.startsWith('photos:') ||
+        lower.startsWith('videos:') ||
+        lower.startsWith('all:') ||
+        const {
+          'photos', 'alle fotos', 'all', 'alles', 'media', 'mediathek',
+          'videos', 'alle videos',
+        }.contains(lower);
+  }
+
+  /// Importiert die im Mirror neu heruntergeladenen Dateien in die Mediathek,
+  /// damit sie in der Fotos-App erscheinen.
+  Future<void> _importNewRemoteIntoLibrary(
+    String localRoot,
+    MirrorSyncResult result,
+    MirrorSyncEngine engine,
+  ) async {
+    final bridge = PhotoKitBridge();
+    for (final rel in result.downloadedPaths) {
+      final f = File('${localRoot}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+      if (!await f.exists()) continue;
+      await bridge.importIntoLibrary(f, mimeHint: PhotoKitBridge.mimeHintFor(rel));
+    }
+  }
+
   String _currentTransferName(Map<String, dynamic> stats) {
     final transferring = stats['transferring'] as List<dynamic>?;
     if (transferring != null && transferring.isNotEmpty) {
@@ -379,7 +552,32 @@ class IosRcloneService implements RcloneService {
   /// that mirrors the album structure (`Photos/<Album>/<file>`), which rclone
   /// then syncs to the cloud with a genuine 1:1 hierarchy.
   Future<String> _resolveLocalSource(String localPath, SyncOptions options) async {
-    final lower = localPath.trim().toLowerCase();
+    final trimmed = localPath.trim();
+    final lower = trimmed.toLowerCase();
+
+    // Codierte Auswahl: "photos:Album1|Album2", "videos:...", "all:..." oder
+    // "files:<absPfad1>|<absPfad2>".
+    if (lower.startsWith('files:')) {
+      final paths = trimmed
+          .substring('files:'.length)
+          .split('|')
+          .where((p) => p.trim().isNotEmpty)
+          .map((p) => p.trim())
+          .toList();
+      return _stageFolders(paths);
+    }
+
+    if (lower.startsWith('photos:') || lower.startsWith('videos:') || lower.startsWith('all:')) {
+      final mediaType = lower.split(':').first;
+      final albumList = trimmed
+          .substring(mediaType.length + 1)
+          .split('|')
+          .where((p) => p.trim().isNotEmpty)
+          .map((p) => p.trim())
+          .toList();
+      return _stageMediaLibrary(mediaType, options, selectedAlbums: albumList);
+    }
+
     final isMedia = const {
       'photos', 'alle fotos', 'all', 'alles', 'media', 'mediathek', 'videos', 'alle videos',
     }.contains(lower);
@@ -390,6 +588,18 @@ class IosRcloneService implements RcloneService {
       return _stageMediaLibrary(lower, options);
     }
 
+    // Lokale Ordner (Files): persistenter Spiegel für echten 2-Wege-Sync.
+    if (lower.startsWith('folders:') || lower.startsWith('dir:')) {
+      final prefix = lower.startsWith('folders:') ? 'folders:' : 'dir:';
+      final paths = trimmed
+          .substring(prefix.length)
+          .split('|')
+          .where((p) => p.trim().isNotEmpty)
+          .map((p) => p.trim())
+          .toList();
+      return _stageFolders(paths);
+    }
+
     // Direct filesystem path (Files app folder / documents subfolder).
     if (localPath.startsWith('/') || localPath.contains(':\\')) {
       return localPath;
@@ -398,18 +608,55 @@ class IosRcloneService implements RcloneService {
     return '${appDir.path}/$localPath';
   }
 
-  Future<String> _stageMediaLibrary(String lower, SyncOptions options) async {
+  /// Stages the given absolute local folder paths into a temp dir (1:1 hierarchy).
+  Future<String> _stageFolders(List<String> paths) async {
+    final tempDir = await getTemporaryDirectory();
+    final staging = Directory('${tempDir.path}/fibu_files_staging');
+    if (await staging.exists()) await staging.delete(recursive: true);
+    await staging.create(recursive: true);
+    for (final p in paths) {
+      final src = Directory(p);
+      if (!await src.exists()) continue;
+      final safeName = p.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      await _copyTree(src, Directory('${staging.path}/Dateien/$safeName'));
+    }
+    return staging.path;
+  }
+
+  Future<void> _copyTree(Directory src, Directory dst) async {
+    if (!await dst.exists()) await dst.create(recursive: true);
+    await for (final entity in src.list(followLinks: false)) {
+      if (entity is Directory) {
+        await _copyTree(entity, Directory('${dst.path}/${entity.uri.pathSegments.last}'));
+      } else if (entity is File) {
+        try {
+          await entity.copy('${dst.path}/${entity.uri.pathSegments.last}');
+        } catch (_) {
+          // Nicht zugängliche Datei überspringen.
+        }
+      }
+    }
+  }
+
+  /// Baut einen PERSISTENTEN lokalen Mediathek-Spiegel auf (nicht transient).
+  ///
+  /// Der Spiegel liegt unter `<Dokumente>/FibuMirror/` und wird bei jedem Lauf
+  /// inkrementell aktualisiert: Neue/geänderte Assets werden hineinkopiert,
+  /// lokal gelöschte Assets werden im Spiegel gelöscht. Dadurch funktioniert
+  /// die Lösch-Propagation in beide Richtungen (bisync lokal↔remote).
+  Future<String> _stageMediaLibrary(
+    String lower,
+    SyncOptions options, {
+    List<String> selectedAlbums = const [],
+  }) async {
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
       throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
     }
 
-    final tempDir = await getTemporaryDirectory();
-    final staging = Directory('${tempDir.path}/fibu_media_staging');
-    if (await staging.exists()) {
-      await staging.delete(recursive: true);
-    }
-    await staging.create(recursive: true);
+    final appDir = await getApplicationDocumentsDirectory();
+    final mirror = Directory('${appDir.path}/FibuMirror');
+    if (!await mirror.exists()) await mirror.create(recursive: true);
 
     final reqType = (lower == 'videos' || lower == 'alle videos')
         ? RequestType.video
@@ -418,7 +665,15 @@ class IosRcloneService implements RcloneService {
     final albums = await PhotoManager.getAssetPathList(type: reqType, hasAll: true);
     final processed = <String>{};
 
+    // Nur ausgewählte Alben sichern, sofern welche gewählt wurden (leer = alle).
+    final allowAll = selectedAlbums.isEmpty;
+    final selectedSet = selectedAlbums.map((a) => a.toLowerCase()).toSet();
+    final existingAlbumDirs = <String>{};
+
     for (final album in albums) {
+      final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
+      if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) continue;
+      existingAlbumDirs.add(albumName);
       final count = await album.assetCountAsync;
       if (count == 0) continue;
       const batch = 100;
@@ -437,14 +692,33 @@ class IosRcloneService implements RcloneService {
           final filename = asset.title ?? file.path.split(Platform.pathSeparator).last;
           if (options.excludeFilters.contains(filename)) continue;
 
-          final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
-          final destDir = Directory('${staging.path}/Photos/$albumName');
+          final destDir = Directory('${mirror.path}/Photos/$albumName');
           if (!await destDir.exists()) await destDir.create(recursive: true);
-          await file.copy('${destDir.path}/$filename');
+          final dest = File('${destDir.path}/$filename');
+          // Inkrementell: nur kopieren, wenn neu oder anders groß.
+          if (!await dest.exists() ||
+              (await dest.length()) != (await file.length())) {
+            await file.copy('${destDir.path}/$filename');
+          }
         }
       }
     }
 
-    return staging.path;
+    // Lokal gelöschte Assets/Alben aus dem Spiegel entfernen, damit die
+    // Löschung remote propagiert wird (bisync).
+    final photosRoot = Directory('${mirror.path}/Photos');
+    if (await photosRoot.exists()) {
+      await for (final albumDir in photosRoot.list(followLinks: false)) {
+        if (albumDir is! Directory) continue;
+        final albumName = albumDir.uri.pathSegments.last;
+        if (!existingAlbumDirs.contains(albumName)) {
+          try {
+            await albumDir.delete(recursive: true);
+          } catch (_) {}
+        }
+      }
+    }
+
+    return mirror.path;
   }
 }

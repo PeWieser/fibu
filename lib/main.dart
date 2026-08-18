@@ -6,11 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
 
 import 'theme/theme.dart';
+import 'theme/ios_theme.dart';
+import 'core/services/scheduler_service.dart';
 import 'features/shell/presentation/shell_screen.dart';
 import 'features/onboarding/presentation/onboarding_controller.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Hintergrund-Scheduling registrieren (iOS BGTaskScheduler / Android WorkManager).
+  SchedulerService.initialize();
   runApp(
     const ProviderScope(
       child: FibuApp(),
@@ -151,18 +156,7 @@ class FibuApp extends ConsumerWidget {
     } else if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoApp(
         title: 'Fibu',
-        theme: cupertino.CupertinoThemeData(
-          brightness: isDark ? cupertino.Brightness.dark : cupertino.Brightness.light,
-          primaryColor: themeData.accent,
-          primaryContrastingColor: cupertino.CupertinoColors.white,
-          scaffoldBackgroundColor: themeData.canvas,
-          barBackgroundColor: themeData.surface,
-          textTheme: cupertino.CupertinoTextThemeData(
-            textStyle: TextStyle(color: themeData.textPrimary),
-            actionTextStyle: TextStyle(color: themeData.accent),
-            tabLabelTextStyle: TextStyle(color: themeData.textSecondary),
-          ),
-        ),
+        theme: IosTheme.build(themeData),
         debugShowCheckedModeBanner: false,
         home: homeWidget,
       );

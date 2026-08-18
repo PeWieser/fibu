@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
+import '../../../core/localization/app_strings.dart';
+import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import 'onboarding_controller.dart';
@@ -71,6 +73,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(appThemeProvider);
+    final strings = ref.watch(stringsProvider);
     final remotes = ref.watch(remotesProvider);
     final connectedCount = remotes.maybeWhen(data: (r) => r.length, orElse: () => 0);
 
@@ -78,35 +81,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _OnboardingPage(
         theme: theme,
         icon: CupertinoIcons.cloud_upload_fill,
-        title: 'Willkommen bei Fibu',
-        subtitle:
-            'Deine Fotos und Dateien – sicher in deiner eigenen Cloud gespiegelt. '
-            'In drei kurzen Schritten bist du startklar.',
+        title: strings.onboardingWelcomeTitle,
+        subtitle: strings.onboardingWelcomeIntro,
       ),
       _OnboardingPage(
         theme: theme,
         icon: CupertinoIcons.link,
-        title: 'Cloud verbinden',
+        title: strings.onboardingConnectCloudTitle,
         subtitle: connectedCount > 0
-            ? '$connectedCount Cloud${connectedCount == 1 ? '' : 's'} verbunden. Du kannst weitere später in den Einstellungen hinzufügen.'
-            : 'Verbinde einen Cloud-Speicher (z. B. Google Drive, OneDrive, Dropbox), '
-                'damit Fibu deine Daten dorthin sichern kann.',
+            ? strings.onboardingConnectedCount(connectedCount)
+            : strings.onboardingConnectCloudSubtitle,
         action: _ActionButton(
           theme: theme,
-          label: connectedCount > 0 ? 'Weitere Cloud verbinden' : 'Cloud verbinden',
+          label: connectedCount > 0
+              ? strings.onboardingConnectMoreCloud
+              : strings.onboardingConnectCloud,
           onPressed: _connectCloud,
         ),
       ),
       _OnboardingPage(
         theme: theme,
         icon: CupertinoIcons.photo_on_rectangle,
-        title: 'Zugriff erlauben',
-        subtitle:
-            'Fibu braucht Zugriff auf deine Fotos und Dateien, um sie zu sichern. '
-            'Der Zugriff bleibt lokal auf deinem Gerät.',
+        title: strings.onboardingGrantAccessTitle,
+        subtitle: strings.onboardingGrantAccessSubtitle,
         action: _ActionButton(
           theme: theme,
-          label: _photosGranted ? 'Fotozugriff erteilt ✓' : 'Fotos erlauben',
+          label: _photosGranted ? strings.onboardingPhotosGranted : strings.onboardingAllowPhotos,
           onPressed: _photosGranted ? null : _requestPhotos,
         ),
       ),
@@ -127,7 +127,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
           child: _ActionButton(
             theme: theme,
-            label: _index == _lastStep ? 'Loslegen' : 'Weiter',
+            label: _index == _lastStep ? strings.onboardingGetStarted : strings.onboardingNext,
             filled: true,
             onPressed: _next,
           ),
@@ -227,19 +227,26 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       if (filled) {
-        return SizedBox(
-          width: double.infinity,
-          child: CupertinoButton(
-            color: theme.accent,
-            borderRadius: BorderRadius.circular(14),
-            onPressed: onPressed,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
+              color: theme.accent,
+              borderRadius: BorderRadius.circular(14),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              onPressed: onPressed,
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
           ),
         );
       }
-      return CupertinoButton(
-        onPressed: onPressed,
-        child: Text(label, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600)),
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: CupertinoButton(
+          onPressed: onPressed,
+          child: Text(label, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600)),
+        ),
       );
     }
 

@@ -1,5 +1,8 @@
 import Flutter
 import UIKit
+#if canImport(workmanager)
+import workmanager
+#endif
 
 // The `Rclone` module is produced by `ios/scripts/build_librclone.sh`
 // (gomobile build of rclone's `librclone/gomobile` package) and dropped in as
@@ -19,6 +22,14 @@ import Rclone
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    #if canImport(workmanager)
+    // Erlaubt Workmanager, Plugins in den Hintergrund-Isolates zu registrieren.
+    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
+      GeneratedPluginRegistrant.register(with: registry)
+    }
+    // Hintergrund-Task für geplante Syncs (Identifier siehe Info.plist).
+    WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "workmanager.background.task")
+    #endif
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

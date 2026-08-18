@@ -40,6 +40,8 @@ class BackupTask {
   final TargetFolderMode targetFolderMode; // Root vs Custom vs New Folder
   final String targetFolderName; // Subfolder path (e.g. "backup/pictures")
   final bool wifiOnly; // Sync restricted to Wi-Fi only (no cellular data)
+  final List<String> selectedAlbums; // Album-Namen für "Fotos & Videos"; leer = alle
+  final List<String> selectedFolders; // Lokale Ordnerpfade für den Reiter "Dateien"
 
   const BackupTask({
     required this.id,
@@ -58,8 +60,32 @@ class BackupTask {
     this.targetFolderMode = TargetFolderMode.newFolder,
     this.targetFolderName = 'fibu-backup',
     this.wifiOnly = true,
+    this.selectedAlbums = const [],
+    this.selectedFolders = const [],
   })  : _targetRemotes = targetRemotes,
         _targetRemote = targetRemote;
+
+  /// Kurze, menschenlesbare Beschreibung der Quelle für die Liste/Detail-Ansicht.
+  String get sourceDescription {
+    if (sourcePath.startsWith('files:')) {
+      return 'Dateien (${selectedFolders.length})';
+    }
+    if (sourcePath.startsWith('all:')) return 'Fotos & Videos (${selectedAlbums.length})';
+    if (sourcePath.startsWith('photos:')) return 'Fotos (${selectedAlbums.length})';
+    if (sourcePath.startsWith('videos:')) return 'Videos (${selectedAlbums.length})';
+    switch (sourcePath) {
+      case 'all':
+        return 'Fotos & Videos (alle)';
+      case 'photos':
+        return 'Alle Fotos';
+      case 'videos':
+        return 'Alle Videos';
+      case 'files':
+        return 'Dateien & Ordner';
+      default:
+        return sourcePath;
+    }
+  }
 
   List<String> get targetRemotes => _targetRemotes.isNotEmpty
       ? _targetRemotes
@@ -173,6 +199,8 @@ class BackupTask {
     TargetFolderMode? targetFolderMode,
     String? targetFolderName,
     bool? wifiOnly,
+    List<String>? selectedAlbums,
+    List<String>? selectedFolders,
   }) {
     return BackupTask(
       id: id,
@@ -190,6 +218,8 @@ class BackupTask {
       targetFolderMode: targetFolderMode ?? this.targetFolderMode,
       targetFolderName: targetFolderName ?? this.targetFolderName,
       wifiOnly: wifiOnly ?? this.wifiOnly,
+      selectedAlbums: selectedAlbums ?? this.selectedAlbums,
+      selectedFolders: selectedFolders ?? this.selectedFolders,
     );
   }
 }
@@ -254,6 +284,8 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             targetFolderMode: folderMode,
             targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
             wifiOnly: j['wifiOnly'] as bool? ?? true,
+            selectedAlbums: (j['selectedAlbums'] as List<dynamic>?)?.cast<String>() ?? const [],
+            selectedFolders: (j['selectedFolders'] as List<dynamic>?)?.cast<String>() ?? const [],
           );
         }).toList();
       }
@@ -284,6 +316,8 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             : (t.targetFolderMode == TargetFolderMode.newFolder ? 'newFolder' : 'custom'),
         'targetFolderName': t.targetFolderName,
         'wifiOnly': t.wifiOnly,
+        'selectedAlbums': t.selectedAlbums,
+        'selectedFolders': t.selectedFolders,
       }).toList();
       await file.writeAsString(json.encode(jsonList));
     } catch (_) {

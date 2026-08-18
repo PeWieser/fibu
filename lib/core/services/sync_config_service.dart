@@ -116,10 +116,23 @@ class SyncConfigService {
   }
 
   /// Appends an event to the local task log.
+  /// Maximale Größe einer Log-Datei, bevor sie rotiert wird.
+  static const int maxLogBytes = 256 * 1024; // 256 KB
+
   Future<void> appendLocalLog(String taskId, String message) async {
     try {
       final logDir = await getLocalLogDirectory();
       final file = File('${logDir.path}/$taskId.log');
+      // Größenbegrenzung: Ist die Log-Datei zu groß geworden, wird sie auf die
+      // Hälfte gekürzt (älteste Einträge verworfen), statt unbegrenzt zu wachsen.
+      if (await file.exists() && await file.length() > maxLogBytes) {
+        final content = await file.readAsString();
+        final keep = content.length ~/ 2;
+        await file.writeAsString(
+          content.substring(content.length - keep),
+          mode: FileMode.write,
+        );
+      }
       final timestamp = DateTime.now().toIso8601String();
       await file.writeAsString('[$timestamp] $message\n', mode: FileMode.append);
     } catch (_) {}
@@ -171,6 +184,12 @@ class SyncConfigService {
   }
 
   /// Converts remote task configs into local `BackupTask` instances.
+  ///
+  /// Der `sourcePath` einer entfernten Aufgabe ist geräteabhängig (lokale
+  /// Ordner). Beim Import auf einem neuen Gerät wird er deshalb lokal neu
+  /// aufgelöst: Medien-Auswahlen (`all`/`photos:`/`videos:`) bleiben, lokale
+  /// Ordner-Pfade (`files:`) werden auf einen leeren lokalen Platzhalter
+  /// gesetzt, den der Nutzer im Wizard auswählt.
   List<BackupTask> convertConfigToTasks(FibuRemoteConfig config, String remoteName, [String? localDestinationPath]) {
     return config.tasks.map((t) {
       final syncMode = t.syncMode == 'mirror' ? SyncMode.mirror : SyncMode.incremental;
@@ -178,10 +197,18 @@ class SyncConfigService {
           ? DistributionStrategy.balance
           : DistributionStrategy.mirrorAll;
 
+      String sourcePath = localDestinationPath ?? t.sourcePath;
+      if (sourcePath.startsWith('files:') && localDestinationPath == null) {
+        // Lokale Ordnerpfade sind geräteabhängig → leer, Nutzer wählt neu.
+        sourcePath = 'folders:';
+      } else if (sourcePath.startsWith('folders:') && localDestinationPath == null) {
+        sourcePath = 'folders:';
+      }
+
       return BackupTask(
         id: t.taskId.isNotEmpty ? t.taskId : 'imported_${DateTime.now().millisecondsSinceEpoch}',
         name: t.name,
-        sourcePath: localDestinationPath ?? (t.sourcePath.isNotEmpty ? t.sourcePath : 'C:\\fibu-backup'),
+        sourcePath: sourcePath.isNotEmpty ? sourcePath : 'folders:',
         targetRemotes: t.linkedRemotes.isNotEmpty ? t.linkedRemotes : [remoteName],
         schedule: 'Daily at 02:00',
         scheduleDay: 'Daily',

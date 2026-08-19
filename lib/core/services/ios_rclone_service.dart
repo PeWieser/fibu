@@ -38,12 +38,28 @@ class IosRcloneService implements RcloneService {
   // Remote configuration
   // ---------------------------------------------------------------------------
 
+  /// Normalizes a remote name by stripping trailing colons.
+  ///
+  /// rclone's `config/listremotes` returns names WITH a trailing colon
+  /// (e.g. `mega:`), while every RPC below appends the colon itself
+  /// (`'$remoteName:'`). Without normalization this produces `mega::` and
+  /// breaks every call (list, about, copy, sync). Applied at this boundary so
+  /// callers always see clean names – idempotent, so persisted names that
+  /// accidentally contain colons are repaired as well.
+  static String _normalizeRemoteName(String name) {
+    var n = name.trim();
+    while (n.endsWith(':')) {
+      n = n.substring(0, n.length - 1);
+    }
+    return n;
+  }
+
   @override
   Future<List<String>> listRemotes() async {
     await _ensureEngine();
     final res = await _rc.rpc('config/listremotes');
     final remotes = (res['remotes'] as List<dynamic>? ?? []).cast<String>();
-    return remotes;
+    return remotes.map(_normalizeRemoteName).toList();
   }
 
   @override
@@ -64,7 +80,7 @@ class IosRcloneService implements RcloneService {
   @override
   Future<void> removeRemote(String name) async {
     await _ensureEngine();
-    await _rc.rpc('config/delete', {'name': name});
+    await _rc.rpc('config/delete', {'name': _normalizeRemoteName(name)});
   }
 
   @override
@@ -81,8 +97,9 @@ class IosRcloneService implements RcloneService {
   @override
   Future<QuotaInfo> getQuota(String remoteName) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     try {
-      final res = await _rc.rpc('operations/about', {'fs': '$remoteName:'});
+      final res = await _rc.rpc('operations/about', {'fs': '$remote:'});
       final total = (res['total'] as num?)?.toInt() ?? 0;
       final used = (res['used'] as num?)?.toInt() ?? 0;
       final free = (res['free'] as num?)?.toInt() ?? (total - used).clamp(0, total);
@@ -100,8 +117,9 @@ class IosRcloneService implements RcloneService {
   @override
   Future<List<RcloneFileInfo>> listFiles(String remoteName, String path) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     final res = await _rc.rpc('operations/list', {
-      'fs': '$remoteName:',
+      'fs': '$remote:',
       'remote': path,
     });
     final list = (res['list'] as List<dynamic>? ?? []);
@@ -119,8 +137,9 @@ class IosRcloneService implements RcloneService {
   @override
   Future<void> deleteFile(String remoteName, String path) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     await _rc.rpc('operations/deletefile', {
-      'fs': '$remoteName:',
+      'fs': '$remote:',
       'remote': path,
     });
   }
@@ -141,6 +160,7 @@ class IosRcloneService implements RcloneService {
   /// Downloads a single remote file into the app cache and returns the local file.
   Future<File?> downloadToCache(String remoteName, String path) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     final tempDir = await getTemporaryDirectory();
     final cacheDir = Directory('${tempDir.path}/fibu_preview_cache');
     if (!await cacheDir.exists()) {
@@ -150,7 +170,7 @@ class IosRcloneService implements RcloneService {
     final srcDir = path.contains('/') ? path.substring(0, path.lastIndexOf('/')) : '';
     try {
       await _rc.rpc('operations/copyfile', {
-        'srcFs': '$remoteName:$srcDir',
+        'srcFs': '$remote:$srcDir',
         'srcRemote': fileName,
         'dstFs': cacheDir.path,
         'dstRemote': fileName,
@@ -169,6 +189,7 @@ class IosRcloneService implements RcloneService {
     String remotePath,
   ) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     final fileName = localFilePath.split(Platform.pathSeparator).last;
     final srcDir = localFilePath.substring(0, localFilePath.length - fileName.length - 1);
 
@@ -182,12 +203,12 @@ class IosRcloneService implements RcloneService {
       // Letztes Segment ist ein Dateiname (enthält '.'), Rest ist Ordner.
       dstRemote = remoteSegments.last;
       dstFs = remoteSegments.length > 1
-          ? '$remoteName:${remoteSegments.sublist(0, remoteSegments.length - 1).join('/')}'
-          : '$remoteName:';
+          ? '$remote:${remoteSegments.sublist(0, remoteSegments.length - 1).join('/')}'
+          : '$remote:';
     } else {
       // remotePath ist nur ein Ordner → Dateiname beibehalten.
       dstRemote = fileName;
-      dstFs = remoteClean.isEmpty ? '$remoteName:' : '$remoteName:$remoteClean';
+      dstFs = remoteClean.isEmpty ? '$remote:' : '$remote:$remoteClean';
     }
 
     await _rc.rpc('operations/copyfile', {
@@ -205,8 +226,9 @@ class IosRcloneService implements RcloneService {
     String localPath,
   ) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     await _rc.rpc('sync/copy', {
-      'srcFs': '$remoteName:$remotePath',
+      'srcFs': '$remote:$remotePath',
       'dstFs': localPath,
     });
   }
@@ -218,11 +240,12 @@ class IosRcloneService implements RcloneService {
     String localPath,
   ) async {
     await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
     final fileName = remotePath.split('/').last;
     final srcDir = remotePath.contains('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '';
     final dstDir = localPath.substring(0, localPath.lastIndexOf('/'));
     await _rc.rpc('operations/copyfile', {
-      'srcFs': '$remoteName:$srcDir',
+      'srcFs': '$remote:$srcDir',
       'srcRemote': fileName,
       'dstFs': dstDir,
       'dstRemote': fileName,
@@ -287,13 +310,15 @@ class IosRcloneService implements RcloneService {
   Future<void> _runJob(
     String jobId,
     String localPath,
-    String remoteName,
+    String rawRemoteName,
     String remotePath,
     SyncOptions options,
     StreamController<RcloneProgressEvent> progress,
   ) async {
     try {
       await _ensureEngine();
+      // Kollisionen aus alten persistierten Namen / Doppel-Doppelpunkte vermeiden.
+      final remoteName = _normalizeRemoteName(rawRemoteName);
 
       // Pre-flight: network guard.
       final conn = await Connectivity().checkConnectivity();
@@ -670,6 +695,10 @@ class IosRcloneService implements RcloneService {
     final selectedSet = selectedAlbums.map((a) => a.toLowerCase()).toSet();
     final existingAlbumDirs = <String>{};
 
+    // Lauf-lokale Belegung der Spiegelpfade (Zielpfad → Asset-ID), damit sich
+    // Assets mit gleichem Titel/Dateinamen niemals gegenseitig überschreiben.
+    final usedPaths = <String, String>{};
+
     for (final album in albums) {
       final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
       if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) continue;
@@ -689,16 +718,24 @@ class IosRcloneService implements RcloneService {
           final file = await asset.file;
           if (file == null || !await file.exists()) continue;
 
-          final filename = asset.title ?? file.path.split(Platform.pathSeparator).last;
+          final destDir = Directory('${mirror.path}/Photos/$albumName');
+          final filename = _resolveMirrorFileName(asset, file, destDir.path, usedPaths);
           if (options.excludeFilters.contains(filename)) continue;
 
-          final destDir = Directory('${mirror.path}/Photos/$albumName');
+          // Zielordner sicher anlegen, BEVOR Dateipfade darin verwendet werden.
           if (!await destDir.exists()) await destDir.create(recursive: true);
-          final dest = File('${destDir.path}/$filename');
-          // Inkrementell: nur kopieren, wenn neu oder anders groß.
-          if (!await dest.exists() ||
-              (await dest.length()) != (await file.length())) {
-            await file.copy('${destDir.path}/$filename');
+          final destPath = '${destDir.path}/$filename';
+
+          try {
+            final dest = File(destPath);
+            // Inkrementell: nur kopieren, wenn neu oder anders groß.
+            if (!await dest.exists() ||
+                (await dest.length()) != (await file.length())) {
+              await file.copy(destPath);
+            }
+          } catch (_) {
+            // Nicht les-/schreibbare Assets überspringen, statt den kompletten
+            // Spiegel-Lauf (und damit den Sync) abzubrechen.
           }
         }
       }
@@ -720,5 +757,99 @@ class IosRcloneService implements RcloneService {
     }
 
     return mirror.path;
+  }
+
+  /// Ermittelt einen verlässlichen, kollisionsfreien Dateinamen für [asset]
+  /// im Spiegel-Verzeichnis [destDirPath].
+  ///
+  /// Hintergrund: Auf iOS ist [AssetEntity.title] häufig null (werden nur mit
+  /// `needTitle` geladen) und `asset.file` liefert für einzelne Assets (z. B.
+  /// Videos, Screen-Recordings, Live-Photo-Begleitdateien) Dateien ohne
+  /// brauchbaren Namen. Ein leerer Name ließ `file.copy('<dir>/')` auf ein
+  /// Verzeichnis zeigen → FileSystemException (errno 21).
+  ///
+  /// Auflösungsreihenfolge: Asset-Titel → Original-Dateiname aus
+  /// [source].path → generierter Name aus der Asset-ID. Bei Kollisionen
+  /// (gleiche Titel verschiedener Assets) oder einem bereits existierenden
+  /// Verzeichnis gleichen Namens wird die bereinigte Asset-ID angehängt –
+  /// deterministisch pro Asset, damit inkrementelle Läufe stabil bleiben.
+  String _resolveMirrorFileName(
+    AssetEntity asset,
+    File source,
+    String destDirPath,
+    Map<String, String> usedPaths,
+  ) {
+    final pathName = source.path.split(Platform.pathSeparator).last.trim();
+    var base = (asset.title ?? '').trim();
+    if (base.isEmpty) base = pathName;
+    if (base.isEmpty) {
+      base =
+          'asset_${_safeFilePart(asset.id)}.${_mirrorFallbackExtension(asset, pathName)}';
+    }
+
+    // Dateinamen dürfen keine Pfadtrenner enthalten – iOS-Asset-IDs und
+    // manche Titel enthalten '/' bzw. '\\'.
+    base = base.replaceAll(RegExp(r'[/\\]'), '_');
+
+    final dot = base.lastIndexOf('.');
+    final stem = dot > 0 ? base.substring(0, dot) : base;
+    final ext = dot > 0 ? base.substring(dot) : '';
+
+    final disambiguator = _safeFilePart(asset.id);
+    var candidate = '$stem$ext';
+    var counter = 0;
+    while (true) {
+      final path = '$destDirPath/$candidate';
+      final owner = usedPaths[path];
+      if (owner == asset.id) {
+        // Dasselbe Asset erneut angetroffen → identischer (stabiler) Name.
+        return candidate;
+      }
+      if (owner == null && !FileSystemEntity.isDirectorySync(path)) {
+        // Frei und kein bestehendes Verzeichnis → verwendbar.
+        usedPaths[path] = asset.id;
+        return candidate;
+      }
+      // Kollision mit anderem Asset oder Verzeichnis → eindeutigen Namen wählen.
+      candidate = counter == 0
+          ? '${stem}_$disambiguator$ext'
+          : '${stem}_${disambiguator}_$counter$ext';
+      counter++;
+    }
+  }
+
+  /// Entfernt alle Zeichen aus [value], die in Dateinamen problematisch sind
+  /// (iOS-Asset-IDs sehen z. B. so aus: `UUID/L0/001`).
+  static String _safeFilePart(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    return cleaned.isEmpty ? 'x' : cleaned;
+  }
+
+  /// Best-effort-Dateiendung für Assets ohne verwertbaren Namen, damit der
+  /// Medientyp (z. B. für den späteren Mediathek-Re-Import) erhalten bleibt.
+  static String _mirrorFallbackExtension(AssetEntity asset, String pathName) {
+    final dot = pathName.lastIndexOf('.');
+    if (dot > 0 && dot < pathName.length - 1) {
+      return pathName.substring(dot + 1);
+    }
+    final mime = asset.mimeType;
+    if (mime != null) {
+      switch (mime.toLowerCase()) {
+        case 'image/heic':
+        case 'image/heif':
+          return 'heic';
+        case 'image/jpeg':
+          return 'jpg';
+        case 'image/png':
+          return 'png';
+        case 'image/gif':
+          return 'gif';
+        case 'video/quicktime':
+          return 'mov';
+        case 'video/mp4':
+          return 'mp4';
+      }
+    }
+    return asset.type == AssetType.video ? 'mov' : 'jpg';
   }
 }

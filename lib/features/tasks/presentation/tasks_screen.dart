@@ -701,6 +701,23 @@ void showAddEditTaskDialog(
   }
 }
 
+/// Ein Album in der iOS-Medienquellauswahl: Anzeigename plus asynchron
+/// nachgeladene Anzahl der enthaltenen Fotos/Videos.
+///
+/// Die Auswahl selbst arbeitet weiterhin nur mit dem Namen ([name]) – [count]
+/// ist eine reine Anzeige, die je nach Ladestand auch null sein kann.
+class _AlbumOption {
+  _AlbumOption(this.entity);
+
+  /// Zugrunde liegende PhotoManager-Entity (für `assetCountAsync`).
+  final AssetPathEntity entity;
+
+  /// Anzahl der Medien im Album (null, solange noch geladen wird).
+  int? count;
+
+  String get name => entity.name;
+}
+
 // ===========================================================================
 // 3-STEP TASK WIZARD DIALOG (Windows, iOS, Android)
 // ===========================================================================
@@ -741,7 +758,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
   // Neue Quell-Auswahl (iOS): Reiter "Fotos & Videos" / "Dateien".
   late String _sourceTab; // 'media' | 'files'
-  List<String> _albums = [];
+  List<_AlbumOption> _albums = [];
   final Set<String> _selectedAlbums = {};
   List<String> _localFolders = [];
   final Set<String> _selectedFolders = {};
@@ -835,14 +852,31 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       final List<AssetPathEntity> paths = ps.isAuth || ps.hasAccess
           ? await PhotoManager.getAssetPathList(type: RequestType.common, hasAll: true)
           : [];
-      if (mounted) {
-        setState(() {
-          _albums = paths.map((p) => p.name).toList();
-          _loadingAlbums = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _albums = paths.map((p) => _AlbumOption(p)).toList();
+        _loadingAlbums = false;
+      });
+      // Anzahl je Album nicht-blockierend nachladen – die Liste selbst
+      // (Name + Auswahl) steht schon ab hier zur Verfügung.
+      await _loadAlbumCounts();
     } catch (_) {
       if (mounted) setState(() => _loadingAlbums = false);
+    }
+  }
+
+  /// Lädt die Anzahl der Fotos/Videos je Album asynchron nach
+  /// (assetCountAsync pro Album) und aktualisiert die UI schrittweise.
+  Future<void> _loadAlbumCounts() async {
+    for (final album in _albums) {
+      try {
+        final count = await album.entity.assetCountAsync;
+        if (!mounted || !_albums.contains(album)) return;
+        setState(() => album.count = count);
+      } catch (_) {
+        // Zähler einzelner Alben ist rein kosmetisch – bei Fehlern einfach
+        // ohne Anzahl anzeigen, die Auswahl hängt nur am Namen.
+      }
     }
   }
 
@@ -2292,10 +2326,14 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
     final allSelected = _albums.length == _selectedAlbums.length;
 
+    // Gesamtzahl über alle Alben (Summe der bereits geladenen Zähler).
+    final totalCount = _albums.fold<int>(0, (sum, a) => sum + (a.count ?? 0));
+    final anyCountKnown = _albums.any((a) => a.count != null);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // "Alle auswählen" Umschalter
+        // "Alle auswählen" Umschalter (inkl. Gesamtzahl der Medien)
         cupertino.CupertinoListTile(
           leading: Icon(
             allSelected ? cupertino.CupertinoIcons.check_mark_circled_solid : cupertino.CupertinoIcons.circle,
@@ -2307,6 +2345,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             strings.selectAllAlbums,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           ),
+          subtitle: anyCountKnown
+              ? Text(
+                  strings.albumsTotalMediaCount(totalCount),
+                  style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                )
+              : null,
           onTap: () {
             setState(() {
               if (allSelected) {
@@ -2314,7 +2358,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
               } else {
                 _selectedAlbums
                   ..clear()
-                  ..addAll(_albums);
+                  ..addAll(_albums.map((a) => a.name));
               }
             });
           },
@@ -2327,23 +2371,29 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
           ),
           child: Column(
             children: _albums.map((album) {
-              final checked = _selectedAlbums.contains(album);
+              final checked = _selectedAlbums.contains(album.name);
+              final count = album.count;
               return Semantics(
                 checked: checked,
                 toggled: true,
                 button: true,
-                label: album,
+                label: album.name,
                 child: cupertino.CupertinoListTile(
-                  title: Text(album, style: const TextStyle(fontSize: 14)),
+                  title: Text(album.name, style: const TextStyle(fontSize: 14)),
+                  subtitle: Text(
+                    // Anzahl wird asynchron nachgeladen – bis dahin „…“.
+                    count == null ? '…' : strings.albumMediaCount(count),
+                    style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                  ),
                   trailing: checked
                       ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
                       : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
                   onTap: () {
                     setState(() {
                       if (checked) {
-                        _selectedAlbums.remove(album);
+                        _selectedAlbums.remove(album.name);
                       } else {
-                        _selectedAlbums.add(album);
+                        _selectedAlbums.add(album.name);
                       }
                     });
                   },

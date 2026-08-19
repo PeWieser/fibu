@@ -177,6 +177,12 @@ class AppStrings {
   String get sourceTabFiles => isGerman ? 'Dateien' : 'Files';
   String get selectAllAlbums => isGerman ? 'Alle auswählen' : 'Select All';
   String get selectAllFolders => isGerman ? 'Alle auswählen' : 'Select All';
+  String albumMediaCount(int count) => isGerman
+      ? (count == 1 ? '1 Foto/Video' : '$count Fotos/Videos')
+      : (count == 1 ? '1 photo/video' : '$count photos/videos');
+  String albumsTotalMediaCount(int count) => isGerman
+      ? 'Insgesamt ${albumMediaCount(count)}'
+      : 'Total: ${albumMediaCount(count)}';
   String get emptySelectionAlbumsHint => isGerman
       ? 'Keine Alben ausgewählt – es werden alle Alben gesichert.'
       : 'No albums selected – all albums will be backed up.';

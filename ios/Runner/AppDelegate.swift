@@ -79,7 +79,7 @@ final class RcloneBridge: NSObject {
   private func initializeEngine(result: @escaping FlutterResult) {
     #if canImport(Rclone)
     if !RcloneBridge.didInitialize {
-      RcloneRcloneInitialize()
+      RcloneInitialize()
       RcloneBridge.didInitialize = true
     }
     result(nil)
@@ -94,12 +94,12 @@ final class RcloneBridge: NSObject {
   private func performRPC(method: String, input: String, result: @escaping FlutterResult) {
     #if canImport(Rclone)
     if !RcloneBridge.didInitialize {
-      RcloneRcloneInitialize()
+      RcloneInitialize()
       RcloneBridge.didInitialize = true
     }
     // Run off the platform thread; large syncs would otherwise block the UI.
     DispatchQueue.global(qos: .userInitiated).async {
-      guard let rpcResult = RcloneRcloneRPC(method, input) else {
+      guard let rpcResult = RcloneRPC(method, input) else {
         DispatchQueue.main.async {
           result(FlutterError(
             code: "rclone_error_nil",

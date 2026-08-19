@@ -6,9 +6,15 @@ import workmanager
 
 // The `Rclone` module is produced by `ios/scripts/build_librclone.sh`
 // (gomobile build of rclone's `librclone/gomobile` package) and dropped in as
-// `ios/Frameworks/Rclone.xcframework`. It exposes:
-//   RcloneInitialize(), RcloneFinalize()
-//   RcloneRPC(_ method: String, _ input: String) -> RcloneRPCResult { output, status }
+// `ios/Frameworks/Rclone.xcframework`.
+//
+// Symbol naming: gobind prefixes every exported name with
+// `<-prefix><Title(go package name)>`. The script passes `-prefix Rclone` and the
+// bound Go package is `gomobile`, so the prefix is `Rclone` + `Gomobile`:
+//   RcloneGomobileRcloneInitialize(), RcloneGomobileRcloneFinalize()
+//   RcloneGomobileRcloneRPC(_ method: String, _ input: String)
+//       -> RcloneGomobileRcloneRPCResult? { output, status }
+// (The module/umbrella header stays `Rclone`, because that is the .xcframework name.)
 //
 // The import is wrapped in `canImport` so the project still compiles before the
 // framework has been built, surfacing a clear runtime error instead of a build failure.
@@ -79,7 +85,7 @@ final class RcloneBridge: NSObject {
   private func initializeEngine(result: @escaping FlutterResult) {
     #if canImport(Rclone)
     if !RcloneBridge.didInitialize {
-      RcloneInitialize()
+      RcloneGomobileRcloneInitialize()
       RcloneBridge.didInitialize = true
     }
     result(nil)
@@ -94,12 +100,12 @@ final class RcloneBridge: NSObject {
   private func performRPC(method: String, input: String, result: @escaping FlutterResult) {
     #if canImport(Rclone)
     if !RcloneBridge.didInitialize {
-      RcloneInitialize()
+      RcloneGomobileRcloneInitialize()
       RcloneBridge.didInitialize = true
     }
     // Run off the platform thread; large syncs would otherwise block the UI.
     DispatchQueue.global(qos: .userInitiated).async {
-      guard let rpcResult = RcloneRPC(method, input) else {
+      guard let rpcResult = RcloneGomobileRcloneRPC(method, input) else {
         DispatchQueue.main.async {
           result(FlutterError(
             code: "rclone_error_nil",

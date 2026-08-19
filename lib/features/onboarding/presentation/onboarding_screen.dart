@@ -45,15 +45,115 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _next() async {
     if (_index < _lastStep) {
       _goTo(_index + 1);
-    } else {
-      await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
+      return;
+    }
+
+    // The photo permission is mandatory: media backups (created later via the
+    // task wizard) cannot work without it, so onboarding must not finish
+    // before it has been granted. Ask for it if the user tries to skip.
+    if (!_photosGranted) {
+      await _requestPhotos();
+    }
+    if (!_photosGranted || !mounted) return;
+
+    await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
+  }
+
+  /// Requests the photo/media permission and updates [_photosGranted].
+  /// When the permission was declined, an explanation dialog is shown that
+  /// also offers opening the system settings (recovery path for a previously
+  /// denied permission).
+  Future<void> _requestPhotos() async {
+    final granted = await _requestPhotoPermission();
+    if (!mounted) return;
+    setState(() => _photosGranted = granted);
+    if (!granted) {
+      await _showPhotoAccessRequiredDialog();
     }
   }
 
-  Future<void> _requestPhotos() async {
-    final ps = await PhotoManager.requestPermissionExtend();
-    if (mounted) {
-      setState(() => _photosGranted = ps.isAuth || ps.hasAccess);
+  /// Returns whether the photo permission is granted, requesting it from the
+  /// operating system when necessary.
+  Future<bool> _requestPhotoPermission() async {
+    if (_photosGranted) return true;
+
+    // photo_manager only exists on mobile platforms (Android, iOS, macOS).
+    // On desktop there is no system photo library, so the permission cannot
+    // be required there.
+    if (!kIsWeb &&
+        defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
+
+    try {
+      final ps = await PhotoManager.requestPermissionExtend();
+      return ps.isAuth || ps.hasAccess;
+    } catch (_) {
+      // Plugin unavailable (e.g. desktop builds or widget tests running on a
+      // bare Dart VM) – do not hard-block onboarding in that case.
+      return true;
+    }
+  }
+
+  /// Tells the user that photo access is mandatory and offers a shortcut to
+  /// the system settings – the way to recover when iOS/Android no longer shows
+  /// the permission prompt after a denial.
+  Future<void> _showPhotoAccessRequiredDialog() async {
+    final strings = ref.read(stringsProvider);
+
+    final openSettings = defaultTargetPlatform == TargetPlatform.iOS
+        ? await showCupertinoDialog<bool>(
+            context: context,
+            builder: (dialogCtx) => CupertinoAlertDialog(
+              title: Text(strings.onboardingPhotoAccessRequiredTitle),
+              content: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(strings.onboardingPhotoAccessRequiredMessage),
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: Text(strings.cancel),
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.pop(dialogCtx, true),
+                  child: Text(strings.openSystemSettings),
+                ),
+              ],
+            ),
+          )
+        : await material.showDialog<bool>(
+            context: context,
+            builder: (dialogCtx) => material.AlertDialog(
+              title: Text(strings.onboardingPhotoAccessRequiredTitle),
+              content: Text(strings.onboardingPhotoAccessRequiredMessage),
+              actions: [
+                material.TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: Text(strings.cancel),
+                ),
+                material.FilledButton(
+                  onPressed: () => Navigator.pop(dialogCtx, true),
+                  child: Text(strings.openSystemSettings),
+                ),
+              ],
+            ),
+          );
+
+    if (openSettings == true) {
+      try {
+        await PhotoManager.openSetting();
+      } catch (_) {
+        // Settings cannot be opened on unsupported platforms – ignore.
+      }
+      // Re-check the permission after returning from the system settings.
+      if (mounted) {
+        final granted = await _requestPhotoPermission();
+        if (mounted) setState(() => _photosGranted = granted);
+      }
     }
   }
 
@@ -111,6 +211,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ),
     ];
 
+    final isLastStep = _index == _lastStep;
+    // Photo access is required to finish onboarding, so the final
+    // "Get Started" button stays blocked until the permission was granted.
+    final waitingForPhotos = isLastStep && !_photosGranted;
+
     final body = Column(
       children: [
         Expanded(
@@ -121,14 +226,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         ),
         _Dots(count: pages.length, index: _index, color: theme.accent),
+        if (waitingForPhotos) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              strings.onboardingPhotosRequiredHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.textSecondary,
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
           child: _ActionButton(
             theme: theme,
-            label: _index == _lastStep ? strings.onboardingGetStarted : strings.onboardingNext,
+            label: isLastStep ? strings.onboardingGetStarted : strings.onboardingNext,
             filled: true,
-            onPressed: _next,
+            onPressed: waitingForPhotos ? null : _next,
           ),
         ),
       ],

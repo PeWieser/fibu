@@ -991,7 +991,15 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   final TextEditingController _hostController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
 
-  String _selectedProvider = '';
+  /// The rclone backend type name of the selected provider
+  /// (e.g. `mega`, `drive`, `s3`, `webdav`, `sftp`).
+  /// This – and never the display name – is passed to rclone as `type`.
+  String _selectedProviderId = '';
+
+  /// The human readable display name of the selected provider
+  /// (e.g. `Mega`, `Google Drive`). Used for UI labels only.
+  String _selectedProviderName = '';
+
   String _searchQuery = '';
   bool _obscurePassword = true;
 
@@ -1020,8 +1028,31 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     super.dispose();
   }
 
+  /// Human readable label of the selected provider for UI display.
+  String get _selectedProviderDisplay =>
+      _selectedProviderName.isNotEmpty ? _selectedProviderName : _selectedProviderId;
+
+  /// Maps the selected provider to the actual rclone backend type string that
+  /// `config/create` accepts.
+  ///
+  /// Most entries in [RcloneProviderRegistry] already use the backend name as
+  /// id (`mega`, `drive`, `onedrive`, `dropbox`, `webdav`, `sftp`, ...), but a
+  /// few convenience entries need mapping: every `s3-*` variant is configured
+  /// through the `s3` backend, `gcs` is rclone's `google cloud storage` and
+  /// `1fichier` is rclone's `fichier` backend.
+  String get _selectedRcloneType {
+    final id = _selectedProviderId.trim().toLowerCase();
+    if (id.startsWith('s3-')) return 's3';
+    if (id == 'gcs') return 'google cloud storage';
+    if (id == '1fichier') return 'fichier';
+    return id;
+  }
+
+  // NOTE: All provider-kind checks below compare against the rclone backend
+  // type name (_selectedProviderId) – never against the display name.
+
   bool get _isOAuthProvider {
-    final p = _selectedProvider.toLowerCase();
+    final p = _selectedProviderId.toLowerCase();
     if (p.isEmpty) return false;
     return p == 'drive' ||
         p == 'google photos' ||
@@ -1035,6 +1066,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         p == 'hidrive' ||
         p == 'zoho' ||
         p == 'mailru' ||
+        p == 'putio' ||
+        p == 'jottacloud' ||
         (p.contains('drive') && !p.contains('webdav') && !p.contains('harddrive')) ||
         p.contains('photo') ||
         p.contains('onedrive') ||
@@ -1044,13 +1077,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   }
 
   bool get _isMegaProvider {
-    final p = _selectedProvider.toLowerCase();
+    final p = _selectedProviderId.toLowerCase();
     if (p.isEmpty) return false;
     return p == 'mega' || p.contains('mega');
   }
 
   bool get _isS3Provider {
-    final p = _selectedProvider.toLowerCase();
+    final p = _selectedProviderId.toLowerCase();
     if (p.isEmpty) return false;
     return p == 's3' ||
         p.contains('s3') ||
@@ -1061,7 +1094,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   }
 
   bool get _isWebDavProvider {
-    final p = _selectedProvider.toLowerCase();
+    final p = _selectedProviderId.toLowerCase();
     if (p.isEmpty) return false;
     return p == 'webdav' ||
         p.contains('webdav') ||
@@ -1070,7 +1103,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   }
 
   bool get _isSftpOrFtpProvider {
-    final p = _selectedProvider.toLowerCase();
+    final p = _selectedProviderId.toLowerCase();
     if (p.isEmpty) return false;
     return p == 'sftp' || p == 'ftp' || p.contains('sftp') || p.contains('ftp');
   }
@@ -1095,7 +1128,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       hasError = true;
     }
 
-    if (_selectedProvider.isEmpty) {
+    if (_selectedProviderId.isEmpty) {
       setState(() {
         _providerError = strings.providerRequiredError;
       });
@@ -1130,7 +1163,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _isOAuthAuthorized = false;
     });
 
-    final providerId = _selectedProvider.toLowerCase();
+    final providerId = _selectedRcloneType;
     final rclone = ref.read(rcloneServiceProvider);
     Map<String, String> creds = const {'client_id': '', 'client_secret': ''};
     if (rclone is IosRcloneService) {
@@ -1189,6 +1222,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     switch (providerId) {
       case 'drive':
       case 'google_photos':
+      case 'google photos':
         return Uri.parse(
             'https://accounts.google.com/o/oauth2/v2/auth?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
       case 'onedrive':
@@ -1357,7 +1391,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         final obscured = plainPass.isNotEmpty
             ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
             : '';
-        final defaultPort = _selectedProvider.toLowerCase() == 'ftp' ? '21' : '22';
+        final defaultPort = _selectedProviderId.toLowerCase() == 'ftp' ? '21' : '22';
         final port = _portController.text.trim().isNotEmpty ? _portController.text.trim() : defaultPort;
         config = {
           if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
@@ -1378,9 +1412,11 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         };
       }
 
+      // rclone's config/create expects the backend type name (e.g. `mega`,
+      // `drive`, `s3`), never the human readable provider display name.
       await ref.read(rcloneServiceProvider).addRemote(
         name: name,
-        type: _selectedProvider,
+        type: _selectedRcloneType,
         config: config,
       );
 
@@ -1574,11 +1610,12 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 itemCount: filtered.length,
                 itemBuilder: (context, index) {
                   final provider = filtered[index];
-                  final isSelected = _selectedProvider == provider.name;
+                  final isSelected = _selectedProviderId == provider.id;
 
                   return GestureDetector(
                     onTap: () => setState(() {
-                      _selectedProvider = provider.name;
+                      _selectedProviderId = provider.id;
+                      _selectedProviderName = provider.name;
                       _providerError = null;
                     }),
                     child: Container(
@@ -1640,7 +1677,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    Text('Provider: ${_selectedProviderDisplay.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1858,11 +1895,12 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 itemCount: filtered.length,
                 itemBuilder: (context, index) {
                   final provider = filtered[index];
-                  final isSelected = _selectedProvider == provider.name;
+                  final isSelected = _selectedProviderId == provider.id;
 
                   return material.InkWell(
                     onTap: () => setState(() {
-                      _selectedProvider = provider.name;
+                      _selectedProviderId = provider.id;
+                      _selectedProviderName = provider.name;
                       _providerError = null;
                     }),
                     child: Container(
@@ -1924,7 +1962,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    Text('Provider: ${_selectedProviderDisplay.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
@@ -2170,12 +2208,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 ),
                 itemBuilder: (context, index) {
                   final provider = filtered[index];
-                  final isSelected = _selectedProvider == provider.name;
+                  final isSelected = _selectedProviderId == provider.id;
 
                   return GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => setState(() {
-                      _selectedProvider = provider.name;
+                      _selectedProviderId = provider.id;
+                      _selectedProviderName = provider.name;
                       _providerError = null;
                     }),
                     child: Container(
@@ -2247,7 +2286,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_nameController.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('Provider: ${_selectedProvider.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    Text('Provider: ${_selectedProviderDisplay.toUpperCase()}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),

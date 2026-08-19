@@ -420,6 +420,14 @@ class AppStrings {
   String get onboardingAllowPhotos => isGerman ? 'Fotos erlauben' : 'Allow Photos';
   String get onboardingNext => isGerman ? 'Weiter' : 'Next';
   String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
+  String get onboardingPhotosRequiredHint => isGerman
+      ? 'Der Fotozugriff ist erforderlich, um fortzufahren. Tippe auf „Fotos erlauben“, um ihn zu erteilen – ohne ihn kann kein Medien-Backup erstellt werden.'
+      : 'Photo access is required to continue. Tap “Allow Photos” to grant it – media backups cannot be created without it.';
+  String get onboardingPhotoAccessRequiredTitle => isGerman ? 'Fotozugriff erforderlich' : 'Photo Access Required';
+  String get onboardingPhotoAccessRequiredMessage => isGerman
+      ? 'Fibu benötigt Zugriff auf deine Fotos, damit Medien-Backups erstellt werden können. Das Onboarding kann erst abgeschlossen werden, wenn der Zugriff erteilt ist. Du kannst ihn jederzeit in den Systemeinstellungen erteilen.'
+      : 'Fibu needs access to your photos so media backups can be created. Onboarding can only be completed after access has been granted. You can grant it at any time in the system settings.';
+  String get openSystemSettings => isGerman ? 'Systemeinstellungen öffnen' : 'Open System Settings';
   String get onboardingFeature1Title => isGerman ? 'Multi-Cloud Backup' : 'Multi-Cloud Backup';
   String get onboardingFeature1Desc => isGerman
       ? 'Verbinde beliebige Cloud-Speicher (Google Drive, OneDrive, S3, Mega, WebDAV etc.) und sichere deine Dateien flexibel.'

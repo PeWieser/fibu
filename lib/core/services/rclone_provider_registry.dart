@@ -64,6 +64,7 @@ class RcloneProviderDescriptor {
   });
 
   RcloneProviderInfo toProviderInfo() => RcloneProviderInfo(
+        id: id,
         name: name,
         description: description,
       );

@@ -78,13 +78,21 @@ class RcloneProgressEvent {
 
 /// Model representing rclone storage provider details.
 class RcloneProviderInfo {
+  /// The rclone backend type name (e.g. `mega`, `drive`, `s3`, `webdav`).
+  /// This is the value rclone's `config/create` expects as `type`.
+  /// Falls back to [name] for sources where name already is the backend type
+  /// (e.g. the raw `rclone config providers` output).
+  final String id;
+
+  /// Human readable display name (e.g. `Mega`, `Google Drive`).
   final String name;
   final String description;
 
   const RcloneProviderInfo({
+    String? id,
     required this.name,
     required this.description,
-  });
+  }) : id = id ?? name;
 }
 
 /// Model representing a file or folder inside a remote storage bucket.

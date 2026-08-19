@@ -261,6 +261,9 @@ class WindowsRcloneService implements RcloneService {
       }
       final List<dynamic> data = json.decode(result.stdout as String);
       return data.map((item) => RcloneProviderInfo(
+        // `rclone config providers` already returns the backend type name in
+        // `Name`, which is exactly what `config/create` expects as `type`.
+        id: item['Name'] as String? ?? '',
         name: item['Name'] as String? ?? '',
         description: item['Description'] as String? ?? '',
       )).toList();

@@ -185,18 +185,18 @@ class MockRcloneService implements RcloneService {
   Future<List<RcloneProviderInfo>> listProviders() async {
     await Future.delayed(const Duration(milliseconds: 100));
     return const [
-      RcloneProviderInfo(name: 'drive', description: 'Google Drive'),
-      RcloneProviderInfo(name: 'google photos', description: 'Google Photos'),
-      RcloneProviderInfo(name: 'onedrive', description: 'Microsoft OneDrive'),
-      RcloneProviderInfo(name: 'dropbox', description: 'Dropbox'),
-      RcloneProviderInfo(name: 'box', description: 'Box'),
-      RcloneProviderInfo(name: 'pcloud', description: 'pCloud'),
-      RcloneProviderInfo(name: 'yandex', description: 'Yandex Disk'),
-      RcloneProviderInfo(name: 'mega', description: 'Mega.nz'),
-      RcloneProviderInfo(name: 's3', description: 'Amazon S3 / MinIO / B2 / Wasabi'),
-      RcloneProviderInfo(name: 'webdav', description: 'WebDAV / Nextcloud / ownCloud'),
-      RcloneProviderInfo(name: 'sftp', description: 'SFTP (SSH File Transfer)'),
-      RcloneProviderInfo(name: 'ftp', description: 'FTP (File Transfer Protocol)'),
+      RcloneProviderInfo(id: 'drive', name: 'drive', description: 'Google Drive'),
+      RcloneProviderInfo(id: 'google photos', name: 'google photos', description: 'Google Photos'),
+      RcloneProviderInfo(id: 'onedrive', name: 'onedrive', description: 'Microsoft OneDrive'),
+      RcloneProviderInfo(id: 'dropbox', name: 'dropbox', description: 'Dropbox'),
+      RcloneProviderInfo(id: 'box', name: 'box', description: 'Box'),
+      RcloneProviderInfo(id: 'pcloud', name: 'pcloud', description: 'pCloud'),
+      RcloneProviderInfo(id: 'yandex', name: 'yandex', description: 'Yandex Disk'),
+      RcloneProviderInfo(id: 'mega', name: 'mega', description: 'Mega.nz'),
+      RcloneProviderInfo(id: 's3', name: 's3', description: 'Amazon S3 / MinIO / B2 / Wasabi'),
+      RcloneProviderInfo(id: 'webdav', name: 'webdav', description: 'WebDAV / Nextcloud / ownCloud'),
+      RcloneProviderInfo(id: 'sftp', name: 'sftp', description: 'SFTP (SSH File Transfer)'),
+      RcloneProviderInfo(id: 'ftp', name: 'ftp', description: 'FTP (File Transfer Protocol)'),
     ];
   }
 

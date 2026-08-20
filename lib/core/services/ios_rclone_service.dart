@@ -217,6 +217,7 @@ class IosRcloneService implements RcloneService {
       'remote': path,
       '_config': _fastFailConfig,
     });
+    AppLog.info('remote', 'Remote-Datei gelöscht: $remote:$path');
   }
 
   @override
@@ -448,11 +449,26 @@ class IosRcloneService implements RcloneService {
         final bridge = PhotoKitBridge();
         List<String> localDeletions = [];
         if (wasMedia) {
-          localDeletions = await bridge.detectLocalDeletions(srcFs);
+          localDeletions = await bridge.detectLocalDeletions(srcFs,
+              onProgress: (label) {
+                if (progress.isClosed) return;
+                progress.add(RcloneProgressEvent(
+                  jobId: jobId,
+                  bytesTransferred: 0,
+                  totalBytes: 0,
+                  percentage: 0,
+                  currentFile: 'Lösch-Erkennung: $label',
+                  eta: '',
+                  speedBytesPerSecond: 0,
+                ));
+              });
           for (final rel in localDeletions) {
             final f = File('$srcFs${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
             try {
-              if (await f.exists()) await f.delete();
+              if (await f.exists()) {
+                await f.delete();
+                AppLog.info('media', 'Im Spiegel gelöscht (lokal gelöscht): $rel');
+              }
             } catch (_) {}
           }
         }
@@ -932,7 +948,7 @@ class IosRcloneService implements RcloneService {
     }
 
     AppLog.info('media',
-        '${options.isEchoMode ? 'Spiegel' : 'Staging'} fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs entfernt');
+        '${options.isEchoMode ? 'Spiegel' : 'Staging'} fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs entfernt → lokal: ${mirror.path}');
     onStage?.call('Spiegel bereit', scannedTotal, scannedTotal);
     return mirror.path;
   }

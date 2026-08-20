@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'app_log_service.dart';
 import 'rclone_service.dart';
 import 'trash_service.dart';
 
@@ -112,10 +113,13 @@ class MirrorSyncEngine {
     MirrorProgressCallback? onProgress,
   }) async {
     // --- Scan beide Seiten ---
+    onProgress?.call('scan', 'Starte Analyse …', 0, 0);
     final localFiles = await _walkLocal(localRoot);
-    final remoteFiles = await _listRemoteRecursive(remoteName, remotePath);
-    onProgress?.call(
-        'scan', '', localFiles.length + remoteFiles.length, 0);
+    final remoteFiles =
+        await _listRemoteRecursive(remoteName, remotePath, onProgress: onProgress);
+    AppLog.info('sync',
+        'Mirror-Analyse fertig: ${localFiles.length} lokale / ${remoteFiles.length} Cloud-Dateien');
+    onProgress?.call('scan', '', localFiles.length + remoteFiles.length, 0);
 
     // --- Löschprotokolle lesen ---
     final localTombs = await _readLocalTombstones(localRoot);
@@ -142,6 +146,9 @@ class MirrorSyncEngine {
             remoteFiles[entry.key] == null ||
             _localIsNewer(entry.value, remoteFiles[entry.key]!))
         .toList();
+    if (toUpload.isNotEmpty) {
+      AppLog.info('sync', 'Mirror-Phase Upload: ${toUpload.length} Dateien → $remoteName:$remotePath');
+    }
     var up = 0;
     for (final entry in toUpload) {
       final rel = entry.key;
@@ -155,9 +162,15 @@ class MirrorSyncEngine {
           _joinRemote(remotePath, rel),
         );
         uploaded++;
-      } catch (_) {
-        // Einzelner Upload-Fehler: weiter mit den übrigen Dateien.
+      } catch (e) {
+        // Einzelner Upload-Fehler: protokollieren und weiter mit den übrigen Dateien.
+        AppLog.warn('sync', 'Upload fehlgeschlagen: $rel → $e');
       }
+    }
+
+    if (localTombs.isNotEmpty) {
+      AppLog.info('sync',
+          'Mirror-Phase Löschprotokoll: ${localTombs.length} lokale Lösch-Einträge remote ausführen');
     }
 
     // =====================================================================
@@ -237,6 +250,9 @@ class MirrorSyncEngine {
             !merged.containsKey(entry.key) &&
             !localFiles.containsKey(entry.key))
         .toList();
+    if (toDownload.isNotEmpty) {
+      AppLog.info('sync', 'Mirror-Phase Download: ${toDownload.length} Dateien ← $remoteName:$remotePath');
+    }
     var dl = 0;
     for (final entry in toDownload) {
       final rel = entry.key;
@@ -248,7 +264,9 @@ class MirrorSyncEngine {
         await _rclone.downloadFile(remoteName, _joinRemote(remotePath, rel), dest.path);
         downloaded++;
         downloadedPaths.add(rel);
-      } catch (_) {}
+      } catch (e) {
+        AppLog.warn('sync', 'Download fehlgeschlagen: $rel ← $e');
+      }
     }
 
     // =====================================================================
@@ -288,11 +306,15 @@ class MirrorSyncEngine {
   /// Rekursive Remote-Listung; relative Pfade mit '/'.
   Future<Map<String, RcloneFileInfo>> _listRemoteRecursive(
     String remoteName,
-    String remotePath,
-  ) async {
+    String remotePath, {
+    MirrorProgressCallback? onProgress,
+  }) async {
     final result = <String, RcloneFileInfo>{};
+    var dirsScanned = 0;
     Future<void> walk(String dir) async {
       final items = await _rclone.listFiles(remoteName, dir);
+      dirsScanned++;
+      onProgress?.call('scan', dir, dirsScanned, 0);
       for (final item in items) {
         final rel = dir.isEmpty ? item.name : '$dir/${item.name}';
         // Meta-Ordner (Löschprotokoll, Remote-Papierkorb) nie als Inhalt
@@ -307,9 +329,15 @@ class MirrorSyncEngine {
       }
     }
 
+    // Fehler beim Cloud-Scan werden NICHT verschluckt (sonst sähe die Engine
+    // fälschlich eine „leere Cloud" und würde alles erneut hochladen) –
+    // stattdessen wird geloggt und der Sync bricht sauber mit Fehler ab.
     try {
       await walk(remotePath);
-    } catch (_) {}
+    } catch (e) {
+      AppLog.error('sync', 'Cloud-Scan fehlgeschlagen ($remoteName:$remotePath): $e');
+      rethrow;
+    }
     return result;
   }
 

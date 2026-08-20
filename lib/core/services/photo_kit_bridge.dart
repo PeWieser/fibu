@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:photo_manager/photo_manager.dart';
 
+import 'app_log_service.dart';
+
 /// Mediathek-first Brücke zwischen der iOS-Foto-Bibliothek (PhotoKit) und dem
 /// lokalen FibuMirror-Spiegel.
 ///
@@ -20,32 +22,20 @@ import 'package:photo_manager/photo_manager.dart';
 class PhotoKitBridge {
   static const String snapshotSubPath = '.fibu/photokit_snapshot.json';
 
-  /// Liest die Mediathek und liefert Asset-ID → relativer Pfad
-  /// (Photos/<Album>/<datei>).
-  Future<Map<String, String>> listLibrarySnapshot() async {
+  /// Liest den lokalen Fibu-Spiegel per Dateisystem ein und liefert
+  /// Pfad (relativ zu [localRoot]) → Pfad. Blitzschnell – KEINE
+  /// PhotoKit-Asset-Exporte mehr (\`asset.file\` pro Foto war zuvor das
+  /// Performance-Nadelöhr und hat den Mirror-Start blockiert).
+  Future<Map<String, String>> listLibrarySnapshot(String localRoot) async {
     final result = <String, String>{};
-    final ps = await PhotoManager.requestPermissionExtend();
-    if (!ps.isAuth && !ps.hasAccess) return result;
-
-    final paths = await PhotoManager.getAssetPathList(type: RequestType.common, hasAll: true);
-    for (final album in paths) {
-      final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
-      final count = await album.assetCountAsync;
-      if (count == 0) continue;
-      const batch = 100;
-      for (int start = 0; start < count; start += batch) {
-        final assets = await album.getAssetListRange(
-          start: start,
-          end: (start + batch).clamp(0, count),
-        );
-        for (final asset in assets) {
-          final file = await asset.file;
-          if (file == null) continue;
-          final name = asset.title ?? file.path.split('/').last;
-          final rel = 'Photos/$albumName/$name';
-          result[asset.id] = rel;
-        }
-      }
+    final photos = Directory('$localRoot${Platform.pathSeparator}Photos');
+    if (!await photos.exists()) return result;
+    await for (final entity in photos.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      var rel = entity.path.substring(localRoot.length);
+      rel = rel.replaceFirst(RegExp(r'^[/\\]'), '').replaceAll('\\', '/');
+      if (rel.startsWith('.fibu')) continue; // Meta-Ordner nie Teil des Snapshots
+      result[rel] = rel;
     }
     return result;
   }
@@ -74,19 +64,38 @@ class PhotoKitBridge {
 
   /// Ermittelt die lokal gelöschten Pfade (im vorherigen Snapshot, aber nicht
   /// mehr in der Mediathek). Rückgabe: relative Pfade der gelöschten Dateien.
-  Future<List<String>> detectLocalDeletions(String localRoot) async {
+  Future<List<String>> detectLocalDeletions(String localRoot,
+      {void Function(String label)? onProgress}) async {
+    AppLog.info('media', 'Lösch-Erkennung: lokalen Spiegel einlesen …');
+    onProgress?.call('Lokale Spiegel-Analyse läuft');
     final before = await loadSnapshot(localRoot);
+    final now = await listLibrarySnapshot(localRoot);
     if (before.isEmpty) {
       // Erster Lauf: Snapshot anlegen, nichts als gelöscht melden.
-      final current = await listLibrarySnapshot();
-      await saveSnapshot(localRoot, current);
+      await saveSnapshot(localRoot, now);
+      AppLog.info('media', 'Erst-Snapshot mit ${now.length} Medien angelegt');
       return [];
     }
-    final now = await listLibrarySnapshot();
     final beforePaths = before.values.toSet();
     final nowPaths = now.values.toSet();
     // Pfade, die im alten Snapshot waren, jetzt aber fehlen = lokal gelöscht.
     final deleted = beforePaths.difference(nowPaths).toList();
+
+    // Sicherheitsbremse: Wenn auf einmal mehr als die Hälfte aller bekannten
+    // Pfade „fehlt", ist das ein Formatwechsel (z. B. Umstieg auf das FS-
+    // basierte Snapshotting), kein echtes Massen-Löschen – der Snapshot wird
+    // neu aufgebaut, aber NICHTS wird als Löschung propagiert.
+    if (beforePaths.length >= 10 && deleted.length * 2 > beforePaths.length) {
+      await saveSnapshot(localRoot, now);
+      AppLog.warn('media',
+          'Snapshot-Diff zu groß (${deleted.length}/${beforePaths.length}) → Formatwechsel erkannt, wird NICHT als Löschung propagiert (Snapshot neu aufgebaut)');
+      return [];
+    }
+
+    if (deleted.isNotEmpty) {
+      AppLog.info('media',
+          '${deleted.length} lokal gelöschte Medien erkannt → als Tombstones propagieren');
+    }
     await saveSnapshot(localRoot, now);
     return deleted;
   }

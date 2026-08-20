@@ -9,9 +9,9 @@ import '../../../theme/theme.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
-import '../../settings/presentation/cloud_drives_screen.dart';
 import 'dashboard_controller.dart';
 import 'widgets/storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
@@ -160,6 +160,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildOfflineHint(context, strings),
             _buildClickableStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             quotaAsync.when(
@@ -256,6 +257,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(value: job.percentage),
+          if (job.itemsTotal > 0) ...[
+            SizedBox(height: theme.sm),
+            fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
+          ],
           SizedBox(height: theme.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -368,6 +373,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+              _buildOfflineHint(context, strings),
               _buildClickableStatusBanner(context, activeJob, strings),
               SizedBox(height: theme.lg),
               quotaAsync.when(
@@ -406,34 +412,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                        SizedBox(height: theme.md),
-                        Semantics(
-                          label: strings.manageCloudDrives,
-                          button: true,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 44),
-                            child: cupertino.CupertinoButton(
-                              color: theme.accent,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              borderRadius: BorderRadius.circular(theme.radiusSm),
-                              onPressed: () {
-                                IosHaptics.light();
-                                Navigator.push(
-                                  context,
-                                  cupertino.CupertinoPageRoute(
-                                      builder: (_) => const CloudDrivesScreen()),
-                                );
-                              },
-                              child: Text(
-                                strings.manageCloudDrives,
-                                style: const TextStyle(
-                                  color: cupertino.CupertinoColors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
                           ),
                         ),
                       ],
@@ -587,6 +565,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               ),
             ),
           ),
+          if (job.itemsTotal > 0) ...[
+            SizedBox(height: theme.sm),
+            Text(
+              strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
+              style: const TextStyle(fontSize: 13, color: cupertino.CupertinoColors.secondaryLabel),
+            ),
+          ],
           SizedBox(height: theme.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -636,6 +621,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildOfflineHint(context, strings),
             _buildClickableStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             quotaAsync.when(
@@ -761,6 +747,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(value: job.percentage / 100),
+            if (job.itemsTotal > 0) ...[
+              SizedBox(height: theme.sm),
+              Text(
+                strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
+                style: material.Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             SizedBox(height: theme.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -770,6 +763,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               ],
             )
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Live-Offline-Hinweis: sichtbar, solange keine Internetverbindung besteht.
+  /// Verschwindet automatisch (live über networkStatusProvider), sobald die
+  /// Verbindung zurückkehrt.
+  Widget _buildOfflineHint(BuildContext context, AppStrings strings) {
+    final theme = context.theme;
+    final net = ref.watch(networkStatusProvider);
+    if (net.online) return const SizedBox.shrink();
+
+    final platform = defaultTargetPlatform;
+    final icon = platform == TargetPlatform.windows
+        ? fluent.FluentIcons.error
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoIcons.wifi_slash
+            : material.Icons.wifi_off);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: theme.md),
+      child: Semantics(
+        label: '${strings.offlineBannerTitle}. ${strings.offlineBannerMessage}',
+        child: Container(
+          padding: EdgeInsets.all(theme.md),
+          decoration: BoxDecoration(
+            color: theme.offline.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: theme.offline.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: theme.offline, size: 22, semanticLabel: strings.offlineBannerTitle),
+              SizedBox(width: theme.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.offlineBannerTitle.toUpperCase(),
+                      style: TextStyle(
+                        color: theme.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      strings.offlineBannerMessage,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

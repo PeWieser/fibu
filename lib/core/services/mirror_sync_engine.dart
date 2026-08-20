@@ -35,6 +35,19 @@ class Tombstone {
       );
 }
 
+/// Fortschritts-Callback des Mirror-Sync (Apple-konforme Zwischenstände).
+///
+/// [phase] ist einer der stabilen Schlüssel `scan`, `upload`, `tombstones`
+/// oder `download`; [item] der relative Pfad der aktuellen Datei (kann leer
+/// sein); [done]/[total] der Zählerstand der aktuellen Phase
+/// (0/0 = keine Zähler-Info für diese Phase).
+typedef MirrorProgressCallback = void Function(
+  String phase,
+  String item,
+  int done,
+  int total,
+);
+
 /// Ergebnis eines Mirror-Sync-Laufs.
 class MirrorSyncResult {
   final int uploaded;
@@ -88,15 +101,21 @@ class MirrorSyncEngine {
 
   /// Synchronisiert den persistenten lokalen Spiegel [localRoot] mit dem
   /// Remote-Verzeichnis [remoteName]:[remotePath].
+  ///
+  /// [onProgress] liefert während des Laufs Zwischenstände (Scan, Upload,
+  /// Tombstones/Deletes, Download) für die UI.
   Future<MirrorSyncResult> sync({
     required String localRoot,
     required String remoteName,
     required String remotePath,
     TrashService? trash,
+    MirrorProgressCallback? onProgress,
   }) async {
     // --- Scan beide Seiten ---
     final localFiles = await _walkLocal(localRoot);
     final remoteFiles = await _listRemoteRecursive(remoteName, remotePath);
+    onProgress?.call(
+        'scan', '', localFiles.length + remoteFiles.length, 0);
 
     // --- Löschprotokolle lesen ---
     final localTombs = await _readLocalTombstones(localRoot);
@@ -118,28 +137,36 @@ class MirrorSyncEngine {
     //    Geräten: die zuletzt geänderte Version gewinnt, nicht der zuletzt
     //    synchronisierende Gerät.
     // =====================================================================
-    for (final entry in localFiles.entries) {
+    final toUpload = localFiles.entries
+        .where((entry) =>
+            remoteFiles[entry.key] == null ||
+            _localIsNewer(entry.value, remoteFiles[entry.key]!))
+        .toList();
+    var up = 0;
+    for (final entry in toUpload) {
       final rel = entry.key;
       final file = entry.value;
-      final remoteInfo = remoteFiles[rel];
-      if (remoteInfo == null || _localIsNewer(file, remoteInfo)) {
-        try {
-          await _rclone.copyFileToRemote(
-            file.path,
-            remoteName,
-            _joinRemote(remotePath, rel),
-          );
-          uploaded++;
-        } catch (_) {
-          // Einzelner Upload-Fehler: weiter mit den übrigen Dateien.
-        }
+      up++;
+      onProgress?.call('upload', rel, up, toUpload.length);
+      try {
+        await _rclone.copyFileToRemote(
+          file.path,
+          remoteName,
+          _joinRemote(remotePath, rel),
+        );
+        uploaded++;
+      } catch (_) {
+        // Einzelner Upload-Fehler: weiter mit den übrigen Dateien.
       }
     }
 
     // =====================================================================
     // 2. Lokale Tombstones remote ausführen (Lokal hat Vorrang).
     // =====================================================================
+    var tb = 0;
     for (final tomb in localTombs) {
+      tb++;
+      onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
       if (remoteFiles.containsKey(tomb.path)) {
         bool ok = false;
         if (trash != null) {
@@ -203,14 +230,18 @@ class MirrorSyncEngine {
     // =====================================================================
     // 4. Neue remote-Dateien in die lokalen Alben/Ordner downloaden.
     // =====================================================================
-    for (final entry in remoteFiles.entries) {
+    final toDownload = remoteFiles.entries
+        .where((entry) =>
+            !entry.value.isDir &&
+            // Tombstoned (und nicht lokal wiederbelebt) → nicht erneut laden.
+            !merged.containsKey(entry.key) &&
+            !localFiles.containsKey(entry.key))
+        .toList();
+    var dl = 0;
+    for (final entry in toDownload) {
       final rel = entry.key;
-      final info = entry.value;
-      if (info.isDir) continue;
-      // Tombstoned (und nicht lokal wiederbelebt) → nicht erneut herunterladen.
-      if (merged.containsKey(rel)) continue;
-      if (localFiles.containsKey(rel)) continue;
-
+      dl++;
+      onProgress?.call('download', rel, dl, toDownload.length);
       final dest = File('$localRoot${Platform.pathSeparator}${_localRel(rel)}');
       try {
         await dest.parent.create(recursive: true);

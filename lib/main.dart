@@ -49,11 +49,41 @@ fluent.AccentColor _createFluentAccent(Color accent, bool isDark) {
   }
 }
 
-class FibuApp extends ConsumerWidget {
+class FibuApp extends ConsumerStatefulWidget {
   const FibuApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FibuApp> createState() => _FibuAppState();
+}
+
+class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    // Plattform-Brightness-Änderungen (iOS Light/Dark-Systemwechsel) live in
+    // den systemBrightnessProvider spiegeln → appThemeProvider re-evaluiert
+    // sofort, kein App-Neustart nötig.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    final brightness = PlatformDispatcher.instance.platformBrightness;
+    final current = ref.read(systemBrightnessProvider);
+    if (current != brightness) {
+      ref.read(systemBrightnessProvider.notifier).state = brightness;
+    }
+    super.didChangePlatformBrightness();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
     final themeData = ref.watch(appThemeProvider);
     final onboardingCompleted = ref.watch(onboardingControllerProvider);

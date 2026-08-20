@@ -215,12 +215,22 @@ final themeConfigProvider = StateNotifierProvider<ThemeNotifier, ThemeConfig>((r
   return ThemeNotifier();
 });
 
+/// Live-Provider für die System-Helligkeit (Light/Dark).
+///
+/// Der Initialwert stammt aus [PlatformDispatcher]; der App-Root (WidgetsApp
+/// tree in main.dart) beobachtet `didChangePlatformBrightness` und setzt hier
+/// den neuen Wert, sobald iOS/Android/Windows zwischen Light und Dark
+/// umschalten – so re-evaluiert [appThemeProvider] sofort, ohne Neustart.
+final systemBrightnessProvider = StateProvider<Brightness>((ref) {
+  return PlatformDispatcher.instance.platformBrightness;
+});
+
 /// Riverpod provider that returns the resolved [AppThemeData] based on active configuration and system brightness.
 final appThemeProvider = Provider<AppThemeData>((ref) {
   final config = ref.watch(themeConfigProvider);
-  
-  // Detect system brightness for automatic mode
-  final systemBrightness = PlatformDispatcher.instance.platformBrightness;
+
+  // Systemhelligkeit live verfolgen (Systemwechsel Light/Dark zur Laufzeit).
+  final systemBrightness = ref.watch(systemBrightnessProvider);
   final isDark = config.syncWithSystem
       ? systemBrightness == Brightness.dark
       : config.forceDarkMode;

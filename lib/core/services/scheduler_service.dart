@@ -7,6 +7,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'ios_rclone_service.dart';
 import 'rclone_service.dart';
+import 'settings_service.dart';
 
 /// Identifier registered in iOS `BGTaskSchedulerPermittedIdentifiers`
 /// (see ios/Runner/Info.plist) and with Workmanager.
@@ -59,9 +60,19 @@ class SchedulerService {
   ///
   /// Reads the persisted `tasks.json` (source of truth for user tasks) and
   /// starts only those tasks whose schedule is due right now.
+  ///
+  /// Netzwerkregeln sind global: Die WLAN-only-Option kommt aus den
+  /// App-Einstellungen (nicht mehr pro Task), Offline blockiert komplett.
   static Future<void> runScheduledSync() async {
     final tasks = await _loadTasks();
     if (tasks.isEmpty) return;
+
+    // Globale WLAN-only-Einstellung einmalig lesen.
+    var wifiOnly = true;
+    try {
+      final settings = await SettingsService.loadSettings();
+      if (settings != null) wifiOnly = settings.wifiOnlySync;
+    } catch (_) {}
 
     final engine = IosRcloneService();
     final now = DateTime.now();
@@ -76,10 +87,14 @@ class SchedulerService {
       final remoteName = remotes.isNotEmpty ? remotes.first : null;
       if (remoteName == null) continue;
 
-      // WLAN-only-Guard: Ohne Wi-Fi nicht synchronisieren.
-      if (task['wifiOnly'] as bool? ?? true) {
+      // Netzwerk-Guard (global): Offline → überspringen; WLAN-only → nur Wi-Fi.
+      try {
         final conn = await Connectivity().checkConnectivity();
-        if (!conn.contains(ConnectivityResult.wifi)) continue;
+        if (!conn.any((r) => r != ConnectivityResult.none)) continue;
+        if (wifiOnly && !conn.contains(ConnectivityResult.wifi)) continue;
+      } catch (_) {
+        // Konnte der Status nicht gelesen werden, lieber nicht syncen.
+        continue;
       }
 
       final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';

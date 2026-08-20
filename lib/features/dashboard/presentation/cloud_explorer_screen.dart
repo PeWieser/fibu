@@ -8,6 +8,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/file_viewer_service.dart';
@@ -101,8 +102,13 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       }
     } catch (e) {
       if (mounted) {
+        // Klare, nutzerfreundliche Meldung: Offline wird explizit benannt,
+        // statt den rohen Engine-Fehlertext zu zeigen.
+        final offline = !ref.read(networkStatusProvider).online;
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = offline
+              ? context.strings.networkUnavailableError
+              : e.toString().replaceAll('Exception: ', '').trim();
           _isLoading = false;
           _files = [];
         });
@@ -1890,6 +1896,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
     );
   }
 
+  /// Live-Offline-Status (zentraler Netzwerk-Provider) – aktualisiert die
+  /// Fehleransicht automatisch, wenn die Verbindung wegbricht/zurückkehrt.
+  bool get _isOffline => !ref.watch(networkStatusProvider).online;
+
   Widget _buildErrorScreen(String error, TargetPlatform platform, AppThemeData theme, AppStrings strings) {
     final widgetBody = Center(
       child: Padding(
@@ -1898,17 +1908,39 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              platform == TargetPlatform.windows
-                  ? fluent.FluentIcons.error
-                  : (platform == TargetPlatform.iOS ? cupertino.CupertinoIcons.exclamationmark_triangle : material.Icons.error_outline),
+              _isOffline
+                  ? (platform == TargetPlatform.windows
+                      ? fluent.FluentIcons.error
+                      : (platform == TargetPlatform.iOS
+                          ? cupertino.CupertinoIcons.wifi_slash
+                          : material.Icons.wifi_off))
+                  : (platform == TargetPlatform.windows
+                      ? fluent.FluentIcons.error
+                      : (platform == TargetPlatform.iOS
+                          ? cupertino.CupertinoIcons.exclamationmark_triangle
+                          : material.Icons.error_outline)),
               size: 48,
-              color: theme.error,
+              color: _isOffline ? theme.offline : theme.error,
               semanticLabel: strings.error,
             ),
             SizedBox(height: theme.md),
+            if (_isOffline) ...[
+              Text(
+                strings.offlineBannerTitle,
+                style: TextStyle(
+                  color: theme.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              SizedBox(height: theme.xs),
+            ],
             Text(
-              '${strings.error}: $error',
-              style: TextStyle(color: theme.error, fontSize: 14),
+              _isOffline ? strings.offlineBannerMessage : '${strings.error}: $error',
+              style: TextStyle(
+                color: _isOffline ? theme.textSecondary : theme.error,
+                fontSize: 14,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

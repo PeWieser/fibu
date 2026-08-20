@@ -751,7 +751,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   late String _selectedHour;
   late String _selectedMinute;
   late bool _isActive;
-  late bool _wifiOnly;
 
   // Mobile categories: 'all', 'photos', 'videos', 'folders' (Windows/Android)
   late String _selectedSourceCategory;
@@ -809,7 +808,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       }
     }
     _isActive = task?.isActive ?? true;
-    _wifiOnly = task?.wifiOnly ?? true;
 
     // iOS nutzt standardmäßig den Reiter "Fotos & Videos".
     _sourceTab = (widget.platform == TargetPlatform.iOS ? 'media' : 'folders');
@@ -975,7 +973,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Mediathek';
         _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
-        _wifiOnly = true;
       } else if (presetType == 'media_incremental') {
         _nameController.text = strings.presetMediaIncrementalTitle;
         _selectedSourceCategory = 'all';
@@ -984,7 +981,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Fotos';
         _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
-        _wifiOnly = true;
       } else if (presetType == 'documents') {
         _nameController.text = strings.presetDocsTitle;
         _selectedSourceCategory = 'folders';
@@ -993,7 +989,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Dokumente';
         _selectedScheduleDay = widget.platform == TargetPlatform.iOS ? 'iOS System' : 'Daily';
-        _wifiOnly = true;
       }
       _nameError = null;
       _sourceError = null;
@@ -1283,7 +1278,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       distributionStrategy: _selectedRemotes.length > 1 ? _selectedDistribution : DistributionStrategy.mirrorAll,
       targetFolderMode: _selectedTargetFolderMode,
       targetFolderName: finalTargetFolder,
-      wifiOnly: _wifiOnly,
+      // wifiOnly wird bewusst NICHT mehr pro Task gesetzt (Default bleibt für
+      // Alt-Daten) – die WLAN-only-Regel ist global (Einstellungen).
       selectedAlbums: selectedAlbums,
       selectedFolders: selectedFolders,
     );
@@ -2098,26 +2094,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         ),
         SizedBox(height: theme.sm),
 
-        // WiFi-Only Toggle
-        Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                SizedBox(height: theme.xs / 2),
-                Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-              ],
-            ),
-            const Spacer(),
-            fluent.ToggleSwitch(
-              checked: _wifiOnly,
-              onChanged: (val) => setState(() => _wifiOnly = val),
-            ),
-          ],
-        ),
-        SizedBox(height: theme.md),
-
         // Catch-up Notice
         Row(
           children: [
@@ -2866,27 +2842,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
           ),
           SizedBox(height: theme.lg),
 
-          // WiFi-Only Switch
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                    SizedBox(height: theme.xs / 2),
-                    Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-                  ],
-                ),
-              ),
-              cupertino.CupertinoSwitch(
-                value: _wifiOnly,
-                onChanged: (val) => setState(() => _wifiOnly = val),
-              ),
-            ],
-          ),
-          SizedBox(height: theme.lg),
-
           Row(
             children: [
               Text('${strings.activeSyncJob}:', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -3404,25 +3359,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             ),
           ],
           SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    SizedBox(height: theme.xs / 2),
-                    Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-                  ],
-                ),
-              ),
-              material.Switch(
-                value: _wifiOnly,
-                onChanged: (val) => setState(() => _wifiOnly = val),
-              ),
-            ],
-          ),
-          SizedBox(height: theme.md),
           Row(
             children: [
               Text('${strings.activeSyncJob}:'),

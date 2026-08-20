@@ -65,6 +65,12 @@ class RcloneProgressEvent {
   final int totalBytes;
   final String currentFile;
 
+  /// Anzahl bereits übertragener Dateien (0 = unbekannt/unklar).
+  final int itemsDone;
+
+  /// Gesamtzahl der zu übertragenden Dateien dieses Laufs (0 = unbekannt).
+  final int itemsTotal;
+
   const RcloneProgressEvent({
     required this.jobId,
     required this.percentage,
@@ -73,6 +79,8 @@ class RcloneProgressEvent {
     required this.bytesTransferred,
     required this.totalBytes,
     required this.currentFile,
+    this.itemsDone = 0,
+    this.itemsTotal = 0,
   });
 }
 

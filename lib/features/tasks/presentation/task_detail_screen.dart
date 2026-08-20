@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/rclone_service.dart';
 import '../../dashboard/presentation/dashboard_controller.dart';
 import 'tasks_controller.dart';
 import 'tasks_screen.dart';
@@ -53,6 +54,85 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         });
       }
     }
+  }
+
+  /// Live-Fortschritt des aktuell laufenden Syncs – Apple-konform:
+  /// Fortschrittsbalken, Prozentzahl, „x von y Dateien“ und aktuelle Datei.
+  /// Zeigt nichts an, wenn gerade kein Sync läuft.
+  Widget _buildLiveSyncProgress(
+      BuildContext context, AppThemeData theme, AppStrings strings) {
+    final job = ref.watch(activeJobProvider);
+    final isSyncing = job.status == RcloneJobStatus.syncing ||
+        job.status == RcloneJobStatus.pending;
+    if (!isSyncing) return const SizedBox.shrink();
+
+    final platform = defaultTargetPlatform;
+    final pct = (job.percentage.clamp(0.0, 100.0) / 100).toDouble();
+
+    final Widget bar;
+    if (platform == TargetPlatform.windows) {
+      bar = fluent.ProgressBar(value: job.percentage);
+    } else if (platform == TargetPlatform.iOS) {
+      bar = ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: SizedBox(
+          height: 6,
+          child: Stack(
+            children: [
+              Container(color: cupertino.CupertinoColors.systemGrey5),
+              FractionallySizedBox(
+                widthFactor: pct,
+                child: Container(color: theme.accent),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      bar = material.LinearProgressIndicator(value: pct);
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: theme.md),
+      child: Container(
+        padding: EdgeInsets.all(theme.md),
+        decoration: BoxDecoration(
+          color: theme.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(theme.radiusSm),
+          border: Border.all(color: theme.accent.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              job.currentFile.isEmpty ? strings.preparing : job.currentFile,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: theme.textPrimary, fontSize: 13),
+            ),
+            SizedBox(height: theme.sm),
+            bar,
+            SizedBox(height: theme.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (job.itemsTotal > 0)
+                  Text(
+                    strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
+                    style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                  )
+                else
+                  const SizedBox.shrink(),
+                Text(
+                  '${job.percentage.toStringAsFixed(1)}%',
+                  style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _confirmDeleteTask(BuildContext context, BackupTask task, TargetPlatform platform) {
@@ -249,6 +329,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildLiveSyncProgress(context, theme, strings),
               if (_syncMessage != null) ...[
                 fluent.InfoBar(
                   title: Text(_syncMessage!),
@@ -334,14 +415,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     _buildWindowsInfoRow(
                       strings.scheduleLabel,
                       task.scheduleDescription,
-                      theme,
-                    ),
-                    const SizedBox(height: 8),
-                    const fluent.Divider(),
-                    const SizedBox(height: 8),
-                    _buildWindowsInfoRow(
-                      strings.wifiOnlySyncLabel,
-                      _formatYesNo(strings, task.wifiOnly),
                       theme,
                     ),
                     const SizedBox(height: 8),
@@ -439,6 +512,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
           child: Column(
             children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(theme.lg, 0, theme.lg, 0),
+                child: _buildLiveSyncProgress(context, theme, strings),
+              ),
               if (_syncMessage != null)
                 Padding(
                   padding: EdgeInsets.all(theme.md),
@@ -556,14 +633,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     ),
                   ),
                   cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.wifi, color: theme.accent, size: 22),
-                    title: Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      _formatYesNo(strings, task.wifiOnly),
-                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                    ),
-                  ),
-                  cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.slider_horizontal_3, color: theme.accent, size: 22),
                     title: Text(strings.excludedFilesLabel, style: const TextStyle(fontSize: 16)),
                     trailing: Text(
@@ -628,6 +697,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildLiveSyncProgress(context, theme, strings),
             if (_syncMessage != null) ...[
               material.MaterialBanner(
                 content: Text(_syncMessage!),
@@ -741,12 +811,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     leading: Icon(material.Icons.schedule, color: theme.accent),
                     title: Text(strings.scheduleLabel),
                     trailing: Text(task.scheduleDescription),
-                  ),
-                  const material.Divider(height: 1),
-                  material.ListTile(
-                    leading: Icon(material.Icons.wifi, color: theme.accent),
-                    title: Text(strings.wifiOnlySyncLabel),
-                    trailing: Text(_formatYesNo(strings, task.wifiOnly)),
                   ),
                   const material.Divider(height: 1),
                   material.ListTile(

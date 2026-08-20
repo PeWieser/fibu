@@ -369,6 +369,30 @@ class IosRcloneService implements RcloneService {
           remoteName: remoteName,
           remotePath: remotePath,
           trash: trash,
+          onProgress: (phase, item, done, total) {
+            if (progress.isClosed) return;
+            const phaseLabels = {
+              'scan': 'Analysiere lokale & Cloud-Dateien',
+              'upload': 'Lade hoch',
+              'tombstones': 'Wende Löschprotokoll an',
+              'download': 'Lade aus der Cloud',
+            };
+            final label = phaseLabels[phase] ?? phase;
+            final fileName =
+                item.isEmpty ? '' : item.split('/').where((s) => s.isNotEmpty).last;
+            final hasCounters = total > 0;
+            progress.add(RcloneProgressEvent(
+              jobId: jobId,
+              bytesTransferred: 0,
+              totalBytes: 0,
+              percentage: hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
+              currentFile: fileName.isEmpty ? '$label…' : '$label: $fileName',
+              eta: hasCounters ? '' : '…',
+              speedBytesPerSecond: 0,
+              itemsDone: done,
+              itemsTotal: total,
+            ));
+          },
         );
 
         // Nach dem Sync: neu heruntergeladene remote-Dateien in die Mediathek
@@ -455,6 +479,9 @@ class IosRcloneService implements RcloneService {
       final etaSecs = (stats['eta'] as num?)?.toInt();
       final currentFile = _currentTransferName(stats);
       final pct = total > 0 ? (transferred / total * 100.0).clamp(0.0, 100.0) : 0.0;
+      // Datei-Zähler aus core/stats („12 von 45“-Anzeige).
+      final itemsDone = (stats['transfers'] as num?)?.toInt() ?? 0;
+      final itemsTotal = (stats['totalTransfers'] as num?)?.toInt() ?? 0;
 
       if (!progress.isClosed) {
         progress.add(RcloneProgressEvent(
@@ -465,6 +492,8 @@ class IosRcloneService implements RcloneService {
           currentFile: currentFile,
           eta: etaSecs != null ? '${etaSecs}s' : '—',
           speedBytesPerSecond: speed,
+          itemsDone: itemsDone,
+          itemsTotal: itemsTotal,
         ));
       }
 

@@ -552,6 +552,36 @@ class AppStrings {
       ? 'Synchronisierung pausiert: Verbindung über Mobilfunk nicht erlaubt (WLAN erforderlich).'
       : 'Sync paused: Cellular data connection blocked (Wi-Fi required).';
 
+  // --- Offline-Banner & Netzwerk-Hinweise ---
+  String get offlineBannerTitle => isGerman ? 'Offline' : 'Offline';
+  String get offlineBannerMessage => isGerman
+      ? 'Keine Internetverbindung – Synchronisierung pausiert, bis du wieder online bist.'
+      : 'No internet connection – syncing is paused until you are back online.';
+  String get syncBlockedOfflineLog => isGerman
+      ? 'Sync blockiert: Offline (keine Internetverbindung).'
+      : 'Sync blocked: offline (no internet connection).';
+  String get syncBlockedCellularLog => isGerman
+      ? 'Sync blockiert: Mobilfunkverbindung, WLAN-only ist aktiv (siehe Einstellungen).'
+      : 'Sync blocked: on cellular, Wi-Fi-only is enabled (see Settings).';
+
+  // --- Freundliche Sync-Fehlermeldungen ---
+  String get syncAuthError => isGerman
+      ? 'Authentifizierung fehlgeschlagen. Bitte verbinde das Cloud-Laufwerk in den Einstellungen neu.'
+      : 'Authentication failed. Please reconnect the cloud drive in Settings.';
+  String get syncQuotaError => isGerman
+      ? 'Nicht genügend Speicherplatz im Cloud-Laufwerk verfügbar.'
+      : 'Not enough storage space available on the cloud drive.';
+  String syncItemsProgress(int done, int total) =>
+      isGerman ? '$done von $total Dateien' : '$done of $total files';
+
+  // --- Speicherplatz-Anzeige der Cloud-Laufwerke ---
+  String get storageNotAvailable => isGerman ? 'n. v.' : 'n/a';
+  String quotaSummaryUsedOf(String used, String total) =>
+      isGerman ? '$used von $total belegt' : '$used of $total used';
+  String get quotaSummaryUnavailable =>
+      isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
+  String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';
+
   // --- About / Über Section & System Language ---
   String get systemLanguage => isGerman ? 'System (Automatisch)' : 'System (Automatic)';
   String get systemLanguageSubtitle => isGerman

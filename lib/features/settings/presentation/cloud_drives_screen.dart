@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/services/ios_rclone_service.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
@@ -49,6 +50,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       _isRefreshing = true;
     });
     try {
+      // Per-Remote Statistiken (Quota + Fibu-Beleg) ebenfalls erneuern.
+      final known = ref.read(remotesProvider).valueOrNull ?? const <String>[];
+      for (final remote in known) {
+        ref.invalidate(remoteQuotaProvider(remote));
+        ref.invalidate(remoteFibuUsageProvider(remote));
+      }
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
       await ref.read(remotesProvider.future);
@@ -227,6 +234,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                     Text(remote, style: const TextStyle(fontWeight: FontWeight.bold)),
                     SizedBox(height: theme.xs),
                     Text(type, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    _remoteStorageInfo(theme, strings, remote),
                   ],
                 ),
               ),
@@ -438,7 +446,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           },
           child: cupertino.CupertinoListTile(
             title: Text(remote),
-            subtitle: Text(type),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(type),
+                _remoteStorageInfo(theme, strings, remote),
+              ],
+            ),
             leading: Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, semanticLabel: 'Cloud Remote'),
             trailing: isDeleting
                 ? const cupertino.CupertinoActivityIndicator()
@@ -616,7 +630,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
               leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: 'Cloud Remote'),
               title: Text(remote),
-              subtitle: Text(type),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type),
+                  _remoteStorageInfo(theme, strings, remote),
+                ],
+              ),
               trailing: isDeleting
                   ? const SizedBox(
                       width: 20,
@@ -641,6 +661,47 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   }
 
   // --- Helper Methods ---
+
+  /// Speicherplatz-Angaben je Remote (Apple-dezent, als Subtitle-Zeilen):
+  ///
+  /// * Quota: „<belegt> von <gesamt> belegt“ – bei Providern ohne `about`
+  ///   (getQuota == null oder 0-Total) stattdessen „Speicherplatz n. v.“.
+  /// * Fibu-Beleg: rekursive Byte-Summe des Fibu-Backup-Zielordners im Remote.
+  ///
+  /// Beide Werte werden pro Remote asynchron nachgeladen.
+  Widget _remoteStorageInfo(AppThemeData theme, AppStrings strings, String remote,
+      {TextStyle? style}) {
+    final quotaAsync = ref.watch(remoteQuotaProvider(remote));
+    final fibuAsync = ref.watch(remoteFibuUsageProvider(remote));
+    final textStyle =
+        style ?? TextStyle(color: theme.textSecondary, fontSize: 12);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        quotaAsync.when(
+          data: (quota) => Text(
+            (quota == null || quota.totalBytes <= 0)
+                ? strings.quotaSummaryUnavailable
+                : strings.quotaSummaryUsedOf(
+                    formatBytes(quota.usedBytes), formatBytes(quota.totalBytes)),
+            style: textStyle,
+          ),
+          loading: () => Text('…', style: textStyle),
+          error: (err, _) => Text(strings.quotaSummaryUnavailable, style: textStyle),
+        ),
+        fibuAsync.when(
+          data: (bytes) => Text(
+            '${strings.fibuSpaceLabel}: ${formatBytes(bytes)}',
+            style: textStyle,
+          ),
+          loading: () => Text('${strings.fibuSpaceLabel}: …', style: textStyle),
+          error: (err, _) => Text('${strings.fibuSpaceLabel}: –', style: textStyle),
+        ),
+      ],
+    );
+  }
+
   String _getProviderType(String name) {
     final lowerName = name.toLowerCase();
     if (lowerName.contains('google photo') || lowerName.contains('photos')) {

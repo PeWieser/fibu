@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/localization/app_strings.dart';
+import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/settings_service.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 
 /// State object representing the status and progress of the active background backup task.
@@ -13,6 +16,12 @@ class ActiveJobState {
   final String eta;
   final List<String> logs;
 
+  /// Anzahl bereits übertragener Dateien (0 = keine Info).
+  final int itemsDone;
+
+  /// Gesamtzahl der Dateien des aktuellen Laufs (0 = unbekannt).
+  final int itemsTotal;
+
   const ActiveJobState({
     this.jobId,
     this.status = RcloneJobStatus.completed,
@@ -20,6 +29,8 @@ class ActiveJobState {
     this.currentFile = '',
     this.eta = '',
     this.logs = const [],
+    this.itemsDone = 0,
+    this.itemsTotal = 0,
   });
 
   ActiveJobState copyWith({
@@ -29,6 +40,8 @@ class ActiveJobState {
     String? currentFile,
     String? eta,
     List<String>? logs,
+    int? itemsDone,
+    int? itemsTotal,
   }) {
     return ActiveJobState(
       jobId: jobId ?? this.jobId,
@@ -37,6 +50,8 @@ class ActiveJobState {
       currentFile: currentFile ?? this.currentFile,
       eta: eta ?? this.eta,
       logs: logs ?? this.logs,
+      itemsDone: itemsDone ?? this.itemsDone,
+      itemsTotal: itemsTotal ?? this.itemsTotal,
     );
   }
 }
@@ -57,6 +72,50 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
   String _timestamp() {
     final now = DateTime.now();
     return '[${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}]';
+  }
+
+  /// Übersetzt rohe Sync-/Netzwerkfehler in klare, lokalisierte Meldungen.
+  String _friendlySyncError(AppStrings strings, Object error) {
+    final raw = error.toString().replaceAll('Exception: ', '').trim();
+    final lower = raw.toLowerCase();
+    if (lower.contains('offline') ||
+        lower.contains('network') ||
+        lower.contains('netzwerk') ||
+        lower.contains('internet') ||
+        lower.contains('socket') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout')) {
+      return strings.networkUnavailableError;
+    }
+    if (lower.contains('unauthorized') ||
+        lower.contains('forbidden') ||
+        lower.contains('401') ||
+        lower.contains('403') ||
+        lower.contains('token') ||
+        lower.contains('auth') ||
+        lower.contains('anmeldung')) {
+      return strings.syncAuthError;
+    }
+    if (lower.contains('quota') ||
+        lower.contains('insufficient storage') ||
+        lower.contains('speicherplatz') ||
+        lower.contains('no space')) {
+      return strings.syncQuotaError;
+    }
+    return raw;
+  }
+
+  /// Prüft die globalen Netzwerkregeln vor einem Sync.
+  ///
+  /// Liefert null, wenn synchronisiert werden darf, sonst eine lokalisierte
+  /// Sperr-Begründung (Offline bzw. globales WLAN-only bei Mobilfunk).
+  String? _networkBlockReason(AppStrings strings) {
+    final net = _ref.read(networkStatusProvider);
+    if (!net.online) return strings.networkUnavailableError;
+    if (_ref.read(wifiOnlySyncProvider) && !net.onWifi) {
+      return strings.cellularSyncBlockedNotice;
+    }
+    return null;
   }
 
   /// Synchronisiert eine einzelne Aufgabe. Gibt true bei Erfolg, false bei
@@ -87,6 +146,21 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         '*.jpg', '*.jpeg', '*.png', '*.heic', '*.webp', '*.gif', '*.raw', '*.cr2', '*.nef', '*.dng', '*.heif',
         '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp',
       ]);
+    }
+
+    final strings = _ref.read(stringsProvider);
+
+    // Globale Netzwerkregeln direkt vor dem Task-Start prüfen (die
+    // Verbindung kann mitten in der Queue abreißen).
+    final blockReason = _networkBlockReason(strings);
+    if (blockReason != null) {
+      final t = _timestamp();
+      state = state.copyWith(
+        status: RcloneJobStatus.failed,
+        currentFile: blockReason,
+        logs: [...state.logs, '$t Task "${task.name}": $blockReason'],
+      );
+      return false;
     }
 
     final isEcho = task.syncMode == SyncMode.mirror;
@@ -135,6 +209,8 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
             percentage: event.percentage,
             currentFile: '[${task.name}] ${event.currentFile}',
             eta: event.eta,
+            itemsDone: event.itemsDone,
+            itemsTotal: event.itemsTotal,
             logs: newLogs,
           );
         }
@@ -172,10 +248,12 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       _progressSub?.cancel();
       _progressSub = null;
       if (!mounted) return false;
-      final failMsg = '${_timestamp()} Task "${task.name}" failed: $e';
+      final isCancelled = e.toString() == 'Backup cancelled' || _isCancelled;
+      final friendly = _friendlySyncError(strings, e);
+      final failMsg = '${_timestamp()} Task "${task.name}" failed: $friendly';
       state = state.copyWith(
-        status: e.toString() == 'Backup cancelled' || _isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
-        currentFile: 'Backup stopped: $e',
+        status: isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
+        currentFile: isCancelled ? 'Backup stopped.' : friendly,
         logs: [...state.logs, failMsg],
       );
       return false;
@@ -190,9 +268,22 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     }
 
     _isCancelled = false;
+    final strings = _ref.read(stringsProvider);
+
+    // Offline/WLAN-only blockieren, bevor überhaupt ein Task startet.
+    final blockReason = _networkBlockReason(strings);
+    final timestamp = _timestamp();
+    if (blockReason != null) {
+      state = ActiveJobState(
+        status: RcloneJobStatus.failed,
+        currentFile: blockReason,
+        logs: ['$timestamp Queue started.', '$timestamp $blockReason'],
+      );
+      return;
+    }
+
     final activeTasks = _ref.read(tasksListProvider).where((t) => t.isActive).toList();
 
-    final timestamp = _timestamp();
     if (activeTasks.isEmpty) {
       state = ActiveJobState(
         status: RcloneJobStatus.failed,
@@ -260,6 +351,17 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     }
 
     final timestamp = _timestamp();
+    final strings = _ref.read(stringsProvider);
+    final blockReason = _networkBlockReason(strings);
+    if (blockReason != null) {
+      state = ActiveJobState(
+        status: RcloneJobStatus.failed,
+        currentFile: blockReason,
+        logs: ['$timestamp $blockReason'],
+      );
+      return;
+    }
+
     state = ActiveJobState(
       status: RcloneJobStatus.pending,
       currentFile: 'Preparing ${task.name}...',

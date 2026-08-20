@@ -100,7 +100,7 @@ class IosRcloneService implements RcloneService {
       'name': name,
       'type': type,
       'parameters': config,
-      'opt': {'obscure': true, 'nonInteractive': true},
+      'opt': {'nonInteractive': true},
     });
     AppLog.info('remote', 'Remote "$name" erfolgreich angelegt');
   }
@@ -134,7 +134,7 @@ class IosRcloneService implements RcloneService {
         'name': tempName,
         'type': type,
         'parameters': config,
-        'opt': {'obscure': true, 'nonInteractive': true},
+        'opt': {'nonInteractive': true},
       });
       await _rc.rpc('operations/list', {
         'fs': '$tempName:',

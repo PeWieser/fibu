@@ -1081,6 +1081,17 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   bool _isOAuthWorking = false;
   String? _oauthError;
 
+  /// Credentials gelten erst nach einem erfolgreichen Verbindungstest bzw.
+  /// erfolgreicher OAuth-Autorisierung als verifiziert – vorher bleibt
+  /// „Hinzufügen" deaktiviert. Wird bei jeder Änderung der Felder zurückgesetzt.
+  bool _step2Verified = false;
+
+  bool get _canAdd => _step2Verified;
+
+  void _markCredentialsDirty() {
+    if (_step2Verified) setState(() => _step2Verified = false);
+  }
+
   /// Gespeicherte Zugänge für den gewählten Provider-Typ (schlüsselbund-
   /// basierte Vorschläge für Credentials-Anbieter).
   List<SavedCredential> _savedCredentials = [];
@@ -1213,6 +1224,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _addError = null;
       _isOAuthAuthorized = false;
       _oauthError = null;
+      _step2Verified = false;
     });
 
     // Schlüsselbund-Vorschläge laden: gespeicherte Zugänge für GENAU diesen
@@ -1280,6 +1292,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         _isOAuthWorking = false;
         if (result.success) {
           _isOAuthAuthorized = true;
+          _step2Verified = true;
           _oauthError = null;
         } else {
           _oauthError = result.error;
@@ -1486,6 +1499,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           _isTesting = false;
           _testStatus = 'success';
           _testMessage = strings.connectionSuccess;
+          _step2Verified = true;
         });
       }
     } catch (e) {
@@ -1503,6 +1517,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   Future<void> _handleAddRemote() async {
     final strings = context.strings;
     final name = _nameController.text.trim();
+
+    // Hinzufügen ist erst nach erfolgreichem Verbindungstest (Credentials)
+    // bzw. erfolgreicher OAuth-Autorisierung erlaubt.
+    if (!_canAdd) {
+      setState(() => _step2Error = strings.testRequiredBeforeAddHint);
+      return;
+    }
 
     if (_isMegaProvider) {
       if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
@@ -1777,6 +1798,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       _selectedProviderId = provider.id;
                       _selectedProviderName = provider.name;
                       _providerError = null;
+                      _step2Verified = false;
                     }),
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
@@ -1879,12 +1901,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ],
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
-          fluent.TextBox(controller: _userController, placeholder: 'user@example.com / username'),
+          fluent.TextBox(controller: _userController, placeholder: 'user@example.com / username', onChanged: (_) => _markCredentialsDirty()),
           SizedBox(height: theme.md),
           Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
           fluent.TextBox(
             controller: _passController,
+            onChanged: (_) => _markCredentialsDirty(),
             obscureText: _obscurePassword,
             placeholder: '••••••••',
             suffix: fluent.IconButton(
@@ -1903,7 +1926,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                     children: [
                       Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: theme.xs),
-                      fluent.TextBox(controller: _hostController, placeholder: 'server.example.com'),
+                      fluent.TextBox(controller: _hostController, placeholder: 'server.example.com', onChanged: (_) => _markCredentialsDirty()),
                     ],
                   ),
                 ),
@@ -1915,7 +1938,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                     children: [
                       Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: theme.xs),
-                      fluent.TextBox(controller: _portController, placeholder: '443'),
+                      fluent.TextBox(controller: _portController, placeholder: '443', onChanged: (_) => _markCredentialsDirty()),
                     ],
                   ),
                 ),
@@ -1941,6 +1964,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
           ),
         ],
+        if (!_canAdd) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            strings.testRequiredBeforeAddHint,
+            style: TextStyle(color: theme.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
       ],
     );
   }
@@ -1960,7 +1990,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             fluent.Button(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
             SizedBox(width: theme.md),
             fluent.FilledButton(
-              onPressed: _isAdding ? null : _handleAddRemote,
+              onPressed: _isAdding || !_canAdd ? null : _handleAddRemote,
               child: _isAdding
                   ? const SizedBox(width: 14, height: 14, child: fluent.ProgressRing(strokeWidth: 2))
                   : Text(strings.add, style: const TextStyle(color: Color(0xFFFFFFFF))),
@@ -2078,6 +2108,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       _selectedProviderId = provider.id;
                       _selectedProviderName = provider.name;
                       _providerError = null;
+                      _step2Verified = false;
                     }),
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
@@ -2184,6 +2215,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           SizedBox(height: theme.xs),
           material.TextField(
             controller: _userController,
+            onChanged: (_) => _markCredentialsDirty(),
+            onChanged: (_) => _markCredentialsDirty(),
             decoration: const material.InputDecoration(
               hintText: 'user@example.com / username',
               border: material.OutlineInputBorder(),
@@ -2195,6 +2228,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           SizedBox(height: theme.xs),
           material.TextField(
             controller: _passController,
+            onChanged: (_) => _markCredentialsDirty(),
+            onChanged: (_) => _markCredentialsDirty(),
             obscureText: _obscurePassword,
             decoration: material.InputDecoration(
               hintText: '••••••••',
@@ -2219,6 +2254,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       SizedBox(height: theme.xs),
                       material.TextField(
                         controller: _hostController,
+                        onChanged: (_) => _markCredentialsDirty(),
+                        onChanged: (_) => _markCredentialsDirty(),
                         decoration: const material.InputDecoration(
                           hintText: 'server.example.com',
                           border: material.OutlineInputBorder(),
@@ -2238,6 +2275,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       SizedBox(height: theme.xs),
                       material.TextField(
                         controller: _portController,
+                        onChanged: (_) => _markCredentialsDirty(),
+                        onChanged: (_) => _markCredentialsDirty(),
                         decoration: const material.InputDecoration(
                           hintText: '443',
                           border: material.OutlineInputBorder(),
@@ -2270,6 +2309,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
           ),
         ],
+        if (!_canAdd) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            strings.testRequiredBeforeAddHint,
+            style: TextStyle(color: theme.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
         if (_addError != null) ...[
           SizedBox(height: theme.md),
           Text(
@@ -2296,7 +2342,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             material.OutlinedButton(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
             SizedBox(width: theme.md),
             material.FilledButton(
-              onPressed: _isAdding ? null : _handleAddRemote,
+              onPressed: _isAdding || !_canAdd ? null : _handleAddRemote,
               child: _isAdding
                   ? const SizedBox(width: 16, height: 16, child: material.CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFFFFF)))
                   : Text(strings.add),
@@ -2409,6 +2455,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       _selectedProviderId = provider.id;
                       _selectedProviderName = provider.name;
                       _providerError = null;
+                      _step2Verified = false;
                     }),
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.md),
@@ -2630,6 +2677,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             style: TextStyle(color: _testStatus == 'success' ? theme.success : theme.error, fontSize: 12),
           ),
         ],
+        if (!_canAdd) ...[
+          SizedBox(height: theme.sm),
+          Text(
+            strings.testRequiredBeforeAddHint,
+            style: TextStyle(color: theme.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
         if (_addError != null) ...[
           SizedBox(height: theme.md),
           Text(
@@ -2656,7 +2710,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             cupertino.CupertinoButton(onPressed: _isAdding ? null : () => setState(() => _currentStep = 0), child: Text(strings.back)),
             SizedBox(width: theme.md),
             cupertino.CupertinoButton.filled(
-              onPressed: _isAdding ? null : _handleAddRemote,
+              onPressed: _isAdding || !_canAdd ? null : _handleAddRemote,
               child: _isAdding
                   ? const cupertino.CupertinoActivityIndicator()
                   : Text(strings.add),

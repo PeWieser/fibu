@@ -34,7 +34,9 @@ Unterstützung für alle Cloud-Speicher und Protokolle aus dem Rclone-Ökosystem
       └── WhatsApp/
           └── IMG_1337.JPG
   ```
-- **2-Wege-Spiegelung (Echo):** Synchronisiert Löschungen und Änderungen sauber zwischen lokalem Gerät und Cloud.
+- **2-Wege-Spiegelung (Echo):** Synchronisiert Löschungen und Änderungen sauber zwischen lokalem Gerät und Cloud. Dafür existiert ein persistenter lokaler Spiegel unter `Dokumente/FibuMirror` (inkl. Tombstone-Löschprotokoll).
+- **Kollisionsfreie Dateinamen beim Staging:** Leere/duplizierte Asset-Titel (iOS liefert Titel oft null), Screen-Recordings, Live-Photos und Asset-/L0-IDs werden deterministisch pro Asset eindeutig benannt — Zielpfade zeigen nie auf Verzeichnisse.
+- **Incremental ohne Doppelbelegung:** Reine Upload-Tasks stagen in einen transienten Cache-Ordner, der nach dem Upload gelöscht wird — keine dauerhafte Foto-Duplikate lokal. Remote-seitig bleibt alles inkrementell (rclone gleicht Größe/Modtime ab).
 
 ### 3. Dateisystem- & Ordner-Sicherung (Files App)
 - Volle Integration mit der iOS Dateien-App und Android Storage Access Framework.
@@ -45,9 +47,9 @@ Unterstützung für alle Cloud-Speicher und Protokolle aus dem Rclone-Ökosystem
 - Ermöglicht blitzschnelle inkrementelle Backups und Offline-Durchsuchen des Cloud-Explorers.
 
 ### 5. Resiliente Offline- & Netzwerk-State Machine
-- Kontinuierliche Netzwerkprüfung über `connectivity_plus`.
-- Bei Verbindungsabbruch oder fehlender Berechtigung schaltet die App sofort in einen sauberen "Pausiert"- bzw. "Fehler"-Status mit Klartext-Hinweisen.
-- **WLAN-Only Option:** Verhindert ungewollten Datenverbrauch über mobile Netze.
+- **Live-Netzwerkstatus:** zentraler `networkStatusProvider` über `connectivity_plus` (Initialprüfung + Live-Stream). Offline erscheint sofort als Banner im Dashboard; die Rückkehr der Verbindung aktualisiert die UI automatisch.
+- **Sync-Blocker & globales WLAN-only:** Bei Offline startet kein Sync; WLAN-only ist sauber **nur global** in den Einstellungen und gilt für Dashboard-Queue, Einzel-Tasks und den Hintergrund-Scheduler.
+- **Klare Fehler statt Hänger:** rclone-Aufrufe nutzen Fast-Fail-Verbindungsoptionen (Connect-Timeouts, minimale Retries) plus Dart-Backstop-Timeouts — der echte Provider-Fehlertext (z. B. „couldn't login ...") wird aus den Fehler-Details extrahiert und verständlich angezeigt, statt zu endlosen Ladezuständen.
 
 ### 6. Apple Minimalist UI/UX Design
 - **Progressive Disclosure:** Beliebte Provider erhalten priorisierte Schnellzugriffskarten; komplexe Parameter (S3-Endpoints, Ports, SSH-Keys) sind aufgeräumt eingeklappt.
@@ -55,7 +57,20 @@ Unterstützung für alle Cloud-Speicher und Protokolle aus dem Rclone-Ökosystem
   - **Windows:** Fluent UI (Mica, Acrylic, Fluent Icons)
   - **iOS:** Cupertino Design (Blur-Effekte, SF Symbols, Cupertino Navigation)
   - **Android:** Material 3 (Dynamic Color, Elevation, Floating Bars)
-- **Barrierefreiheit:** 44pt Mindest-Touch-Targets, WCAG AA Kontraste, Sanzo Wada Farbpaletten.
+- **Barrierefreiheit:** 44pt Mindest-Touch-Targets, theme-getriebene Textfarben mit geprüfter Lesbarkeit in Light **und** Dark Mode (keine statischen Label-Farben mehr), WCAG-AA-konforme Kontraste, Sanzo Wada Farbpaletten.
+- **Live-Theme-Wechsel:** System Light/Dark-Wechsel aktualisiert das komplette UI sofort (WidgetsBindingObserver → appThemeProvider), ohne App-Neustart.
+
+### 7. Echtes Rclone-Verhalten im Wizard & Cloud-Laufwerke
+- **Echter Verbindungstest:** „Verbindung testen“ legt ein temporäres Remote an, listet das Wurzelverzeichnis und löscht es wieder — Fehler (falsche Zugangsdaten, Host nicht erreichbar, ungültige S3-Keys) kommen so, noch vor dem Speichern.
+- **iCloud-Schlüsselbund-Autofill (iOS):** `AutofillGroup` mit `AutofillHints.username`/`password`; nach erfolgreichem Anlegen bietet iOS das Sichern im Schlüsselbund an.
+- **Provider-spezifische Zugangsvorschläge:** Fibu merkt Zugänge je rclone-Typ (MEGA, S3, WebDAV, SFTP/FTP …) in der Keychain (flutter_secure_storage) und bietet sie beim nächsten Remote desselben Typs als tippbare Chips an.
+- **Pro Remote sichtbar:** Gesamtspeicher aus `getQuota` („x von y belegt“, „n. v.“ für Provider ohne about) **plus** der von Fibu belegte Platz im `fibu-backup`-Ordner (rekursiv berechnet).
+
+### 8. Komfort & Integrationen (iOS)
+- **Homescreen-Kontextmenü:** Langes Drücken aufs App-Icon → **„Jetzt synchronisieren"** (Quick Action, SF-Symbol) startet sofort die Sync-Queue — auch nach Kaltstart.
+- **Diagnose-Protokoll (Fehlerdiagnose):** Einstellungen → „Sync-Protokoll & Diagnose" zeigt alle Aktionen mit Zeitstempel und Schweregrad (Engine, rclone-RPCs, Remotes, Media-Staging, Syncs, Offline-Events) — kopierbar für Support.
+
+---
 
 ---
 
@@ -66,7 +81,7 @@ fibu win/
 ├── lib/
 │   ├── core/
 │   │   ├── localization/         # Zweisprachig (Deutsch & Englisch) via AppStrings
-│   │   ├── services/             # RcloneService, RcloneProviderRegistry, SyncManifestService
+│   │   ├── services/             # RcloneService (+Timeouts/Logging), RcloneProviderRegistry, SyncManifestService, AppLog-Service, CredentialVault (Keychain), NetworkStatus, QuickActions
 │   │   └── utils/                # Dateihandler, Formatierer
 │   ├── features/
 │   │   ├── dashboard/            # Übersicht, Hero-Status, Speicher-Karten, Explorer

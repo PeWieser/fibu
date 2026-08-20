@@ -589,6 +589,12 @@ class AppStrings {
   String get savedCredentialsHint => isGerman
       ? 'Tippen übernimmt Benutzer/Passwort/Host aus dem Schlüsselbund.'
       : 'Tap fills user/password/host from the keychain.';
+  String get invalidCredentialsHint => isGerman
+      ? 'Zugangsdaten ungültig – bitte Benutzername/Passwort (und Host) prüfen.'
+      : 'Invalid credentials – please check username/password (and host).';
+  String get oauthAuthorizeFirstHint => isGerman
+      ? 'Bitte zuerst über \u201eIn Browser autorisieren\u201c anmelden.'
+      : 'Please authorize via "Authorize in browser" first.';
 
   // --- Homescreen Quick Action (iOS) ---
   String get quickActionSyncNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';

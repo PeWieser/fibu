@@ -127,17 +127,11 @@ class StorageCard extends StatelessWidget {
             children: [
               Text(
                 'Used: ${(quota.usedBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: cupertino.CupertinoColors.secondaryLabel,
-                ),
+                style: TextStyle(fontSize: 12, color: theme.textSecondary),
               ),
               Text(
                 'Total: ${(quota.totalBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: cupertino.CupertinoColors.secondaryLabel,
-                ),
+                style: TextStyle(fontSize: 12, color: theme.textSecondary),
               ),
             ],
           ),

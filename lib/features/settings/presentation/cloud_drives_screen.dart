@@ -11,6 +11,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/services/ios_rclone_service.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/credential_vault_service.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
@@ -1323,6 +1324,133 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     }
   }
 
+  /// Macht aus rohen rclone/Bridge-Fehlern verständliche Meldungen und holt
+  /// den echten Provider-Fehlertext aus der Bridge-Details-JSON heraus
+  /// (z. B. `{"error": "couldn't login: …"}`).
+  String _friendlyConfigError(AppStrings strings, Object e) {
+    final raw = e.toString().replaceAll('Exception: ', '').trim();
+    final lower = raw.toLowerCase();
+
+    String? providerError;
+    final m = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(raw);
+    if (m != null) providerError = m.group(1);
+
+    if (lower.contains("couldn't login") ||
+        lower.contains('unauthorized') ||
+        lower.contains('forbidden') ||
+        lower.contains('access denied') ||
+        lower.contains('invalid') ||
+        lower.contains('401') ||
+        lower.contains('403')) {
+      return providerError != null
+          ? '${strings.invalidCredentialsHint}\n$providerError'
+          : strings.invalidCredentialsHint;
+    }
+    if (lower.contains('timeout') ||
+        lower.contains('timed out') ||
+        lower.contains('socket') ||
+        lower.contains('no such host') ||
+        lower.contains('network') ||
+        lower.contains('unreachable')) {
+      return providerError != null
+          ? '${strings.networkUnavailableError}\n$providerError'
+          : strings.networkUnavailableError;
+    }
+    return providerError ?? raw;
+  }
+
+  /// Baut die rclone-Config-Map für den gewählten Provider aus den Feldern.
+  /// Wird von „Verbindung testen" und „Hinzufügen" gemeinsam genutzt.
+  Future<Map<String, String>> _buildProviderConfig() async {
+    Map<String, String> config = {};
+
+    if (_isOAuthProvider) {
+      // OAuth providers use the securely stored browser token.
+      final name = _nameController.text.trim();
+      final token = await ref.read(oauthServiceProvider).getToken(name);
+      config = {
+        if (token != null && token.isNotEmpty) 'token': '{\"access_token\":\"$token\",\"token_type\":\"Bearer\",\"expiry\":\"0001-01-01T00:00:00Z\"}',
+      };
+    } else if (_isMegaProvider) {
+      final obscured =
+          await ref.read(rcloneServiceProvider).obscurePassword(_passController.text);
+      config = {
+        'user': _userController.text.trim(),
+        'pass': obscured,
+      };
+    } else if (_isS3Provider) {
+      final plainPass = _passController.text;
+      final obscured = plainPass.isNotEmpty
+          ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+          : '';
+      config = {
+        'provider': 'Other',
+        if (_userController.text.trim().isNotEmpty) 'access_key_id': _userController.text.trim(),
+        if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+        if (obscured.isNotEmpty) 'secret_access_key': obscured,
+        if (obscured.isNotEmpty) 'pass': obscured,
+        if (_hostController.text.trim().isNotEmpty) 'endpoint': _hostController.text.trim(),
+      };
+    } else if (_isWebDavProvider) {
+      final plainPass = _passController.text;
+      final obscured = plainPass.isNotEmpty
+          ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+          : '';
+      config = {
+        if (_hostController.text.trim().isNotEmpty) 'url': _hostController.text.trim(),
+        if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+        if (obscured.isNotEmpty) 'pass': obscured,
+        'vendor': 'other',
+      };
+    } else if (_isSftpOrFtpProvider) {
+      final plainPass = _passController.text;
+      final obscured = plainPass.isNotEmpty
+          ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+          : '';
+      final defaultPort = _selectedProviderId.toLowerCase() == 'ftp' ? '21' : '22';
+      final port = _portController.text.trim().isNotEmpty ? _portController.text.trim() : defaultPort;
+      config = {
+        if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
+        'port': port,
+        if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+        if (obscured.isNotEmpty) 'pass': obscured,
+      };
+    } else {
+      final plainPass = _passController.text;
+      final obscured = plainPass.isNotEmpty
+          ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
+          : '';
+      config = {
+        if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
+        if (obscured.isNotEmpty) 'pass': obscured,
+        if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
+        if (_portController.text.trim().isNotEmpty) 'port': _portController.text.trim(),
+      };
+    }
+    return config;
+  }
+
+  /// Validiert Pflichtfelder je Provider-Art (vor Test/Hinzufügen).
+  void _validateStep2Fields(AppStrings strings) {
+    if (_isOAuthProvider) return;
+    final needsUserPass = _isMegaProvider || _isS3Provider;
+    final needsHostUser = _isWebDavProvider || _isSftpOrFtpProvider;
+    if (needsUserPass &&
+        (_userController.text.trim().isEmpty || _passController.text.isEmpty)) {
+      throw Exception(strings.credentialsRequiredError);
+    }
+    if (needsHostUser &&
+        (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty)) {
+      throw Exception(strings.credentialsRequiredError);
+    }
+    if (!needsUserPass &&
+        !needsHostUser &&
+        _userController.text.trim().isEmpty &&
+        _passController.text.isEmpty) {
+      throw Exception(strings.credentialsRequiredError);
+    }
+  }
+
   Future<void> _handleTestConnection() async {
     final strings = context.strings;
     setState(() {
@@ -1333,37 +1461,25 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     });
 
     try {
+      _validateStep2Fields(strings);
+
       if (_isOAuthProvider) {
-        // OAuth verification ping
+        // OAuth: Test = gespeichertes Token vorhanden (Browser-Auth zuvor).
+        final name = _nameController.text.trim();
+        final token = await ref.read(oauthServiceProvider).getToken(name);
+        if (token == null || token.isEmpty) {
+          throw Exception(strings.oauthAuthorizeFirstHint);
+        }
         _isOAuthAuthorized = true;
-      } else if (_isMegaProvider) {
-        if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
-          throw Exception(strings.credentialsRequiredError);
-        }
-      } else if (_isS3Provider) {
-        if (_userController.text.trim().isEmpty || _passController.text.isEmpty) {
-          throw Exception(strings.credentialsRequiredError);
-        }
-      } else if (_isWebDavProvider) {
-        if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
-          throw Exception(strings.credentialsRequiredError);
-        }
-      } else if (_isSftpOrFtpProvider) {
-        if (_hostController.text.trim().isEmpty || _userController.text.trim().isEmpty) {
-          throw Exception(strings.credentialsRequiredError);
-        }
       } else {
-        if (_userController.text.trim().isEmpty) {
-          throw Exception(strings.credentialsRequiredError);
-        }
+        // ECHTER Verbindungstest: Temp-Remote + Root-Listing via rclone,
+        // damit Fehler wie „couldn't login" sofort sichtbar werden.
+        final config = await _buildProviderConfig();
+        await ref.read(rcloneServiceProvider).testConnection(
+              type: _selectedRcloneType,
+              config: config,
+            );
       }
-
-      if (_passController.text.isNotEmpty) {
-        await ref.read(rcloneServiceProvider).obscurePassword(_passController.text);
-      }
-
-      // Simulate verification ping
-      await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
         setState(() {
@@ -1373,11 +1489,12 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         });
       }
     } catch (e) {
+      AppLog.warn('remote', 'Verbindungstest fehlgeschlagen: $e');
       if (mounted) {
         setState(() {
           _isTesting = false;
           _testStatus = 'error';
-          _testMessage = e.toString().replaceAll('Exception: ', '').trim();
+          _testMessage = _friendlyConfigError(strings, e);
         });
       }
     }
@@ -1431,72 +1548,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     });
 
     try {
-      Map<String, String> config = {};
-
-      if (_isOAuthProvider) {
-        // OAuth providers use the securely stored browser token.
-        final token = await ref.read(oauthServiceProvider).getToken(name);
-        config = {
-          if (token != null && token.isNotEmpty) 'token': '{"access_token":"$token","token_type":"Bearer","expiry":"0001-01-01T00:00:00Z"}',
-        };
-      } else if (_isMegaProvider) {
-        final plainPass = _passController.text;
-        final obscured = await ref.read(rcloneServiceProvider).obscurePassword(plainPass);
-        config = {
-          'user': _userController.text.trim(),
-          'pass': obscured,
-        };
-      } else if (_isS3Provider) {
-        final plainPass = _passController.text;
-        final obscured = plainPass.isNotEmpty
-            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
-            : '';
-        config = {
-          'provider': 'Other',
-          if (_userController.text.trim().isNotEmpty) 'access_key_id': _userController.text.trim(),
-          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
-          if (obscured.isNotEmpty) 'secret_access_key': obscured,
-          if (obscured.isNotEmpty) 'pass': obscured,
-          if (_hostController.text.trim().isNotEmpty) 'endpoint': _hostController.text.trim(),
-          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
-        };
-      } else if (_isWebDavProvider) {
-        final plainPass = _passController.text;
-        final obscured = plainPass.isNotEmpty
-            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
-            : '';
-        config = {
-          if (_hostController.text.trim().isNotEmpty) 'url': _hostController.text.trim(),
-          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
-          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
-          if (obscured.isNotEmpty) 'pass': obscured,
-          'vendor': 'other',
-        };
-      } else if (_isSftpOrFtpProvider) {
-        final plainPass = _passController.text;
-        final obscured = plainPass.isNotEmpty
-            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
-            : '';
-        final defaultPort = _selectedProviderId.toLowerCase() == 'ftp' ? '21' : '22';
-        final port = _portController.text.trim().isNotEmpty ? _portController.text.trim() : defaultPort;
-        config = {
-          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
-          'port': port,
-          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
-          if (obscured.isNotEmpty) 'pass': obscured,
-        };
-      } else {
-        final plainPass = _passController.text;
-        final obscured = plainPass.isNotEmpty
-            ? await ref.read(rcloneServiceProvider).obscurePassword(plainPass)
-            : '';
-        config = {
-          if (_userController.text.trim().isNotEmpty) 'user': _userController.text.trim(),
-          if (obscured.isNotEmpty) 'pass': obscured,
-          if (_hostController.text.trim().isNotEmpty) 'host': _hostController.text.trim(),
-          if (_portController.text.trim().isNotEmpty) 'port': _portController.text.trim(),
-        };
-      }
+      final config = await _buildProviderConfig();
 
       // rclone's config/create expects the backend type name (e.g. `mega`,
       // `drive`, `s3`), never the human readable provider display name.
@@ -1534,10 +1586,11 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         Navigator.pop(context, name);
       }
     } catch (e) {
+      AppLog.warn('remote', 'Remote-Anlage fehlgeschlagen: $e');
       if (mounted) {
         setState(() {
           _isAdding = false;
-          _addError = e.toString().replaceAll('Exception: ', '').trim();
+          _addError = _friendlyConfigError(strings, e);
         });
       }
     }

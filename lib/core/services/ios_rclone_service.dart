@@ -119,6 +119,36 @@ class IosRcloneService implements RcloneService {
     return res['obscured'] as String? ?? plainPassword;
   }
 
+  /// Echter Verbindungstest: temporäres Remote anlegen → Wurzelverzeichnis
+  /// auflisten (authentifiziert + erreichbar) → temporäres Remote entfernen.
+  @override
+  Future<void> testConnection({
+    required String type,
+    required Map<String, String> config,
+  }) async {
+    await _ensureEngine();
+    final tempName = 'fibu_test_${DateTime.now().millisecondsSinceEpoch}';
+    AppLog.info('remote', 'Verbindungstest (Typ „$type“) startet …');
+    try {
+      await _rc.rpc('config/create', {
+        'name': tempName,
+        'type': type,
+        'parameters': config,
+        'opt': {'obscure': true, 'nonInteractive': true},
+      });
+      await _rc.rpc('operations/list', {
+        'fs': '$tempName:',
+        'remote': '',
+        '_config': _fastFailConfig,
+      }, const Duration(seconds: 45));
+      AppLog.info('remote', 'Verbindungstest erfolgreich (Typ „$type“)');
+    } finally {
+      try {
+        await _rc.rpc('config/delete', {'name': tempName});
+      } catch (_) {}
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Quota
   // ---------------------------------------------------------------------------

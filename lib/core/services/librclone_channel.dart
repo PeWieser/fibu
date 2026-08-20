@@ -118,5 +118,10 @@ class RcloneRpcException implements Exception {
   });
 
   @override
-  String toString() => 'rclone $method: $message${details != null ? ' ($details)' : ''}';
+  String toString() {
+    // Die Bridge-Nachricht enthält bereits "rclone <method> …" → nichts
+    // doppelt präfixen.
+    final base = message.startsWith('rclone ') ? message : 'rclone $method: $message';
+    return details != null && details!.isNotEmpty ? '$base ($details)' : base;
+  }
 }

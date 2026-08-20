@@ -310,3 +310,32 @@ Umsetzung der Empfehlungen aus `docs/CODE_AUDIT.md` plus robustes Multi-Gerät-L
 | `ios/Runner/AppDelegate.swift` | Workmanager-Registrierung |
 | `.github/workflows/build-ios.yml` | Go/gomobile + librclone-Framework-Build in CI |
 | `docs/ARBEITSLOG.md` | dieses Log |
+
+---
+
+# Arbeits-Log — Session 2026-08-20 (Folge-Sessionen)
+
+**Branch:** `arena/01a019b4-fibu` · direkte Pushes auf `main`.
+
+## Behobene Laufzeitprobleme (iOS)
+1. **Remote-Anlegen schlug fehl (alle Anbieter):** Wizard reichte den Anzeigenamen („Mega") statt des rclone-Backend-Typs (`mega`) an `config/create`. Jetzt durchgängig `provider.id` (`RcloneProviderInfo.id` neu), alle Provider-Art-Prüfungen (OAuth/MEGA/S3/WebDAV/SFTP) vergleichen gegen die ID; Registrierungs-Aliase (`s3-* → s3`, `gcs → google cloud storage`, `1fichier → fichier`) werden gemappt.
+2. **Onboarding überspringbar:** „Jetzt loslegen" ist blockiert, bis die Foto-Berechtigung erteilt ist (verpflichtend, da Task-Wizard Medien-Backups sie braucht); Dialog mit Sprung in die Systemeinstellungen.
+3. **Doppelter Doppelpunkt** (`mega::`): `config/listremotes` liefert Trailing-`:` → zentrale Normalisierung in `listRemotes()` + defensiv an allen fs-Aufrufen. Cloud-Explorer/Quota/Sync laufen.
+4. **„Is a directory" beim Media-Mirror:** `asset.title` ist unter iOS oft null — nulle/leere Dateinamen trafen `file.copy('<dir>/')`. Jetzt deterministische, kollisionsfreie Spiegel-Dateinamen (Titel → Basename → `asset_<id>.<ext>`, Register gegen Überschreiben gleichnamiger Assets).
+5. **Endlos laden / „Timeout nach 60s":** rclone betreibt bei Netzproblemen lange Retry-Ketten (3 Job-Retries × 10 Low-Level). Abfragen (about/list/delete) nutzen jetzt rclone-seitiges Fast-Fail-`_config` (15 s Connect, Retries 1, LLR 2) + Dart-Backstop. Echte Provider-Fehlertexte (z. B. MEGA `couldn't login`) landen in Sekunden in UI & Protokoll.
+6. **Foto-Doppeleppien im lokalen Speicher:** Persistenter Spiegel `FibuMirror` nur noch für Echo/2-Wege-Tasks (bisync/Tombstones brauchen ihn). Incremental-Tasks stagen transient (Cache) und löschen nach dem Upload.
+
+## Neue Funktionen
+- **iOS-Homescreen-Kontextmenü:** Quick Action „Jetzt synchronisieren" (quick_actions-Plugin, SF-Symbol, Kaltstart-sicher via persistiertem Onboarding-Flag).
+- **Diagnose-Protokoll:** zentraler `appLogProvider` (Ringpuffer 300, Zeitstempel/Level/Tags; keine Credentials) + neuer Viewer-Screen in den Einstellungen (kopieren/leeren) + System-Log-Abschnitt im Sync-Log-Dialog.
+- **Echter Verbindungstest im Wizard:** temporäres rclone-Remote anlegen → Root listen → löschen (Neuer Interface-Method `testConnection` für iOS/Windows; Mock simuliert). Fehler werden verständlich gemappt (ungültige Zugangsdaten/Netzwerk).
+- **Provider-spezifische Zugangs-Vorschläge:** `CredentialVaultService` (Keychain via flutter_secure_storage), Je-Typ-Chips „user @ host" im Wizard; Save on Success; AutofillGroup-Bestand.
+- **Offline/Live-UX:** zentraler `networkStatusProvider` (live), Offline-Banner + Sync-Block; Live-Theme-Wechsel ohne Neustart (StateProvider + WidgetsBindingObserver).
+- **UX-Sauberkeit:** Fortschrittszähler „x von y Dateien" (rclone `transfers/totalTransfers` + Mirror-Phasen-Callback), pro-Remote Quota + Fibu-Beleg in der Laufwerksliste, Dashboard-„Laufwerke verwalten"-Button im Leerzustand entfernt, WLAN-only-Toggle nur noch global (Wizard/Detail bereinigt).
+
+## Barrierefreiheit & Lesbarkeit
+- Dark/Light-Audit: statische CupertinoDyanamic-Farben (`secondaryLabel` usw. unaufgelöst) durch theme-getriebene `textPrimary/textSecondary` ersetzt (Storage-Card, Dashboard-Fortschritt, Einstellungs-Header). Onboarding-Buttons mit expliziter Kontrastfarbe (weiß/Accent, Disabled-State sichtbar).
+
+## CI/Infrastruktur
+- Actions auf Node-24-Majors: checkout v5, setup-java v5, setup-go v6 (`cache: false`, kein go.sum im Root), upload-artifact v7. Go auf `stable` (gomobile@latest verlangt ≥ 1.25; Pin 1.21 brach den Build).
+- Hinweis: Die Arena-GitHub-App hat keine `workflows`-Permission → Workflow-Dateiänderungen wurden manuell übertragen.

@@ -65,6 +65,32 @@ class WindowsRcloneService implements RcloneService {
     }
   }
 
+  /// Echter Verbindungstest (Windows): Temp-Config anlegen, Root listen,
+  /// wieder löschen. Wirft den echten rclone-Fehlertext bei Problemen.
+  @override
+  Future<void> testConnection({
+    required String type,
+    required Map<String, String> config,
+  }) async {
+    final tempName = 'fibu_test_${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      final createArgs = ['config', 'create', tempName, type];
+      config.forEach((key, value) => createArgs.add('$key=$value'));
+      var result = await Process.run(_executablePath, createArgs)
+          .timeout(const Duration(seconds: 45));
+      if (result.exitCode != 0) {
+        throw Exception('Konfiguration ungültig: ${result.stderr}');
+      }
+      result = await Process.run(_executablePath, ['lsjson', '$tempName:'])
+          .timeout(const Duration(seconds: 45));
+      if (result.exitCode != 0) {
+        throw Exception('Verbindung fehlgeschlagen: ${result.stderr}');
+      }
+    } finally {
+      await Process.run(_executablePath, ['config', 'delete', tempName]);
+    }
+  }
+
   @override
   Future<void> removeRemote(String name) async {
     try {

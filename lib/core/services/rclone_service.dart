@@ -156,6 +156,15 @@ abstract class RcloneService {
   /// Obscures a password for configuration storage.
   Future<String> obscurePassword(String plainPassword);
 
+  /// Führt einen ECHTEN Verbindungstest aus: legt eine temporäre Konfiguration
+  /// mit den gegebenen Credentials an, listet das Wurzelverzeichnis des
+  /// Remote und entfernt die temporäre Konfiguration wieder. Wirft im
+  /// Fehlerfall den echten rclone/Provider-Fehler (z. B. „couldn't login").
+  Future<void> testConnection({
+    required String type,
+    required Map<String, String> config,
+  });
+
   /// Lists all supported storage providers in rclone.
   Future<List<RcloneProviderInfo>> listProviders();
 

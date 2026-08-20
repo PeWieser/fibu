@@ -491,9 +491,9 @@ class SettingsScreen extends ConsumerWidget {
                       label: strings.tooltipWadaPalette,
                       child: Text(
                         strings.lightModeSection.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: cupertino.CupertinoColors.secondaryLabel,
+                          color: theme.textSecondary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -505,9 +505,9 @@ class SettingsScreen extends ConsumerWidget {
                       label: strings.tooltipWadaPalette,
                       child: Text(
                         strings.darkModeSection.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: cupertino.CupertinoColors.secondaryLabel,
+                          color: theme.textSecondary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

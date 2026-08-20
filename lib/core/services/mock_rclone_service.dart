@@ -31,6 +31,15 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> testConnection({
+    required String type,
+    required Map<String, String> config,
+  }) async {
+    // Mock: simulierter erfolgreicher Testlauf (kein echtes Netzwerk).
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  @override
   Future<void> removeRemote(String name) async {
     await Future.delayed(const Duration(milliseconds: 200));
     if (!_remotes.contains(name)) {

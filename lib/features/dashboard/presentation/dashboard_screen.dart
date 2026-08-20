@@ -569,15 +569,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             SizedBox(height: theme.sm),
             Text(
               strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
-              style: const TextStyle(fontSize: 13, color: cupertino.CupertinoColors.secondaryLabel),
+              style: TextStyle(fontSize: 13, color: theme.textSecondary),
             ),
           ],
           SizedBox(height: theme.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('ETA: ${job.eta}', style: const TextStyle(fontSize: 12, color: cupertino.CupertinoColors.secondaryLabel)),
-              Text('${job.percentage.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: cupertino.CupertinoColors.secondaryLabel)),
+              Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+              Text('${job.percentage.toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
             ],
           )
         ],

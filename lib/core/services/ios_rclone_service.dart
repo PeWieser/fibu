@@ -29,6 +29,27 @@ class IosRcloneService implements RcloneService {
   // Maps our public jobId -> the librclone async job id + stats group.
   final Map<String, int> _rcJobIds = {};
 
+  /// Schnell-fehschlagende Netzwerk-Optionen für reine Verbindungs-/Lese-Calls
+  /// (about, list): Beim iOS-Stack können rclones Standard-Retries (3× mit
+  /// Low-Level-Retries à 10, exponential backoff) einen einfachen Fehler auf
+  /// Minuten strecken. Hier begrenzen wir: Verbindungsaufbau max. 15 s, keine
+  /// Job-Wiederholungen → der ECHTE Providerr-Fehler kommt sofort hoch,
+  /// statt minutenlang zu „hängen“.
+  static Map<String, Object> get _fastFailConfig => const {
+        'Timeout': '15s',
+        'Contimeout': '15s',
+        'ExpectContinueTimeout': '10s',
+        'Retries': 1,
+        'LowLevelRetries': 2,
+      };
+
+  /// Transfers (eine einzelne Datei rauf/runter): kurze Verbindungs-Timeouts,
+  /// aber KEIN globales Transfer-Timeout (große Videos brauchen länger).
+  static Map<String, Object> get _transferConfig => const {
+        'Contimeout': '20s',
+        'ExpectContinueTimeout': '15s',
+      };
+
   Future<void> _ensureEngine() async {
     final dir = await getApplicationDocumentsDirectory();
     final configPath = '${dir.path}/rclone.conf';
@@ -107,7 +128,10 @@ class IosRcloneService implements RcloneService {
     await _ensureEngine();
     final remote = _normalizeRemoteName(remoteName);
     try {
-      final res = await _rc.rpc('operations/about', {'fs': '$remote:'});
+      final res = await _rc.rpc('operations/about', {
+        'fs': '$remote:',
+        '_config': _fastFailConfig,
+      });
       final total = (res['total'] as num?)?.toInt() ?? 0;
       final used = (res['used'] as num?)?.toInt() ?? 0;
       final free = (res['free'] as num?)?.toInt() ?? (total - used).clamp(0, total);
@@ -132,6 +156,7 @@ class IosRcloneService implements RcloneService {
     final res = await _rc.rpc('operations/list', {
       'fs': '$remote:',
       'remote': path,
+      '_config': _fastFailConfig,
     });
     final list = (res['list'] as List<dynamic>? ?? []);
     final listedPath = path.isEmpty ? '/' : path;
@@ -154,6 +179,7 @@ class IosRcloneService implements RcloneService {
     await _rc.rpc('operations/deletefile', {
       'fs': '$remote:',
       'remote': path,
+      '_config': _fastFailConfig,
     });
   }
 
@@ -187,6 +213,7 @@ class IosRcloneService implements RcloneService {
         'srcRemote': fileName,
         'dstFs': cacheDir.path,
         'dstRemote': fileName,
+        '_config': _transferConfig,
       }, const Duration(minutes: 10));
       final local = File('${cacheDir.path}/$fileName');
       return await local.exists() ? local : null;
@@ -229,6 +256,7 @@ class IosRcloneService implements RcloneService {
       'srcRemote': fileName,
       'dstFs': dstFs,
       'dstRemote': dstRemote,
+      '_config': _transferConfig,
     }, const Duration(minutes: 10));
     AppLog.info('remote', 'Upload → $remote:$dstRemote ($fileName)');
   }
@@ -263,6 +291,7 @@ class IosRcloneService implements RcloneService {
       'srcRemote': fileName,
       'dstFs': dstDir,
       'dstRemote': fileName,
+      '_config': _transferConfig,
     }, const Duration(minutes: 10));
   }
 
@@ -478,6 +507,12 @@ class IosRcloneService implements RcloneService {
       _rcJobIds[jobId] = rcJobId;
 
       await _pollJob(jobId, rcJobId, group, progress);
+
+      // Incremental-Staging ist transient: nach dem Upload den lokalen
+      // Kopie-Ordner wieder entfernen (Doppelbelegung des Speichers vermeiden).
+      if (!options.isEchoMode) {
+        await _cleanupTransientStaging(srcFs);
+      }
     } catch (e) {
       _fail(jobId, e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -743,16 +778,33 @@ class IosRcloneService implements RcloneService {
     List<String> selectedAlbums = const [],
     void Function(String label, int done, int total)? onStage,
   }) async {
-    AppLog.info('media', 'Medien-Staging startet (Quelle: $lower, Alben-Filter: ${selectedAlbums.isEmpty ? 'alle' : selectedAlbums.length})');
+    AppLog.info('media',
+        'Medien-Staging startet (Quelle: $lower, Modus: ${options.isEchoMode ? '2-Wege-Mirror (persistenter Spiegel)' : 'Incremental (transientes Staging)'}, Alben-Filter: ${selectedAlbums.isEmpty ? 'alle' : selectedAlbums.length})');
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
       AppLog.error('media', 'Foto/Mediathek-Berechtigung verweigert – Staging abgebrochen');
       throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
     }
 
-    final appDir = await getApplicationDocumentsDirectory();
-    final mirror = Directory('${appDir.path}/FibuMirror');
-    if (!await mirror.exists()) await mirror.create(recursive: true);
+    // Zwei Staging-Modi:
+    // * Echo/2-Wege-Sync: PERSISTENTER Spiegel unter <Dokumente>/FibuMirror –
+    //   zwingend nötig, weil der bisync ihn als lokale Seite nutzt
+    //   (Tombstones/Lösch-Propagation) und inkrementell erweitert wird.
+    // * Incremental (nur lokal→remote): TRANSIENTER Staging-Ordner im Cache,
+    //   der nach dem Upload wieder gelöscht wird – keine dauerhafte Kopie der
+    //   Fotos. rclone überspringt remote vorhandene Dateien anhand von
+    //   Größe/Modtime, Uploads bleiben also trotzdem inkrementell.
+    final Directory mirror;
+    if (options.isEchoMode) {
+      final appDir = await getApplicationDocumentsDirectory();
+      mirror = Directory('${appDir.path}/FibuMirror');
+      if (!await mirror.exists()) await mirror.create(recursive: true);
+    } else {
+      final tempDir = await getTemporaryDirectory();
+      mirror = Directory('${tempDir.path}/fibu_media_staging');
+      if (await mirror.exists()) await mirror.delete(recursive: true);
+      await mirror.create(recursive: true);
+    }
 
     final reqType = (lower == 'videos' || lower == 'alle videos')
         ? RequestType.video
@@ -826,10 +878,11 @@ class IosRcloneService implements RcloneService {
     }
 
     // Lokal gelöschte Assets/Alben aus dem Spiegel entfernen, damit die
-    // Löschung remote propagiert wird (bisync).
+    // Löschung remote propagiert wird (bisync) – nur beim persistenten
+    // Echo-Spiegel nötig, das transiente Staging wird ohnehin gelöscht.
     var removedAlbumDirs = 0;
     final photosRoot = Directory('${mirror.path}/Photos');
-    if (await photosRoot.exists()) {
+    if (options.isEchoMode && await photosRoot.exists()) {
       await for (final albumDir in photosRoot.list(followLinks: false)) {
         if (albumDir is! Directory) continue;
         final albumName = albumDir.uri.pathSegments.last;
@@ -843,9 +896,24 @@ class IosRcloneService implements RcloneService {
     }
 
     AppLog.info('media',
-        'Spiegel fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs verwaiste Album-Ordner entfernt');
+        '${options.isEchoMode ? 'Spiegel' : 'Staging'} fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs entfernt');
     onStage?.call('Spiegel bereit', scannedTotal, scannedTotal);
     return mirror.path;
+  }
+
+  /// Entfernt den transienten Staging-Ordner nach einem Incremental-Sync,
+  /// damit Fotos nicht doppelt Speicher belegen (Echo-Spiegel bleibt!).
+  Future<void> _cleanupTransientStaging(String srcFs) async {
+    if (!srcFs.contains('fibu_media_staging')) return;
+    try {
+      final dir = Directory(srcFs);
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+        AppLog.info('media', 'Transientes Staging gelöscht: $srcFs');
+      }
+    } catch (e) {
+      AppLog.warn('media', 'Transientes Staging konnte nicht gelöscht werden: $e');
+    }
   }
 
   /// Ermittelt einen verlässlichen, kollisionsfreien Dateinamen für [asset]

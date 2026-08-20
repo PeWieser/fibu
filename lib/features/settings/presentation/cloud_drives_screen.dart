@@ -11,6 +11,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/services/ios_rclone_service.dart';
+import '../../../core/services/credential_vault_service.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
@@ -1079,6 +1080,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   bool _isOAuthWorking = false;
   String? _oauthError;
 
+  /// Gespeicherte Zugänge für den gewählten Provider-Typ (schlüsselbund-
+  /// basierte Vorschläge für Credentials-Anbieter).
+  List<SavedCredential> _savedCredentials = [];
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -1207,6 +1212,25 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       _addError = null;
       _isOAuthAuthorized = false;
       _oauthError = null;
+    });
+
+    // Schlüsselbund-Vorschläge laden: gespeicherte Zugänge für GENAU diesen
+    // Provider-Typ (z. B. mega, s3, webdav, sftp) anbieten.
+    CredentialVaultService.instance.listFor(_selectedRcloneType).then((creds) {
+      if (mounted && creds.isNotEmpty) {
+        setState(() => _savedCredentials = creds);
+      }
+    }).catchError((_) {});
+  }
+
+  /// Übernimmt einen gespeicherten Zugang in die Felder.
+  void _applySavedCredential(SavedCredential cred) {
+    setState(() {
+      _userController.text = cred.user;
+      _passController.text = cred.pass;
+      _hostController.text = cred.host;
+      _portController.text = cred.port;
+      _step2Error = null;
     });
   }
 
@@ -1487,6 +1511,20 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       // Credentials-Anbietern, nicht bei OAuth).
       if (widget.platform == TargetPlatform.iOS && !_isOAuthProvider) {
         TextInput.finishAutofillContext();
+      }
+
+      // Provider-spezifisch in der Keychain-Vault merken → beim nächsten
+      // Remote dieses Typs wird der Zugang direkt wieder vorgeschlagen.
+      if (!_isOAuthProvider && _userController.text.trim().isNotEmpty) {
+        await CredentialVaultService.instance.save(
+          _selectedRcloneType,
+          SavedCredential(
+            user: _userController.text.trim(),
+            pass: _passController.text,
+            host: _hostController.text.trim(),
+            port: _portController.text.trim(),
+          ),
+        );
       }
 
       ref.invalidate(remotesProvider);
@@ -1770,6 +1808,22 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
+          if (_savedCredentials.isNotEmpty) ...[
+            Text(strings.savedCredentialsLabel, style: TextStyle(color: theme.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+            Text(strings.savedCredentialsHint, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+            SizedBox(height: theme.xs),
+            Wrap(
+              spacing: theme.sm,
+              runSpacing: theme.xs,
+              children: _savedCredentials
+                  .map((cred) => fluent.Button(
+                        onPressed: () => _applySavedCredential(cred),
+                        child: Text(cred.label),
+                      ))
+                  .toList(),
+            ),
+            SizedBox(height: theme.md),
+          ],
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
           fluent.TextBox(controller: _userController, placeholder: 'user@example.com / username'),
@@ -2056,6 +2110,23 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
+          if (_savedCredentials.isNotEmpty) ...[
+            Text(strings.savedCredentialsLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(strings.savedCredentialsHint, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
+            SizedBox(height: theme.sm),
+            Wrap(
+              spacing: theme.sm,
+              runSpacing: theme.xs,
+              children: _savedCredentials
+                  .map((cred) => material.ActionChip(
+                        avatar: const Icon(material.Icons.key, size: 16),
+                        label: Text(cred.label),
+                        onPressed: () => _applySavedCredential(cred),
+                      ))
+                  .toList(),
+            ),
+            SizedBox(height: theme.md),
+          ],
           Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           SizedBox(height: theme.xs),
           material.TextField(
@@ -2388,6 +2459,33 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_savedCredentials.isNotEmpty) ...[
+                  Text(strings.savedCredentialsLabel,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(strings.savedCredentialsHint, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                  SizedBox(height: theme.xs),
+                  Wrap(
+                    spacing: theme.sm,
+                    runSpacing: theme.xs,
+                    children: _savedCredentials
+                        .map((cred) => cupertino.CupertinoButton(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              color: theme.accent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(theme.radiusLg),
+                              onPressed: () => _applySavedCredential(cred),
+                              child: Text(
+                                cred.label,
+                                style: TextStyle(
+                                    color: theme.accent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                  SizedBox(height: theme.md),
+                ],
                 Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 SizedBox(height: theme.xs),
                 cupertino.CupertinoTextField(

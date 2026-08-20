@@ -582,6 +582,14 @@ class AppStrings {
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
   String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';
 
+  // --- Gespeicherte Zugänge (Schlüsselbund-Vorschläge pro Provider) ---
+  String get savedCredentialsLabel => isGerman
+      ? 'Gespeicherte Zugänge für diesen Anbieter'
+      : 'Saved accounts for this provider';
+  String get savedCredentialsHint => isGerman
+      ? 'Tippen übernimmt Benutzer/Passwort/Host aus dem Schlüsselbund.'
+      : 'Tap fills user/password/host from the keychain.';
+
   // --- Homescreen Quick Action (iOS) ---
   String get quickActionSyncNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';
 

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -1481,6 +1482,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         config: config,
       );
 
+      // iOS: Autofill-Kontext erfolgreich abschließen → das System bietet an,
+      // die Credentials im iCloud-Schlüsselbund zu sichern (nur bei
+      // Credentials-Anbietern, nicht bei OAuth).
+      if (widget.platform == TargetPlatform.iOS && !_isOAuthProvider) {
+        TextInput.finishAutofillContext();
+      }
+
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
 
@@ -2373,65 +2381,84 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             Text(_oauthError!, style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ] else ...[
-          Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoTextField(
-            controller: _userController,
-            placeholder: 'user@example.com / username',
-            padding: const EdgeInsets.all(12),
-          ),
-          SizedBox(height: theme.md),
-          Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoTextField(
-            controller: _passController,
-            obscureText: _obscurePassword,
-            placeholder: '••••••••',
-            padding: const EdgeInsets.all(12),
-            suffix: cupertino.CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(_obscurePassword ? cupertino.CupertinoIcons.eye : cupertino.CupertinoIcons.eye_slash, size: 20),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-            ),
-          ),
-          if (_requiresHostPort) ...[
-            SizedBox(height: theme.md),
-            Row(
+          // AutofillGroup: aktiviert iCloud-Schlüsselbund-Vorschläge (iOS
+          // QuickType über der Tastatur) für Benutzername/Passwort – nur bei
+          // Credentials-Anbietern, nicht bei OAuth.
+          AutofillGroup(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Text(strings.emailOrUserLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                SizedBox(height: theme.xs),
+                cupertino.CupertinoTextField(
+                  controller: _userController,
+                  placeholder: 'user@example.com / username',
+                  padding: const EdgeInsets.all(12),
+                  autofillHints: const [AutofillHints.username],
+                  textInputAction: TextInputAction.next,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                SizedBox(height: theme.md),
+                Text(strings.passwordLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                SizedBox(height: theme.xs),
+                cupertino.CupertinoTextField(
+                  controller: _passController,
+                  obscureText: _obscurePassword,
+                  placeholder: '••••••••',
+                  padding: const EdgeInsets.all(12),
+                  autofillHints: const [AutofillHints.password],
+                  textInputAction: TextInputAction.done,
+                  suffix: cupertino.CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(_obscurePassword ? cupertino.CupertinoIcons.eye : cupertino.CupertinoIcons.eye_slash, size: 20),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+                if (_requiresHostPort) ...[
+                  SizedBox(height: theme.md),
+                  Row(
                     children: [
-                      Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      SizedBox(height: theme.xs),
-                      cupertino.CupertinoTextField(
-                        controller: _hostController,
-                        placeholder: 'server.example.com',
-                        padding: const EdgeInsets.all(12),
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(strings.hostLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            SizedBox(height: theme.xs),
+                            cupertino.CupertinoTextField(
+                              controller: _hostController,
+                              placeholder: 'server.example.com',
+                              padding: const EdgeInsets.all(12),
+                              textInputAction: TextInputAction.next,
+                              keyboardType: TextInputType.url,
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: theme.md),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            SizedBox(height: theme.xs),
+                            cupertino.CupertinoTextField(
+                              controller: _portController,
+                              placeholder: '443',
+                              padding: const EdgeInsets.all(12),
+                              textInputAction: TextInputAction.done,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                SizedBox(width: theme.md),
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(strings.portLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      SizedBox(height: theme.xs),
-                      cupertino.CupertinoTextField(
-                        controller: _portController,
-                        placeholder: '443',
-                        padding: const EdgeInsets.all(12),
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ],
             ),
-          ],
+          ),
         ],
         if (_step2Error != null) ...[
           SizedBox(height: theme.md),

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../theme/theme.dart';
+import '../../../../core/localization/app_strings.dart';
+import '../../../../core/services/app_log_service.dart';
 import '../../../../core/services/rclone_service.dart';
 
 /// Shows an adaptive detailed storage breakdown dialog using real quota info.
@@ -146,34 +149,62 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
   final platform = defaultTargetPlatform;
 
   Widget buildContent() {
-    if (logs.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 24.0),
-          child: Text(
-            'No logs recorded.',
-            style: TextStyle(fontStyle: FontStyle.italic, fontSize: 13),
-          ),
-        ),
-      );
-    }
+    // Zweigeteilter, professioneller Sync-Nachweis:
+    // oben die aktuelle Sync-Queue (Task-Verlauf), darunter das
+    // System-Protokoll (alle Aktionen: Engine, Netzwerk, Staging, Remote).
+    return Consumer(
+      builder: (context, ref, _) {
+        final strings = ref.watch(stringsProvider);
+        final systemLog = ref.watch(appLogProvider);
+        final theme = context.theme;
 
-    return SizedBox(
-      width: double.maxFinite,
-      child: ListView.builder(
-        shrinkWrap: true,
-        itemCount: logs.length,
-        itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2.0),
-          child: Text(
-            logs[index],
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 11,
-            ),
+        Text sectionHeader(String label) => Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: theme.textSecondary,
+              ),
+            );
+
+        Text mono(String line, {bool isError = false}) => Text(
+              line,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: isError ? theme.error : theme.textPrimary,
+              ),
+            );
+
+        return SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              sectionHeader(strings.taskLogSection),
+              const SizedBox(height: 4),
+              if (logs.isEmpty)
+                mono('(leer)')
+              else
+                ...logs.map((l) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1.5),
+                      child: mono(l, isError: l.contains('failed') || l.contains('Error')),
+                    )),
+              const SizedBox(height: 14),
+              sectionHeader(strings.systemLogSection),
+              const SizedBox(height: 4),
+              if (systemLog.isEmpty)
+                mono(strings.debugLogEmpty)
+              else
+                ...systemLog.take(60).map((e) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1.5),
+                      child: mono(e.format(), isError: e.level == AppLogLevel.error),
+                    )),
+            ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

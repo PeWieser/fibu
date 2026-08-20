@@ -9,6 +9,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'librclone_channel.dart';
 import 'mirror_sync_engine.dart';
 import 'photo_kit_bridge.dart';
+import 'app_log_service.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
 import 'trash_service.dart';
@@ -59,7 +60,9 @@ class IosRcloneService implements RcloneService {
     await _ensureEngine();
     final res = await _rc.rpc('config/listremotes');
     final remotes = (res['remotes'] as List<dynamic>? ?? []).cast<String>();
-    return remotes.map(_normalizeRemoteName).toList();
+    final cleaned = remotes.map(_normalizeRemoteName).toList();
+    AppLog.info('remote', 'Remotes gelistet (${cleaned.length}): ${cleaned.join(', ') ?: 'keine'}');
+    return cleaned;
   }
 
   @override
@@ -69,18 +72,22 @@ class IosRcloneService implements RcloneService {
     required Map<String, String> config,
   }) async {
     await _ensureEngine();
+    // Keine Config-Parameter loggen – enthält Zugangsdaten.
+    AppLog.info('remote', 'Remote wird angelegt: "$name" (Typ: $type)');
     await _rc.rpc('config/create', {
       'name': name,
       'type': type,
       'parameters': config,
       'opt': {'obscure': true, 'nonInteractive': true},
     });
+    AppLog.info('remote', 'Remote "$name" erfolgreich angelegt');
   }
 
   @override
   Future<void> removeRemote(String name) async {
     await _ensureEngine();
     await _rc.rpc('config/delete', {'name': _normalizeRemoteName(name)});
+    AppLog.info('remote', 'Remote "$name" gelöscht');
   }
 
   @override
@@ -103,9 +110,12 @@ class IosRcloneService implements RcloneService {
       final total = (res['total'] as num?)?.toInt() ?? 0;
       final used = (res['used'] as num?)?.toInt() ?? 0;
       final free = (res['free'] as num?)?.toInt() ?? (total - used).clamp(0, total);
+      AppLog.info('remote', 'Quota für "$remote": $used/$total Bytes belegt');
       return QuotaInfo(totalBytes: total, usedBytes: used, freeBytes: free);
-    } catch (_) {
+    } catch (e) {
       // Providers without an `about` command: report unknown rather than fake data.
+      AppLog.info('remote',
+          'Quota für "$remote" nicht verfügbar (Provider ohne about oder Fehler): $e');
       return const QuotaInfo(totalBytes: 0, usedBytes: 0, freeBytes: 0);
     }
   }
@@ -123,6 +133,7 @@ class IosRcloneService implements RcloneService {
       'remote': path,
     });
     final list = (res['list'] as List<dynamic>? ?? []);
+    AppLog.info('remote', 'Auflistung $remote:${path.isEmpty ? '/' : path} → ${list.length} Einträge');
     return list.map((raw) {
       final m = raw as Map<String, dynamic>;
       return RcloneFileInfo(
@@ -174,7 +185,7 @@ class IosRcloneService implements RcloneService {
         'srcRemote': fileName,
         'dstFs': cacheDir.path,
         'dstRemote': fileName,
-      });
+      }, const Duration(minutes: 10));
       final local = File('${cacheDir.path}/$fileName');
       return await local.exists() ? local : null;
     } catch (_) {
@@ -216,7 +227,8 @@ class IosRcloneService implements RcloneService {
       'srcRemote': fileName,
       'dstFs': dstFs,
       'dstRemote': dstRemote,
-    });
+    }, const Duration(minutes: 10));
+    AppLog.info('remote', 'Upload → $remote:$dstRemote ($fileName)');
   }
 
   @override
@@ -249,7 +261,7 @@ class IosRcloneService implements RcloneService {
       'srcRemote': fileName,
       'dstFs': dstDir,
       'dstRemote': fileName,
-    });
+    }, const Duration(minutes: 10));
   }
 
   @override
@@ -328,8 +340,24 @@ class IosRcloneService implements RcloneService {
       }
 
       // Resolve the local source. Media backups are staged into a persistent
-      // local mirror (FibuMirror) that mirrors the album hierarchy.
-      final String srcFs = await _resolveLocalSource(localPath, options);
+      // local mirror (FibuMirror) that mirrors the album hierarchy. Staging
+      // meldet Zwischenstände, damit die UI nie „ewig ohne Ausgabe lädt“.
+      AppLog.info('sync', 'Sync-Job $jobId gestartet → $remoteName:$remotePath');
+      final String srcFs = await _resolveLocalSource(localPath, options,
+          onStage: (label, done, total) {
+        if (progress.isClosed) return;
+        progress.add(RcloneProgressEvent(
+          jobId: jobId,
+          bytesTransferred: 0,
+          totalBytes: 0,
+          percentage: total > 0 ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
+          currentFile: 'Vorbereitung: $label',
+          eta: '',
+          speedBytesPerSecond: 0,
+          itemsDone: done,
+          itemsTotal: total,
+        ));
+      });
 
       // Mirror/Echo-Modus: Mediathek-first, Löschprotokoll-basierter
       // bidirektionaler Sync mit Papierkorb. Lokal hat Vorrang.
@@ -418,6 +446,8 @@ class IosRcloneService implements RcloneService {
           ));
         }
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
+        AppLog.info('sync',
+            'Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}');
         return;
       }
 
@@ -515,6 +545,7 @@ class IosRcloneService implements RcloneService {
           ));
         }
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
+        AppLog.info('sync', 'Job $jobId abgeschlossen: $transferred/$total Bytes übertragen');
       } else {
         final err = status['error'] as String? ?? 'Unbekannter Fehler';
         _fail(jobId, err);
@@ -570,6 +601,7 @@ class IosRcloneService implements RcloneService {
   }
 
   void _fail(String jobId, String error) {
+    AppLog.error('sync', 'Job $jobId fehlgeschlagen: $error');
     _statusController.add(RcloneJobEvent(
       jobId: jobId,
       status: RcloneJobStatus.failed,
@@ -605,7 +637,11 @@ class IosRcloneService implements RcloneService {
   /// For media keywords, PhotoKit assets are exported into a staging directory
   /// that mirrors the album structure (`Photos/<Album>/<file>`), which rclone
   /// then syncs to the cloud with a genuine 1:1 hierarchy.
-  Future<String> _resolveLocalSource(String localPath, SyncOptions options) async {
+  Future<String> _resolveLocalSource(
+    String localPath,
+    SyncOptions options, {
+    void Function(String label, int done, int total)? onStage,
+  }) async {
     final trimmed = localPath.trim();
     final lower = trimmed.toLowerCase();
 
@@ -629,7 +665,8 @@ class IosRcloneService implements RcloneService {
           .where((p) => p.trim().isNotEmpty)
           .map((p) => p.trim())
           .toList();
-      return _stageMediaLibrary(mediaType, options, selectedAlbums: albumList);
+      return _stageMediaLibrary(mediaType, options,
+          selectedAlbums: albumList, onStage: onStage);
     }
 
     final isMedia = const {
@@ -639,7 +676,7 @@ class IosRcloneService implements RcloneService {
     if (isMedia &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android)) {
-      return _stageMediaLibrary(lower, options);
+      return _stageMediaLibrary(lower, options, onStage: onStage);
     }
 
     // Lokale Ordner (Files): persistenter Spiegel für echten 2-Wege-Sync.
@@ -702,9 +739,12 @@ class IosRcloneService implements RcloneService {
     String lower,
     SyncOptions options, {
     List<String> selectedAlbums = const [],
+    void Function(String label, int done, int total)? onStage,
   }) async {
+    AppLog.info('media', 'Medien-Staging startet (Quelle: $lower, Alben-Filter: ${selectedAlbums.isEmpty ? 'alle' : selectedAlbums.length})');
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
+      AppLog.error('media', 'Foto/Mediathek-Berechtigung verweigert – Staging abgebrochen');
       throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
     }
 
@@ -728,12 +768,19 @@ class IosRcloneService implements RcloneService {
     // Assets mit gleichem Titel/Dateinamen niemals gegenseitig überschreiben.
     final usedPaths = <String, String>{};
 
+    var scannedTotal = 0; // bislang bekannte Gesamtzahl (wächst albumweise)
+    var processedCount = 0; // verarbeitete Assets dieses Laufs
+    var copiedNew = 0; // tatsächlich neu in den Spiegel kopierte Dateien
+
     for (final album in albums) {
       final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
       if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) continue;
       existingAlbumDirs.add(albumName);
       final count = await album.assetCountAsync;
+      AppLog.info('media', 'Album „$albumName“: $count Assets');
       if (count == 0) continue;
+      scannedTotal += count;
+      onStage?.call('Album „$albumName“', processedCount, scannedTotal);
       const batch = 100;
       for (int start = 0; start < count; start += batch) {
         final assets = await album.getAssetListRange(
@@ -743,6 +790,11 @@ class IosRcloneService implements RcloneService {
         for (final asset in assets) {
           if (processed.contains(asset.id)) continue;
           processed.add(asset.id);
+
+          processedCount++;
+          if (processedCount % 25 == 0 || processedCount == scannedTotal) {
+            onStage?.call('Album „$albumName“', processedCount, scannedTotal);
+          }
 
           final file = await asset.file;
           if (file == null || !await file.exists()) continue;
@@ -761,6 +813,7 @@ class IosRcloneService implements RcloneService {
             if (!await dest.exists() ||
                 (await dest.length()) != (await file.length())) {
               await file.copy(destPath);
+              copiedNew++;
             }
           } catch (_) {
             // Nicht les-/schreibbare Assets überspringen, statt den kompletten
@@ -772,6 +825,7 @@ class IosRcloneService implements RcloneService {
 
     // Lokal gelöschte Assets/Alben aus dem Spiegel entfernen, damit die
     // Löschung remote propagiert wird (bisync).
+    var removedAlbumDirs = 0;
     final photosRoot = Directory('${mirror.path}/Photos');
     if (await photosRoot.exists()) {
       await for (final albumDir in photosRoot.list(followLinks: false)) {
@@ -780,11 +834,15 @@ class IosRcloneService implements RcloneService {
         if (!existingAlbumDirs.contains(albumName)) {
           try {
             await albumDir.delete(recursive: true);
+            removedAlbumDirs++;
           } catch (_) {}
         }
       }
     }
 
+    AppLog.info('media',
+        'Spiegel fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs verwaiste Album-Ordner entfernt');
+    onStage?.call('Spiegel bereit', scannedTotal, scannedTotal);
     return mirror.path;
   }
 

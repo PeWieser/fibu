@@ -13,6 +13,7 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
+import 'debug_log_screen.dart';
 
 /// Platform-adaptive Settings screen structured according to Apple HIG:
 /// 1. Cloud Storage (Manage Cloud Drives)
@@ -30,6 +31,16 @@ class SettingsScreen extends ConsumerWidget {
         : (platform == TargetPlatform.iOS
             ? cupertino.CupertinoPageRoute(builder: (_) => const CloudDrivesScreen())
             : material.MaterialPageRoute(builder: (_) => const CloudDrivesScreen()));
+    Navigator.of(context).push(route);
+  }
+
+  void _navigateToDebugLog(BuildContext context) {
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => const DebugLogScreen())
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => const DebugLogScreen())
+            : material.MaterialPageRoute(builder: (_) => const DebugLogScreen()));
     Navigator.of(context).push(route);
   }
 
@@ -356,6 +367,15 @@ class SettingsScreen extends ConsumerWidget {
                     const fluent.Divider(),
                     const SizedBox(height: 8),
                     _buildInfoRow(strings.licenseLabel, strings.licenseValue, theme),
+                    const SizedBox(height: 8),
+                    const fluent.Divider(),
+                    const SizedBox(height: 8),
+                    fluent.ListTile(
+                      title: fluent.Text(strings.debugLogTitle),
+                      subtitle: fluent.Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                      trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open log'),
+                      onPressed: () => _navigateToDebugLog(context),
+                    ),
                   ],
                 ),
               ),
@@ -546,6 +566,20 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: Text(strings.licenseValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
                   ),
                   cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.doc_text, color: theme.accent, size: 22),
+                    title: Text(strings.debugLogTitle, style: const TextStyle(fontSize: 16)),
+                    subtitle: Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
+                    onTap: () {
+                      IosHaptics.selection();
+                      _navigateToDebugLog(context);
+                    },
+                  ),
+                  cupertino.CupertinoListTile(
                     title: Text(strings.aboutAppTitle, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600, fontSize: 16)),
                     trailing: const Icon(
                       cupertino.CupertinoIcons.info_circle,
@@ -732,6 +766,14 @@ class SettingsScreen extends ConsumerWidget {
                   material.ListTile(
                     title: Text(strings.licenseLabel),
                     trailing: Text(strings.licenseValue, style: TextStyle(color: theme.textSecondary)),
+                  ),
+                  const material.Divider(height: 1),
+                  material.ListTile(
+                    leading: Icon(material.Icons.article_outlined, color: theme.accent),
+                    title: Text(strings.debugLogTitle),
+                    subtitle: Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    trailing: const Icon(material.Icons.chevron_right),
+                    onTap: () => _navigateToDebugLog(context),
                   ),
                   const material.Divider(height: 1),
                   material.ListTile(

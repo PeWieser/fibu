@@ -6,6 +6,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import 'onboarding_controller.dart';
@@ -65,6 +66,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// denied permission).
   Future<void> _requestPhotos() async {
     final granted = await _requestPhotoPermission();
+    AppLog.info('media', granted
+        ? 'Foto/Mediathek-Berechtigung erteilt'
+        : 'Foto/Mediathek-Berechtigung verweigert – Hinweisdialog gezeigt');
     if (!mounted) return;
     setState(() => _photosGranted = granted);
     if (!granted) {
@@ -346,16 +350,29 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       if (filled) {
+        final enabled = onPressed != null;
         return ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           child: SizedBox(
             width: double.infinity,
             child: CupertinoButton(
               color: theme.accent,
+              // Deaktiviert: deutlich sichtbarer, gedimmter Hintergrund +
+              // explizit weißer Text (sonst wirkt der Button „leer“).
+              disabledBackgroundColor:
+                  theme.accent.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(14),
               padding: const EdgeInsets.symmetric(vertical: 14),
               onPressed: onPressed,
-              child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: enabled
+                      ? const Color(0xFFFFFFFF)
+                      : const Color(0xFFFFFFFF).withValues(alpha: 0.85),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         );
@@ -375,6 +392,11 @@ class _ActionButton extends StatelessWidget {
         child: material.FilledButton(
           style: material.FilledButton.styleFrom(
             backgroundColor: theme.accent,
+            foregroundColor: material.Colors.white,
+            disabledBackgroundColor:
+                theme.accent.withValues(alpha: 0.25),
+            disabledForegroundColor:
+                material.Colors.white.withValues(alpha: 0.85),
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
           onPressed: onPressed,

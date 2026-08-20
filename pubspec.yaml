@@ -28,6 +28,8 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   # Background execution for scheduled syncs (BGTaskScheduler on iOS / WorkManager on Android).
   workmanager: ^0.5.2
+  # iOS Home-Screen Quick Actions (long press app icon -> "Jetzt synchronisieren").
+  quick_actions: ^1.1.0
 
 dev_dependencies:
   flutter_test:

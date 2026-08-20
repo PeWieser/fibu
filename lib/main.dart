@@ -7,7 +7,12 @@ import 'package:flutter/widgets.dart';
 
 import 'theme/theme.dart';
 import 'theme/ios_theme.dart';
+import 'core/localization/app_strings.dart';
+import 'core/services/app_log_service.dart';
+import 'core/services/quick_actions_service.dart';
 import 'core/services/scheduler_service.dart';
+import 'core/services/settings_service.dart';
+import 'features/dashboard/presentation/dashboard_controller.dart';
 import 'features/shell/presentation/shell_screen.dart';
 import 'features/onboarding/presentation/onboarding_controller.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
@@ -64,6 +69,28 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
     // den systemBrightnessProvider spiegeln → appThemeProvider re-evaluiert
     // sofort, kein App-Neustart nötig.
     WidgetsBinding.instance.addObserver(this);
+
+    // Zentrales Diagnose-Protokoll: statische Fassade mit Provider verbinden,
+    // damit alle Services (auch ohne Ref) loggen können.
+    AppLog.attach(ref);
+    AppLog.info('app', 'Fibu gestartet');
+
+    // iOS-Homescreen-Quick-Action „Jetzt synchronisieren“.
+    final strings = ref.read(stringsProvider);
+    QuickActionsService.instance.setup(
+      syncNowLabel: strings.quickActionSyncNow,
+      onSyncNow: () async {
+        // Beim Kaltstart ist das Onboarding-Flag evtl. noch nicht geladen –
+        // deshalb direkt aus den persistierten Settings lesen.
+        final settings = await SettingsService.loadSettings();
+        final onboardingDone = settings?.onboardingCompleted ?? true;
+        if (!onboardingDone) {
+          AppLog.warn('quickaction', 'Sync ignoriert: Onboarding nicht abgeschlossen');
+          return;
+        }
+        ref.read(activeJobProvider.notifier).triggerSyncAll();
+      },
+    );
   }
 
   @override

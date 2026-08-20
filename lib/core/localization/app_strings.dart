@@ -582,6 +582,23 @@ class AppStrings {
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
   String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';
 
+  // --- Homescreen Quick Action (iOS) ---
+  String get quickActionSyncNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';
+
+  // --- Diagnose-Protokoll / Debug-Log ---
+  String get debugLogTitle => isGerman ? 'Sync-Protokoll & Diagnose' : 'Sync Log & Diagnostics';
+  String get debugLogSubtitle => isGerman
+      ? 'Alle Aktionen, Netzwerk- und Sync-Ereignisse mit Zeitstempel'
+      : 'All actions, network and sync events with timestamps';
+  String get debugLogEmpty => isGerman
+      ? 'Noch keine Protokoll-Einträge vorhanden.'
+      : 'No log entries yet.';
+  String get clearLog => isGerman ? 'Protokoll leeren' : 'Clear Log';
+  String get systemLogSection =>
+      isGerman ? 'System-Protokoll (alle Aktionen)' : 'System log (all actions)';
+  String get taskLogSection =>
+      isGerman ? 'Aktueller Sync-Verlauf (aktive Queue)' : 'Current sync run (active queue)';
+
   // --- About / Über Section & System Language ---
   String get systemLanguage => isGerman ? 'System (Automatisch)' : 'System (Automatic)';
   String get systemLanguageSubtitle => isGerman

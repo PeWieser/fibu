@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import 'app_log_service.dart';
+
 /// Thin Dart wrapper around the native librclone bridge.
 ///
 /// The native side (iOS `RcloneBridge.swift`, Android `RcloneBridge.kt`) links the
@@ -35,34 +37,56 @@ class LibrcloneChannel {
     final completer = Completer<void>();
     _initializing = completer;
     try {
+      AppLog.info('engine', 'librclone engine initialisiere (config: $configPath)');
       await _channel.invokeMethod<void>('initialize', {'configPath': configPath});
       // Make sure librclone writes/reads the same config file we manage.
       await rpc('config/setpath', {'path': configPath});
       _initialized = true;
       completer.complete();
+      AppLog.info('engine', 'librclone engine bereit');
     } catch (e, st) {
       completer.completeError(e, st);
       _initializing = null;
+      AppLog.error('engine', 'Engine-Initialisierung fehlgeschlagen: $e');
       rethrow;
     }
   }
 
   /// Performs a single rclone remote-control call and decodes the JSON response.
   ///
+  /// Jeder Aufruf hat ein [timeout] (Default 60 s); überschreitet ihn rclone,
+  /// wird eine [RcloneRpcException] mit klarer Timeout-Meldung geworfen, statt
+  /// endlos zu laden. Polling-Calls (`core/stats`, `job/status`) werden aus
+  /// Lärm-Gründen nicht pro Aufruf geloggt.
+  ///
   /// Throws [RcloneRpcException] when librclone reports a non-2xx status so callers
   /// can surface real, native error text instead of silent no-ops.
   Future<Map<String, dynamic>> rpc(
     String method, [
     Map<String, dynamic> input = const {},
+    Duration timeout = const Duration(seconds: 60),
   ]) async {
+    final poll = method == 'core/stats' || method == 'job/status';
+    final started = DateTime.now();
+    if (!poll) AppLog.info('rclone', '→ $method');
     final String output;
     try {
-      output = await _channel.invokeMethod<String>('rpc', {
+      output = await _channel
+          .invokeMethod<String>('rpc', {
             'method': method,
             'input': jsonEncode(input),
-          }) ??
+          })
+          .timeout(timeout) ??
           '{}';
+    } on TimeoutException {
+      AppLog.error(
+          'rclone', 'Timeout nach ${timeout.inSeconds}s bei $method (Netzwerk/Provider?)');
+      throw RcloneRpcException(
+        method: method,
+        message: 'timeout after ${timeout.inSeconds}s – Timeout/Netzwerkproblem bei $method',
+      );
     } on PlatformException catch (e) {
+      if (!poll) AppLog.error('rclone', '$method fehlgeschlagen: ${e.message}');
       throw RcloneRpcException(
         method: method,
         message: e.message ?? 'librclone call failed',
@@ -70,6 +94,10 @@ class LibrcloneChannel {
       );
     }
 
+    if (!poll) {
+      final ms = DateTime.now().difference(started).inMilliseconds;
+      AppLog.info('rclone', '← $method OK (${ms}ms)');
+    }
     if (output.isEmpty) return <String, dynamic>{};
     final decoded = jsonDecode(output);
     if (decoded is Map<String, dynamic>) return decoded;

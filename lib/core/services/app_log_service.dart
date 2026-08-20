@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Schweregrad eines Protokolleintrags.
 enum AppLogLevel { info, warning, error }
@@ -67,6 +70,29 @@ final appLogProvider =
   return AppLogNotifier();
 });
 
+/// Persistente Logdatei `<Dokumente>/fibu.log` wird durch den Notifier
+/// bei jedem Eintrag asynchron mitgeschrieben (siehe [AppLog.attachFileSink]).
+File? _logFile;
+
+void _appendToLogFile(String line) {
+  final file = _logFile;
+  if (file == null) return;
+  // Best-effort, niemals blockierend und niemals werfend.
+  Future(() async {
+    try {
+      if (await file.length() > 256 * 1024) {
+        // Ring-Schnitt: bei 256 KB wird auf die letzten 1000 Zeilen gekürzt.
+        final lines = await file.readAsLines();
+        final tail = lines.length > 1000 ? lines.sublist(lines.length - 1000) : lines;
+        await file.writeAsString(tail.join('\n') + '\n', flush: false);
+      }
+      await file.writeAsString('$line\n', mode: FileMode.append, flush: false);
+    } catch (_) {
+      // Logging darf nie crashen.
+    }
+  });
+}
+
 /// Statische Fassade, damit Services ohne Riverpod-Ref loggen können.
 /// Das Attachment passiert einmalig im App-Root (FibuApp).
 ///
@@ -77,19 +103,50 @@ class AppLog {
 
   static AppLogNotifier? _notifier;
 
+  /// Pfad zur persistenten Logdatei (im Dokumente-Ordner, neben rclone.conf).
+  static String? get logFilePath => _logFile?.path;
+
   /// Verbindet die Fassade mit dem Provider-Notifier (App-Start).
   static void attach(WidgetRef ref) {
     _notifier = ref.read(appLogProvider.notifier);
   }
 
-  static void info(String tag, String message) =>
-      _notifier?.add(AppLogLevel.info, tag, message);
+  /// Aktiviert die Logdatei im Dokumente-Ordner (wo auch rclone.conf liegt).
+  /// Datei wird angelegt, ohne bestehende Inhalte zu löschen.
+  static Future<void> attachFileSink() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/fibu.log');
+      if (!await file.exists()) await file.create();
+      _logFile = file;
+      AppLog.info('app', 'Logdatei aktiv: ${file.path}');
+    } catch (_) {}
+  }
 
-  static void warn(String tag, String message) =>
-      _notifier?.add(AppLogLevel.warning, tag, message);
+  static void info(String tag, String message) {
+    _notifier?.add(AppLogLevel.info, tag, message);
+    _appendToLogFile(_formatRaw(AppLogLevel.info, tag, message));
+  }
 
-  static void error(String tag, String message) =>
-      _notifier?.add(AppLogLevel.error, tag, message);
+  static void warn(String tag, String message) {
+    _notifier?.add(AppLogLevel.warning, tag, message);
+    _appendToLogFile(_formatRaw(AppLogLevel.warning, tag, message));
+  }
+
+  static void error(String tag, String message) {
+    _notifier?.add(AppLogLevel.error, tag, message);
+    _appendToLogFile(_formatRaw(AppLogLevel.error, tag, message));
+  }
+
+  static String _formatRaw(AppLogLevel level, String tag, String message) {
+    final p = AppLogEntry(
+      time: DateTime.now(),
+      level: level,
+      tag: tag,
+      message: message,
+    );
+    return p.format();
+  }
 
   /// Kompletter Export als Text (z. B. für die Zwischenablage).
   static String exportAll(List<AppLogEntry> entries) =>

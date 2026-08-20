@@ -63,6 +63,20 @@ class DebugLogScreen extends ConsumerWidget {
     }
   }
 
+  /// Fußzeile mit Pfad zur persistenten Logdatei (Dokumente-Ordner, neben
+  /// der rclone.conf).
+  Widget _fileFooter(AppThemeData theme, AppStrings strings) {
+    final path = AppLog.logFilePath;
+    if (path == null) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(theme.md, theme.xs, theme.md, theme.md),
+      child: Text(
+        strings.debugLogFileLocation(path),
+        style: TextStyle(color: theme.textSecondary, fontSize: 11, height: 1.3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
@@ -108,6 +122,14 @@ class DebugLogScreen extends ConsumerWidget {
             itemBuilder: (context, index) => entryTile(entries[index]),
           );
 
+    final Widget withFooter = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: body),
+        _fileFooter(theme, strings),
+      ],
+    );
+
     if (platform == TargetPlatform.windows) {
       return fluent.ScaffoldPage(
         header: fluent.PageHeader(
@@ -139,7 +161,7 @@ class DebugLogScreen extends ConsumerWidget {
             ],
           ),
         ),
-        content: body,
+        content: withFooter,
       );
     }
 
@@ -167,7 +189,7 @@ class DebugLogScreen extends ConsumerWidget {
             ],
           ),
         ),
-        child: SafeArea(child: body),
+        child: SafeArea(child: withFooter),
       );
     }
 
@@ -188,7 +210,7 @@ class DebugLogScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: body,
+      body: withFooter,
     );
   }
 }

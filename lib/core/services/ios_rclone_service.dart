@@ -35,19 +35,25 @@ class IosRcloneService implements RcloneService {
   /// Minuten strecken. Hier begrenzen wir: Verbindungsaufbau max. 15 s, keine
   /// Job-Wiederholungen → der ECHTE Providerr-Fehler kommt sofort hoch,
   /// statt minutenlang zu „hängen“.
-  static Map<String, Object> get _fastFailConfig => const {
-        'Timeout': '15s',
-        'Contimeout': '15s',
-        'ExpectContinueTimeout': '10s',
+  ///
+  /// WICHTIG: Im RC-`_config` müssen Durations als Nanosekunden-Ints kommen –
+  /// Strings wie "15s" schlagen das Reshape ins Go-Struct fehl
+  /// („cannot unmarshal string into ConfigInfo.ExpectContinueTimeout").
+  static const int _ns = 1000000000; // Nanosekunden pro Sekunde
+
+  static Map<String, Object> get _fastFailConfig => {
+        'Timeout': 15 * _ns,
+        'Contimeout': 15 * _ns,
+        'ExpectContinueTimeout': 10 * _ns,
         'Retries': 1,
         'LowLevelRetries': 2,
       };
 
   /// Transfers (eine einzelne Datei rauf/runter): kurze Verbindungs-Timeouts,
   /// aber KEIN globales Transfer-Timeout (große Videos brauchen länger).
-  static Map<String, Object> get _transferConfig => const {
-        'Contimeout': '20s',
-        'ExpectContinueTimeout': '15s',
+  static Map<String, Object> get _transferConfig => {
+        'Contimeout': 20 * _ns,
+        'ExpectContinueTimeout': 15 * _ns,
       };
 
   Future<void> _ensureEngine() async {

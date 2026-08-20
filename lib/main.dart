@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
@@ -71,9 +73,11 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     // Zentrales Diagnose-Protokoll: statische Fassade mit Provider verbinden,
-    // damit alle Services (auch ohne Ref) loggen können.
+    // damit alle Services (auch ohne Ref) loggen können; zusätzlich wird jede
+    // Zeile in <Dokumente>/fibu.log persistiert (neben der rclone.conf).
     AppLog.attach(ref);
     AppLog.info('app', 'Fibu gestartet');
+    unawaited(AppLog.attachFileSink());
 
     // iOS-Homescreen-Quick-Action „Jetzt synchronisieren“.
     final strings = ref.read(stringsProvider);

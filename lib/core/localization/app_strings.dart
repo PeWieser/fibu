@@ -598,6 +598,9 @@ class AppStrings {
   String get testRequiredBeforeAddHint => isGerman
       ? 'Bitte zuerst „Verbindung testen“ erfolgreich ausführen – erst dann kann das Laufwerk hinzugefügt werden.'
       : 'Please run "Test connection" successfully first – the drive can only be added afterwards.';
+  String debugLogFileLocation(String path) => isGerman
+      ? 'Logdatei: $path (im Dokumente-Ordner, neben rclone.conf)'
+      : 'Log file: $path (in the documents folder, next to rclone.conf)';
 
   // --- Homescreen Quick Action (iOS) ---
   String get quickActionSyncNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';

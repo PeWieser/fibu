@@ -359,8 +359,7 @@ class _ActionButton extends StatelessWidget {
               color: theme.accent,
               // Deaktiviert: deutlich sichtbarer, gedimmter Hintergrund +
               // explizit weißer Text (sonst wirkt der Button „leer“).
-              disabledBackgroundColor:
-                  theme.accent.withValues(alpha: 0.25),
+              disabledColor: theme.accent.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(14),
               padding: const EdgeInsets.symmetric(vertical: 14),
               onPressed: onPressed,

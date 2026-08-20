@@ -61,7 +61,8 @@ class IosRcloneService implements RcloneService {
     final res = await _rc.rpc('config/listremotes');
     final remotes = (res['remotes'] as List<dynamic>? ?? []).cast<String>();
     final cleaned = remotes.map(_normalizeRemoteName).toList();
-    AppLog.info('remote', 'Remotes gelistet (${cleaned.length}): ${cleaned.join(', ') ?: 'keine'}');
+    final remoteNames = cleaned.isEmpty ? 'keine' : cleaned.join(', ');
+    AppLog.info('remote', 'Remotes gelistet (${cleaned.length}): $remoteNames');
     return cleaned;
   }
 
@@ -133,7 +134,8 @@ class IosRcloneService implements RcloneService {
       'remote': path,
     });
     final list = (res['list'] as List<dynamic>? ?? []);
-    AppLog.info('remote', 'Auflistung $remote:${path.isEmpty ? '/' : path} → ${list.length} Einträge');
+    final listedPath = path.isEmpty ? '/' : path;
+    AppLog.info('remote', 'Auflistung $remote:$listedPath → ${list.length} Einträge');
     return list.map((raw) {
       final m = raw as Map<String, dynamic>;
       return RcloneFileInfo(

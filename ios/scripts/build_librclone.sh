@@ -18,10 +18,26 @@
 set -euo pipefail
 
 # Statt: RCLONE_VERSION="${1:-v1.68.2}"
-RCLONE_VERSION="${1:-$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4 || echo "")}"
+# Versionsauflösung priorisiert:
+#   1. CLI-Argument,
+#   2. neuestes Versions-Tag via `git ls-remote` (kein GitHub-API-Ratelimit!),
+#   3. GitHub Release-API (Fallback),
+#   4. harter Pin v1.75.0 (nie älter; ältere Fallbacks erzeugen kleinere,
+#      veraltete IPAs, wie bei einem früheren Rate-Limit-Build gesehen).
+RCLONE_VERSION="${1:-}"
 if [ -z "${RCLONE_VERSION}" ]; then
-  echo "WARN: Could not fetch latest rclone version via GitHub API (rate limit?), using fallback v1.70.0"
-  RCLONE_VERSION="v1.70.0"
+  RCLONE_VERSION="$(git ls-remote --tags https://github.com/rclone/rclone.git 'v*' 2>/dev/null \
+    | awk -F/ '{print $NF}' \
+    | grep -v '\^{}' \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -V | tail -n 1 || echo "")"
+fi
+if [ -z "${RCLONE_VERSION}" ]; then
+  RCLONE_VERSION="$(curl -s https://api.github.com/repos/rclone/rclone/releases/latest | grep '"tag_name"' | cut -d '"' -f 4 || echo "")"
+fi
+if [ -z "${RCLONE_VERSION}" ]; then
+  echo "WARN: Keine rclone-Version aufloesbar (offline/rate limit?), verwende gepinnte v1.75.0"
+  RCLONE_VERSION="v1.75.0"
 fi
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/build/librclone"

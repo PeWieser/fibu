@@ -2216,7 +2216,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           material.TextField(
             controller: _userController,
             onChanged: (_) => _markCredentialsDirty(),
-            onChanged: (_) => _markCredentialsDirty(),
             decoration: const material.InputDecoration(
               hintText: 'user@example.com / username',
               border: material.OutlineInputBorder(),
@@ -2228,7 +2227,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           SizedBox(height: theme.xs),
           material.TextField(
             controller: _passController,
-            onChanged: (_) => _markCredentialsDirty(),
             onChanged: (_) => _markCredentialsDirty(),
             obscureText: _obscurePassword,
             decoration: material.InputDecoration(
@@ -2255,7 +2253,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       material.TextField(
                         controller: _hostController,
                         onChanged: (_) => _markCredentialsDirty(),
-                        onChanged: (_) => _markCredentialsDirty(),
                         decoration: const material.InputDecoration(
                           hintText: 'server.example.com',
                           border: material.OutlineInputBorder(),
@@ -2275,7 +2272,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                       SizedBox(height: theme.xs),
                       material.TextField(
                         controller: _portController,
-                        onChanged: (_) => _markCredentialsDirty(),
                         onChanged: (_) => _markCredentialsDirty(),
                         decoration: const material.InputDecoration(
                           hintText: '443',
@@ -2590,6 +2586,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 SizedBox(height: theme.xs),
                 cupertino.CupertinoTextField(
                   controller: _userController,
+                  onChanged: (_) => _markCredentialsDirty(),
                   placeholder: 'user@example.com / username',
                   padding: const EdgeInsets.all(12),
                   autofillHints: const [AutofillHints.username],
@@ -2601,6 +2598,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 SizedBox(height: theme.xs),
                 cupertino.CupertinoTextField(
                   controller: _passController,
+                  onChanged: (_) => _markCredentialsDirty(),
                   obscureText: _obscurePassword,
                   placeholder: '••••••••',
                   padding: const EdgeInsets.all(12),
@@ -2625,6 +2623,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                             SizedBox(height: theme.xs),
                             cupertino.CupertinoTextField(
                               controller: _hostController,
+                              onChanged: (_) => _markCredentialsDirty(),
                               placeholder: 'server.example.com',
                               padding: const EdgeInsets.all(12),
                               textInputAction: TextInputAction.next,
@@ -2643,6 +2642,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                             SizedBox(height: theme.xs),
                             cupertino.CupertinoTextField(
                               controller: _portController,
+                              onChanged: (_) => _markCredentialsDirty(),
                               placeholder: '443',
                               padding: const EdgeInsets.all(12),
                               textInputAction: TextInputAction.done,

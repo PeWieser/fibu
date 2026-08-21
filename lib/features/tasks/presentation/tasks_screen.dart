@@ -144,31 +144,15 @@ class TasksScreen extends ConsumerWidget {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final tasks = ref.watch(tasksListProvider);
+    final tasksLoaded = ref.watch(tasksLoadedProvider);
 
-    return cupertino.CupertinoPageScaffold(
-      navigationBar: cupertino.CupertinoNavigationBar(
-        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
-        middle: const SizedBox.shrink(),
-        trailing: SizedBox(
-          width: 44,
-          height: 44,
-          child: cupertino.CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () {
-              IosHaptics.light();
-              showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS);
-            },
-            child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
-          ),
-        ),
-      ),
-      backgroundColor: theme.canvas,
-      child: SafeArea(
-        child: !ref.watch(tasksLoadedProvider)
-            ? const Center(child: cupertino.CupertinoActivityIndicator())
-            : (tasks.isEmpty
-                ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
-                : SingleChildScrollView(
+    final Widget childContent;
+    if (!tasksLoaded) {
+      childContent = const Center(child: cupertino.CupertinoActivityIndicator());
+    } else if (tasks.isEmpty) {
+      childContent = _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings);
+    } else {
+      childContent =                 SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,10 +216,31 @@ class TasksScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                ),
+;
+    }
+
+    return cupertino.CupertinoPageScaffold(
+      navigationBar: cupertino.CupertinoNavigationBar(
+        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
+        middle: const SizedBox.shrink(),
+        trailing: SizedBox(
+          width: 44,
+          height: 44,
+          child: cupertino.CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              IosHaptics.light();
+              showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS);
+            },
+            child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
+          ),
+        ),
       ),
+      backgroundColor: theme.canvas,
+      child: SafeArea(child: childContent),
     );
   }
+
 
   // =========================================================================
   // ANDROID (Material 3 UI in Minimalist Style)

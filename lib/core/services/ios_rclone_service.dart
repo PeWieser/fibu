@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -9,6 +10,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'librclone_channel.dart';
 import 'mirror_sync_engine.dart';
 import 'photo_kit_bridge.dart';
+import 'virtual_mirror_sync.dart';
 import 'app_log_service.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
@@ -404,6 +406,15 @@ class IosRcloneService implements RcloneService {
       final conn = await Connectivity().checkConnectivity();
       if (conn.contains(ConnectivityResult.none) || conn.isEmpty) {
         _fail(jobId, 'Offline: Keine aktive Netzwerkverbindung');
+        return;
+      }
+
+      // NEU (Manifest-only Mirror): Medien-Echo läuft komplett ohne
+      // persistenten FibuMirror — nur Metadaten lokal, Zustand in
+      // Application Support (für Nutzer nicht sichtbar), On-Demand-Export
+      // nur der tatsächlich zu übertragenden Assets.
+      if (options.isEchoMode && _isMediaSource(localPath)) {
+        await _runVirtualMirrorSync(jobId, localPath, remoteName, remotePath, options, progress);
         return;
       }
 
@@ -987,8 +998,325 @@ class IosRcloneService implements RcloneService {
     }
   }
 
-  /// Ermittelt einen verlässlichen, kollisionsfreien Dateinamen für [asset]
-  /// im Spiegel-Verzeichnis [destDirPath].
+  // ---------------------------------------------------------------------------
+  // Virtueller Mirror (manifest-only / Option 3)
+  // ---------------------------------------------------------------------------
+
+  /// Ort für den Mirror-Zustand: iOS `Library/Application Support` –
+  /// absichtlich NICHT in Dokumente, damit Nutzer darauf keinen Zugriff haben
+  /// (via UIFileSharingEnabled zur Files-App) und nichts sichtbar löschen.
+  Future<Directory> _virtualStateRoot() async {
+    final dir = await getApplicationSupportDirectory();
+    final root = Directory('${dir.path}/fibu_state');
+    if (!await root.exists()) await root.create(recursive: true);
+    final meta = Directory('${root.path}/.fibu');
+    if (!await meta.exists()) await meta.create(recursive: true);
+    return root;
+  }
+
+  /// Liest den persistierten Mirror-Zustand (rel → Metadaten + geblockte Pfade).
+  Future<({List<VirtualMediaItem> items, Set<String> blocked})>
+      _loadVirtualState(Directory root) async {
+    try {
+      final f = File('${root.path}/mirror_state.json');
+      if (!await f.exists()) return (items: const [], blocked: <String>{});
+      final decoded = jsonDecode(await f.readAsString());
+      if (decoded is! Map<String, dynamic>) return (items: const [], blocked: <String>{});
+      final items = (decoded['items'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(VirtualMediaItem.fromJson)
+          .toList();
+      final blocked = (decoded['blocked'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toSet();
+      return (items: items, blocked: blocked);
+    } catch (_) {
+      return (items: const [], blocked: <String>{});
+    }
+  }
+
+  Future<void> _saveVirtualState(
+      Directory root, List<Map<String, dynamic>> items, Set<String> blocked) async {
+    try {
+      final f = File('${root.path}/mirror_state.json');
+      await f.writeAsString(jsonEncode({
+        'writtenAt': DateTime.now().toIso8601String(),
+        'items': items,
+        'blocked': blocked.toList(),
+      }));
+    } catch (e) {
+      AppLog.warn('sync', 'Mirror-Zustand konnte nicht gespeichert werden: $e');
+    }
+  }
+
+  Future<void> _appendVirtualTombstones(Directory root, List<String> rels) async {
+    try {
+      final dir = Directory('${root.path}/.fibu');
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final f = File('${dir.path}/tombstones.json');
+      final now = DateTime.now();
+      final entries = <Map<String, dynamic>>[];
+      if (await f.exists()) {
+        final content = (await f.readAsString()).trim();
+        if (content.isNotEmpty) {
+          final decoded = jsonDecode(content);
+          if (decoded is List) entries.addAll(decoded.whereType<Map<String, dynamic>>());
+        }
+      }
+      for (final rel in rels) {
+        entries.add({'path': rel, 'deletedAt': now.toIso8601String(), 'deviceId': 'local'});
+      }
+      await f.writeAsString(const JsonEncoder.withIndent('  ').convert(entries));
+    } catch (_) {}
+  }
+
+  /// Scannt die Mediathek NUR per Metadaten (mit `needTitle` → echte
+  /// Dateinamen ohne Datei-Export!). Liefert rel → Metadaten plus rel → Asset
+  /// (für den On-Demand-Export im Upload).
+  Future<({Map<String, VirtualMediaItem> items, Map<String, AssetEntity> byRel})>
+      _scanVirtualMedia(
+    String localPath,
+    SyncOptions options,
+    void Function(String label, int done, int total) onStage,
+  ) async {
+    AppLog.info('media', 'Virtual-Scan der Mediathek startet (Quelle: $localPath)');
+    final ps = await PhotoManager.requestPermissionExtend();
+    if (!ps.isAuth && !ps.hasAccess) {
+      AppLog.error('media', 'Foto/Mediathek-Berechtigung verweigert');
+      throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
+    }
+
+    final trimmed = localPath.trim();
+    final lower = trimmed.toLowerCase();
+
+    // Gleiche Schlüssel-Parsing-Logik wie _resolveLocalSource.
+    String mediaType = 'all';
+    List<String> selectedAlbums = const [];
+    if (lower.startsWith('photos:') ||
+        lower.startsWith('videos:') ||
+        lower.startsWith('all:')) {
+      mediaType = lower.split(':').first;
+      selectedAlbums = trimmed
+          .substring(mediaType.length + 1)
+          .split('|')
+          .where((p) => p.trim().isNotEmpty)
+          .map((p) => p.trim().toLowerCase())
+          .toList();
+    } else if (lower == 'videos' || lower == 'alle videos') {
+      mediaType = 'videos';
+    }
+
+    final reqType = mediaType == 'videos' ? RequestType.video : RequestType.common;
+    // needTitle:true → iOS liefert echte Dateinamen (IMG_0001.HEIC …) ohne
+    // dass die Datei exportiert werden muss.
+    const needTitle = FilterOption(needTitle: true);
+    final filter = FilterOptionGroup(
+      imageOption: needTitle,
+      videoOption: needTitle,
+    );
+    final albums = await PhotoManager.getAssetPathList(
+      type: reqType,
+      hasAll: true,
+      filterOption: filter,
+    );
+
+    final items = <String, VirtualMediaItem>{};
+    final byRel = <String, AssetEntity>{};
+    final selectedSet = selectedAlbums.toSet();
+    final allowAll = selectedAlbums.isEmpty;
+
+    var total = 0;
+    var done = 0;
+    for (final album in albums) {
+      if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) continue;
+      final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
+      final count = await album.assetCountAsync;
+      if (count == 0) continue;
+      total += count;
+      onStage('Album „$albumName“ lesen', done, total);
+      AppLog.info('media', 'Album „$albumName“: $count Assets (Metadaten)');
+      const batch = 100;
+      final taken = <String>{};
+      for (int start = 0; start < count; start += batch) {
+        final assets = await album.getAssetListRange(
+            start: start, end: (start + batch).clamp(0, count));
+        for (final asset in assets) {
+          done++;
+          if (done % 25 == 0 || done == total) {
+            onStage('Album „$albumName“ lesen', done, total);
+          }
+          // Titel → deterministisch-eindeutiger Zielname (ohne jeglichen Export).
+          var base = (asset.title ?? '').trim();
+          if (base.isEmpty) {
+            base = 'asset_${_safeFilePart(asset.id)}.${_mirrorFallbackExtension(asset, '')}';
+          }
+          base = base.replaceAll(RegExp(r'[/\\]'), '_');
+          final dot = base.lastIndexOf('.');
+          final stem = dot > 0 ? base.substring(0, dot) : base;
+          final ext = dot > 0 ? base.substring(dot) : '';
+          var candidate = '$stem$ext';
+          var counter = 0;
+          final disamb = _safeFilePart(asset.id);
+          while (!taken.add(candidate)) {
+            candidate = counter == 0
+                ? '${stem}_$disamb$ext'
+                : '${stem}_${disamb}_$counter$ext';
+            counter++;
+          }
+          if (options.excludeFilters.contains(candidate)) continue;
+          final rel = 'Photos/$albumName/$candidate';
+          items[rel] = VirtualMediaItem(
+            rel: rel,
+            assetId: asset.id,
+            modifiedMs: asset.modifiedDateTime.millisecondsSinceEpoch,
+          );
+          byRel[rel] = asset;
+        }
+      }
+    }
+    AppLog.info('media', 'Virtual-Scan fertig: ${items.length} Medien in $total Assets geprüft');
+    return (items: items, byRel: byRel);
+  }
+
+  /// Manifest-only Echo: 2-Wege-Sync ohne dauerhafte lokale Kopie.
+  Future<void> _runVirtualMirrorSync(
+    String jobId,
+    String localPath,
+    String remoteName,
+    String remotePath,
+    SyncOptions options,
+    StreamController<RcloneProgressEvent> progress,
+  ) async {
+    AppLog.info('sync',
+        'Virtual-Mirror (manifest-only) startet → $remoteName:$remotePath');
+
+    void stage(String label, int done, int total) {
+      if (progress.isClosed) return;
+      progress.add(RcloneProgressEvent(
+        jobId: jobId,
+        bytesTransferred: 0,
+        totalBytes: 0,
+        percentage: total > 0 ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
+        currentFile: label,
+        eta: '',
+        speedBytesPerSecond: 0,
+        itemsDone: done,
+        itemsTotal: total,
+      ));
+    }
+
+    final scan =
+        await _scanVirtualMedia(localPath, options, stage);
+    final items = scan.items;
+    final byRel = scan.byRel;
+
+    final stateRoot = await _virtualStateRoot();
+    final state = await _loadVirtualState(stateRoot);
+    final blocked = state.blocked;
+
+    // Lokale Lösch-Erkennung ohne Dateisystem-Spiegel: Pfade, die im alten
+    // Zustand standen und jetzt fehlen ─→ Tombstone (nach Safety-Brake).
+    final previousRels = state.items.map((i) => i.rel).toSet();
+    final deletedNow =
+        previousRels.where((rel) => !items.containsKey(rel)).toList();
+    if (previousRels.length >= 10 && deletedNow.length * 2 > previousRels.length) {
+      AppLog.warn('media',
+          'Virtual-Mirror: auffällig großer Schwund (${deletedNow.length}/${previousRels.length}) → als Formatwechsel behandelt, nichts als Löschung propagiert');
+    } else if (deletedNow.isNotEmpty) {
+      AppLog.info('media',
+          '${deletedNow.length} lokal gelöschte Medien → Tombstones propagieren');
+      await _appendVirtualTombstones(stateRoot, deletedNow);
+    }
+
+    /// Genau ein Asset für den Upload on-demand exportieren (nie liegen lassen).
+    Future<File?> exportForUpload(VirtualMediaItem item) async {
+      final asset = byRel[item.rel];
+      if (asset == null) return null;
+      try {
+        final exported = await asset.file;
+        if (exported == null || !await exported.exists()) return null;
+        final dir = await Directory.systemTemp.createTemp('fibu_export_');
+        final base = item.rel.split('/').last; // Ziel-Dateinamen erzwingen
+        final dest = File('${dir.path}/$base');
+        return await exported.copy(dest.path);
+      } catch (e) {
+        AppLog.warn('media', 'Export für Upload fehlgeschlagen (${item.rel}): $e');
+        return null;
+      }
+    }
+
+    Future<void> importDownloaded(List<File> files, List<String> rels) async {
+      final bridge = PhotoKitBridge();
+      var okCount = 0;
+      for (var i = 0; i < files.length; i++) {
+        if (await bridge.importIntoLibrary(files[i],
+            mimeHint: PhotoKitBridge.mimeHintFor(rels[i]))) {
+          okCount++;
+        }
+      }
+      AppLog.info('media',
+          '$okCount/${files.length} heruntergeladene Dateien in die Mediathek importiert');
+    }
+
+    final result = await VirtualMirrorSyncEngine(this).sync(
+      localItems: items,
+      stateRoot: stateRoot.path,
+      remoteName: remoteName,
+      remotePath: remotePath,
+      blockedRels: blocked,
+      exportForUpload: exportForUpload,
+      importDownloaded: importDownloaded,
+      persistLocalState: (entries) =>
+          _saveVirtualState(stateRoot, entries, blocked),
+      trash: TrashService(this),
+      onProgress: (phase, item, done, total) {
+        if (progress.isClosed) return;
+        const phaseLabels = {
+          'scan': 'Analysiere lokale Mediathek & Cloud',
+          'upload': 'Lade hoch',
+          'tombstones': 'Wende Löschprotokoll an',
+          'download': 'Lade aus der Cloud',
+        };
+        final label = phaseLabels[phase] ?? phase;
+        final fileName =
+            item.isEmpty ? '' : item.split('/').where((s) => s.isNotEmpty).last;
+        final hasCounters = total > 0;
+        progress.add(RcloneProgressEvent(
+          jobId: jobId,
+          bytesTransferred: 0,
+          totalBytes: 0,
+          percentage:
+              hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
+          currentFile: fileName.isEmpty ? '$label…' : '$label: $fileName',
+          eta: hasCounters ? '' : '…',
+          speedBytesPerSecond: 0,
+          itemsDone: done,
+          itemsTotal: total,
+        ));
+      },
+    );
+
+    AppLog.info('sync',
+        'Virtual-Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}');
+    if (!progress.isClosed) {
+      progress.add(RcloneProgressEvent(
+        jobId: jobId,
+        bytesTransferred: 0,
+        totalBytes: 0,
+        percentage: 100,
+        currentFile:
+            'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+            '🗑${result.trashedLocal}/${result.trashedRemote} + '
+            '${result.deletedLocal}/${result.deletedRemote})',
+        eta: '0s',
+        speedBytesPerSecond: 0,
+        itemsDone: result.uploaded + result.downloaded,
+        itemsTotal: result.uploaded + result.downloaded,
+      ));
+    }
+    _statusController.add(
+        RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
+  }
   ///
   /// Hintergrund: Auf iOS ist [AssetEntity.title] häufig null (werden nur mit
   /// `needTitle` geladen) und `asset.file` liefert für einzelne Assets (z. B.

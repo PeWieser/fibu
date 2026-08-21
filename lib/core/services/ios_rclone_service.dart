@@ -1019,9 +1019,9 @@ class IosRcloneService implements RcloneService {
       _loadVirtualState(Directory root) async {
     try {
       final f = File('${root.path}/mirror_state.json');
-      if (!await f.exists()) return (items: const [], blocked: <String>{});
+      if (!await f.exists()) return (items: const <VirtualMediaItem>[], blocked: <String>{});
       final decoded = jsonDecode(await f.readAsString());
-      if (decoded is! Map<String, dynamic>) return (items: const [], blocked: <String>{});
+      if (decoded is! Map<String, dynamic>) return (items: const <VirtualMediaItem>[], blocked: <String>{});
       final items = (decoded['items'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(VirtualMediaItem.fromJson)
@@ -1031,7 +1031,7 @@ class IosRcloneService implements RcloneService {
           .toSet();
       return (items: items, blocked: blocked);
     } catch (_) {
-      return (items: const [], blocked: <String>{});
+      return (items: const <VirtualMediaItem>[], blocked: <String>{});
     }
   }
 

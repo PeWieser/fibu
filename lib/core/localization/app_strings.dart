@@ -89,6 +89,43 @@ class AppStrings {
   String deleteDrivePrompt(String name) => isGerman
       ? 'Möchtest du die Verbindung zu "$name" wirklich trennen?'
       : 'Do you really want to disconnect from "$name"?';
+  // --- Remote-Registry: Umbenennen & Identität ---
+  String get renameDrive => isGerman ? 'Umbenennen' : 'Rename';
+  String get renameDriveTitle => isGerman ? 'Laufwerk umbenennen' : 'Rename Remote';
+  String get renameDriveDescription => isGerman
+      ? 'Der Name wird nur lokal in der App angezeigt. Verbindung, Zugangsdaten und Aufgaben bleiben unverändert.'
+      : 'The name is only displayed locally in the app. Connection, credentials and tasks stay unchanged.';
+  String driveRenamedSuccess(String name) => isGerman
+      ? 'Laufwerk heißt jetzt „$name“.'
+      : 'Remote is now named "$name".';
+  String deleteDriveTasksWarning(int count) => isGerman
+      ? (count == 1
+          ? 'Achtung: 1 Aufgabe nutzt dieses Laufwerk und schlägt danach fehl, bis du ihr ein neues Ziel gibst.'
+          : 'Achtung: $count Aufgaben nutzen dieses Laufwerk und schlagen danach fehl, bis du ihnen ein neues Ziel gibst.')
+      : (count == 1
+          ? 'Warning: 1 task uses this remote and will fail until you assign a new target.'
+          : 'Warning: $count tasks use this remote and will fail until you assign a new target.');
+  String get remoteMissingBadge =>
+      isGerman ? 'nicht gefunden' : 'missing';
+  String remoteMissingInTask(String id) => isGerman
+      ? 'Remote nicht mehr verbunden (Kennung: $id). Weise der Aufgabe ein neues Ziel zu — Verbindungen verwaltest du unter Cloud-Laufwerke.'
+      : 'Remote is no longer connected (id: $id). Assign a new target to this task — manage connections under Cloud Drives.';
+
+  // --- Aufgaben-Bearbeitung (Alben & Moduswechsel) ---
+  String get albumsSectionTitle => isGerman ? 'Alben' : 'Albums';
+  String get albumsEditNote => isGerman
+      ? 'Ohne Auswahl wird die gesamte Mediathek gesichert.'
+      : 'With nothing selected, the entire library is backed up.';
+  String get syncModeChangedNote => isGerman
+      ? 'Modus wird nach „Fertig“ aktiv.'
+      : 'Mode applies after you tap Done.';
+  String get mirrorAdoptionHint => isGerman
+      ? 'Beim ersten Spiegel-Lauf werden bereits gesicherte Cloud-Dateien übernommen — nichts wird erneut herunter- oder hochgeladen.'
+      : 'On the first mirror run, files already stored in the cloud are adopted — nothing is downloaded or uploaded again.';
+  String get mirrorDeletionWarningEdit => isGerman
+      ? 'Spiegelung ist 2-Wege: Lokal gelöschte Dateien werden auch in der Cloud entfernt.'
+      : 'Mirror is two-way: files deleted locally are also removed from the cloud.';
+
   String get oauthInfoNotice => isGerman
       ? 'Dieser Anbieter nutzt sichere Web-Authentifizierung (OAuth 2.0). Kein Passwort nötig — du wirst zur Anmeldung im Browser weitergeleitet.'
       : 'This provider uses secure OAuth 2.0. No password needed — you will be redirected to your browser to authenticate.';
@@ -264,24 +301,24 @@ class AppStrings {
       ? 'Wähle, ob die Dateien direkt im Stammverzeichnis oder in einem Unterordner in der Cloud gespeichert werden sollen.'
       : 'Choose whether files should be stored in the root directory or a subfolder in the cloud.';
 
-  // --- Sync Modes (Incremental vs Echo / Mirror with Two-Way Sync) ---
+  // --- Sync Modes (Incremental vs Mirror / Spiegelung, 2-Wege) ---
   String get syncModeLabel => isGerman ? 'Synchronisations-Modus' : 'Sync Mode';
   String get syncModeIncremental => isGerman ? 'Inkrementell' : 'Incremental';
   String get syncModeIncrementalDescription => isGerman
       ? 'Nur neue und geänderte Dateien hochladen. In der Cloud vorhandene Dateien bleiben immer erhalten (sicher).'
       : 'Upload only new and modified files. Remote cloud files are always preserved (safe).';
-  String get syncModeMirror => isGerman ? 'Echo-Modus (2-Wege-Spiegelung)' : 'Mirror Mode (2-Way Echo)';
+  String get syncModeMirror => isGerman ? 'Spiegelung (2-Wege Mirror-Sync)' : 'Mirror Sync (two-way)';
   String get syncModeMirrorDescription => isGerman
       ? 'Exakte 2-Wege-Spiegelung: Neue Dateien aus der Cloud werden auch lokal heruntergeladen. Dateien, die du lokal löschst, werden auch in der Cloud gelöscht!'
       : 'Exact 2-way mirror: New files from cloud are downloaded locally. Files deleted locally will also be deleted in the cloud!';
   String get syncModeBadgeIncremental => isGerman ? 'Inkrementell' : 'Incremental';
-  String get syncModeBadgeMirror => isGerman ? 'Echo (2-Wege)' : 'Echo (2-Way)';
+  String get syncModeBadgeMirror => isGerman ? 'Spiegelung' : 'Mirror Sync';
   String get syncModeTooltipIncremental => isGerman
       ? 'Modus Inkrementell: Neue Dateien hochladen, gelöschte Dateien in der Cloud behalten'
       : 'Incremental mode: Uploads new files, preserves deleted files in cloud';
   String get syncModeTooltipMirror => isGerman
-      ? 'Echo-Modus (2-Wege): Vollständiger Abgleich zwischen lokalem Ordner und Cloud inkl. Download neuer Cloud-Dateien und Löschabgleich'
-      : 'Echo mode (2-Way): Full synchronization between local and cloud including cloud downloads and delete mirroring';
+      ? 'Spiegelung (2-Wege): Vollständiger Abgleich zwischen lokalem Ordner und Cloud inkl. Download neuer Cloud-Dateien und Löschabgleich'
+      : 'Mirror mode (two-way): Full synchronization between local and cloud including cloud downloads and delete mirroring';
 
   String excludedFilesBadge(int count) => isGerman
       ? (count == 1 ? '1 Datei ausgeschlossen' : '$count Dateien ausgeschlossen')
@@ -440,7 +477,7 @@ class AppStrings {
       : 'Connect any cloud storage (Google Drive, OneDrive, S3, Mega, WebDAV etc.) and backup files with full flexibility.';
   String get onboardingFeature2Title => isGerman ? 'Automatische Synchronisation' : 'Automated Synchronization';
   String get onboardingFeature2Desc => isGerman
-      ? 'Automatische Zeitpläne, intelligentes Splitting und 2-Wege Echo-Spiegelung.'
+      ? 'Automatische Zeitpläne, intelligentes Splitting und 2-Wege-Spiegelung.'
       : 'Automated schedules, smart storage balancing, and 2-way mirror synchronization.';
   String get onboardingFeature3Title => isGerman ? 'Volle Kontrolle & Datenschutz' : 'Full Control & Privacy';
   String get onboardingFeature3Desc => isGerman

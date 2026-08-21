@@ -133,6 +133,17 @@ abstract class RcloneService {
   /// Deletes an existing remote configuration.
   Future<void> removeRemote(String name);
 
+  /// Returns the rclone backend type (`mega`, `drive`, …) of a configured
+  /// remote, read from the rclone config. null if unknown/unreadable.
+  /// Used by the app-side remote registry when adopting legacy sections.
+  Future<String?> remoteType(String name);
+
+  /// Markiert, dass beim NÄCHSTEN Mirror-Lauf bereits in der Cloud
+  /// vorhandene Dateien „adoptiert" werden sollen (kein Massen-Download beim
+  /// Wechsel Inkrementell → Spiegelung). Standard: keine Aktion – nur die
+  /// iOS-Implementierung (virtueller Mirror) überschreibt dies sinnvoll.
+  Future<void> markMirrorAdoption() async {}
+
   /// Queries storage quota for a specific remote.
   Future<QuotaInfo> getQuota(String remoteName);
 

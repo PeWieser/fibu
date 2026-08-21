@@ -1,6 +1,7 @@
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'secure_store_service.dart';
 
 /// Result of an OAuth authorization attempt.
 class OAuthResult {
@@ -30,20 +31,17 @@ class OAuthResult {
 /// Note: real OAuth needs a registered client_id/client_secret per provider.
 /// Those must be configured in the app settings before a login can complete.
 class OAuthService {
-  OAuthService({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
-
-  final FlutterSecureStorage _storage;
+  OAuthService();
 
   /// Callback URL scheme registered in Info.plist (CFBundleURLTypes).
   static const callbackScheme = 'fibuoauth';
   static const _keyPrefix = 'fibu_oauth_token_';
 
   Future<String?> getToken(String remoteName) =>
-      _storage.read(key: '$_keyPrefix$remoteName');
+      SecureStore.read('$_keyPrefix$remoteName');
 
   Future<void> clearToken(String remoteName) =>
-      _storage.delete(key: '$_keyPrefix$remoteName');
+      SecureStore.delete('$_keyPrefix$remoteName');
 
   /// Opens the provider authorization page in an in-app browser and stores the
   /// resulting token securely. Returns [OAuthResult.success] when authorized.
@@ -77,7 +75,7 @@ class OAuthService {
             'Kein Autorisierungscode im Callback gefunden.');
       }
 
-      await _storage.write(key: '$_keyPrefix$remoteName', value: token);
+      await SecureStore.write('$_keyPrefix$remoteName', token);
       return OAuthResult.success(token);
     } catch (e) {
       return OAuthResult.failure(

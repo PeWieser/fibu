@@ -6,5 +6,35 @@
 	<array>
 		<string>group.com.example.fibu</string>
 	</array>
+	<!--
+		Associated Domains (webcredentials): iOS schlägt im Passwort-Autofill
+		(Schlüsselbund) nur Einträge vor, deren Webseiten-Domain hier gelistet
+		ist — und ordnet neu gespeicherte Zugänge diesen Domains zu.
+		Apex + Wildcard, damit Subdomains (accounts.google.com, login.live.com,
+		www.mega.nz, …) ebenfalls matchen.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:mega.nz</string>
+		<string>webcredentials:*.mega.nz</string>
+		<string>webcredentials:google.com</string>
+		<string>webcredentials:*.google.com</string>
+		<string>webcredentials:dropbox.com</string>
+		<string>webcredentials:*.dropbox.com</string>
+		<string>webcredentials:pcloud.com</string>
+		<string>webcredentials:*.pcloud.com</string>
+		<string>webcredentials:live.com</string>
+		<string>webcredentials:*.live.com</string>
+		<string>webcredentials:microsoftonline.com</string>
+		<string>webcredentials:*.microsoftonline.com</string>
+		<string>webcredentials:box.com</string>
+		<string>webcredentials:*.box.com</string>
+		<string>webcredentials:yandex.com</string>
+		<string>webcredentials:*.yandex.com</string>
+		<string>webcredentials:yandex.ru</string>
+		<string>webcredentials:*.yandex.ru</string>
+		<string>webcredentials:backblaze.com</string>
+		<string>webcredentials:*.backblaze.com</string>
+	</array>
 </dict>
 </plist>

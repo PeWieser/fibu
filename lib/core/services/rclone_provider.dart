@@ -4,6 +4,7 @@ import 'rclone_service.dart';
 import 'mock_rclone_service.dart';
 import 'rclone_service_impl.dart';
 import 'ios_rclone_service.dart';
+import 'remote_registry_service.dart';
 
 /// Riverpod provider for the [RcloneService].
 /// Automatically swaps implementations depending on runtime platform or debug config.
@@ -28,8 +29,15 @@ final rcloneServiceProvider = Provider<RcloneService>((ref) {
 });
 
 /// Riverpod provider to load all remotes asynchronously.
-final remotesProvider = FutureProvider<List<String>>((ref) {
-  return ref.watch(rcloneServiceProvider).listRemotes();
+///
+/// Liefert die stabilen Remote-IDs (= rclone-Sektionsnamen) aus der
+/// App-Registry – NICHT mehr roh aus rclone. Die Registry adoptiert
+/// Alt-Sektionen und trennt Identität (ID) vom Anzeigenamen; Umbenennen
+/// eines Remote bricht dadurch keine Aufgaben mehr.
+/// Für UI-Anzeige bitte immer [remoteDisplayNameProvider] verwenden.
+final remotesProvider = FutureProvider<List<String>>((ref) async {
+  final entries = await ref.watch(remoteEntriesProvider.future);
+  return entries.map((e) => e.id).toList();
 });
 
 /// Riverpod provider to load quota for the first available remote.

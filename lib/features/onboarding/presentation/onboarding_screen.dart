@@ -8,6 +8,7 @@ import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import 'onboarding_controller.dart';
 
@@ -169,6 +170,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           : material.MaterialPageRoute<void>(builder: (_) => const CloudDrivesScreen()),
     );
     // Refresh the connected-remote count when returning.
+    ref.invalidate(remoteEntriesProvider);
     ref.invalidate(remotesProvider);
     if (mounted) setState(() {});
   }

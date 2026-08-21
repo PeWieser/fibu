@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/services/ios_rclone_service.dart';
 import '../../../core/services/app_log_service.dart';
@@ -59,6 +60,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ref.invalidate(remoteQuotaProvider(remote));
         ref.invalidate(remoteFibuUsageProvider(remote));
       }
+      // Registry zuerst — remotesProvider hängt davon ab.
+      ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
       await ref.read(remotesProvider.future);
@@ -221,7 +224,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       separatorBuilder: (_, __) => SizedBox(height: theme.sm),
       itemBuilder: (context, index) {
         final remote = remotes[index];
-        final type = _getProviderType(remote);
+        final entry = ref.watch(remoteEntryProvider(remote));
+        final displayName = entry?.name ?? remote;
+        final type = RemoteEntry.prettyType(entry?.type ?? '');
         final isDeleting = _deletingRemote == remote;
 
         return GestureDetector(
@@ -239,7 +244,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(remote, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       SizedBox(height: theme.xs),
                       Text(type, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                       _remoteStorageInfo(theme, strings, remote),
@@ -419,10 +424,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       children: [
         for (final remote in remotes)
           () {
-            final type = _getProviderType(remote);
+            final entry = ref.watch(remoteEntryProvider(remote));
+            final displayName = entry?.name ?? remote;
+            final type = RemoteEntry.prettyType(entry?.type ?? '');
             final isDeleting = _deletingRemote == remote;
             return cupertino.CupertinoListTile.notched(
-              title: Text(remote),
+              title: Text(displayName),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -570,7 +577,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       separatorBuilder: (_, __) => SizedBox(height: theme.sm),
       itemBuilder: (context, index) {
         final remote = remotes[index];
-        final type = _getProviderType(remote);
+        final entry = ref.watch(remoteEntryProvider(remote));
+        final displayName = entry?.name ?? remote;
+        final type = RemoteEntry.prettyType(entry?.type ?? '');
         final isDeleting = _deletingRemote == remote;
 
         return material.Card(
@@ -584,7 +593,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
             leading: Icon(material.Icons.cloud_queue,
                 color: theme.accent, semanticLabel: 'Cloud Remote'),
-            title: Text(remote),
+            title: Text(displayName),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -650,45 +659,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     );
   }
 
-  String _getProviderType(String name) {
-    final lowerName = name.toLowerCase();
-    if (lowerName.contains('google photo') || lowerName.contains('photos')) {
-      return 'Google Photos';
-    } else if (lowerName.contains('gdrive') || lowerName.contains('drive') || lowerName.contains('google')) {
-      return 'Google Drive';
-    } else if (lowerName.contains('onedrive') || lowerName.contains('one') || lowerName.contains('odrive')) {
-      return 'Microsoft OneDrive';
-    } else if (lowerName.contains('dropbox')) {
-      return 'Dropbox';
-    } else if (lowerName.contains('pcloud')) {
-      return 'pCloud';
-    } else if (lowerName.contains('yandex')) {
-      return 'Yandex Disk';
-    } else if (lowerName.contains('box')) {
-      return 'Box';
-    } else if (lowerName.contains('mega')) {
-      return 'Mega.nz';
-    } else if (lowerName.contains('minio')) {
-      return 'MinIO S3';
-    } else if (lowerName.contains('wasabi')) {
-      return 'Wasabi S3';
-    } else if (lowerName.contains('backblaze') || lowerName.contains('b2')) {
-      return 'Backblaze B2';
-    } else if (lowerName.contains('s3') || lowerName.contains('aws')) {
-      return 'Amazon S3';
-    } else if (lowerName.contains('nextcloud')) {
-      return 'Nextcloud (WebDAV)';
-    } else if (lowerName.contains('owncloud')) {
-      return 'ownCloud (WebDAV)';
-    } else if (lowerName.contains('webdav')) {
-      return 'WebDAV';
-    } else if (lowerName.contains('sftp')) {
-      return 'SFTP';
-    } else if (lowerName.contains('ftp')) {
-      return 'FTP';
-    }
-    return 'Cloud Storage Remote';
-  }
 
   // --- Remote Deletion Confirmation (Destructive Action Rule 6) ---
   /// Aktionsmenü nach Tap auf einen Remote — Übersicht bleibt clean,
@@ -697,12 +667,21 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       BuildContext context, String remote, TargetPlatform platform) async {
     final strings = context.strings;
     final theme = context.theme;
+    // Anzeigename aus der App-Registry (Fallback: Kennung).
+    final displayName = ref.read(remoteDisplayNameProvider(remote));
     if (platform == TargetPlatform.iOS) {
       await cupertino.showCupertinoModalPopup(
         context: context,
         builder: (sheetCtx) => cupertino.CupertinoActionSheet(
-          title: Text(remote),
+          title: Text(displayName),
           actions: [
+            cupertino.CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(sheetCtx);
+                await _showRenameDialog(context, remote, platform);
+              },
+              child: Text(strings.renameDrive),
+            ),
             cupertino.CupertinoActionSheetAction(
               isDestructiveAction: true,
               onPressed: () async {
@@ -727,8 +706,17 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              material.ListTile(title: Text(remote)),
+              material.ListTile(title: Text(displayName)),
               const material.Divider(height: 1),
+              material.ListTile(
+                leading: Icon(material.Icons.drive_file_rename_outline,
+                    color: theme.accent),
+                title: Text(strings.renameDrive),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  await _showRenameDialog(context, remote, platform);
+                },
+              ),
               material.ListTile(
                 leading: Icon(material.Icons.link_off, color: theme.error),
                 title: Text(strings.disconnect,
@@ -745,17 +733,205 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ),
       );
     } else {
-      final confirmed =
-          await _confirmDeleteRemoteAsync(context, remote, platform);
-      if (confirmed) _performDelete(remote);
+      // Windows: Aktionswahl über ContentDialog (Umbenennen / Trennen).
+      final action = await fluent.showDialog<String>(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
+          title: fluent.Text(displayName),
+          actions: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.Button(
+                  onPressed: () => Navigator.pop(dialogCtx, 'rename'),
+                  child: Text(strings.renameDrive),
+                ),
+              ),
+            ),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.FilledButton(
+                  style: fluent.ButtonStyle(
+                    backgroundColor: WidgetStatePropertyAll(theme.error),
+                  ),
+                  onPressed: () => Navigator.pop(dialogCtx, 'disconnect'),
+                  child: Text(strings.disconnect,
+                      style: const TextStyle(color: Color(0xFFFFFFFF))),
+                ),
+              ),
+            ),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.Button(
+                  onPressed: () => Navigator.pop(dialogCtx, null),
+                  child: Text(strings.cancel),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (action == 'rename') {
+        await _showRenameDialog(context, remote, platform);
+      } else if (action == 'disconnect') {
+        final confirmed =
+            await _confirmDeleteRemoteAsync(context, remote, platform);
+        if (confirmed) _performDelete(remote);
+      }
     }
+  }
+
+  /// Umbenennen-Dialog: ändert NUR den lokalen Anzeigenamen in der Registry —
+  /// rclone.conf, Verbindung und alle Aufgaben-Referenzen bleiben unberührt
+  /// (das war früher die Fehlerquelle „Remote nicht gefunden“).
+  Future<void> _showRenameDialog(
+      BuildContext context, String remoteId, TargetPlatform platform) async {
+    final strings = context.strings;
+    final theme = context.theme;
+    final currentName = ref.read(remoteDisplayNameProvider(remoteId));
+    final controller = TextEditingController(text: currentName);
+    String? newName;
+
+    if (platform == TargetPlatform.iOS) {
+      newName = await cupertino.showCupertinoDialog<String>(
+        context: context,
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          title: Text(strings.renameDriveTitle),
+          content: Column(
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                strings.renameDriveDescription,
+                style: TextStyle(fontSize: 12, color: theme.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              cupertino.CupertinoTextField(
+                controller: controller,
+                autofocus: true,
+                autocorrect: false,
+              ),
+            ],
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.cancel),
+            ),
+            cupertino.CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.pop(dialogCtx, controller.text.trim()),
+              child: Text(strings.save),
+            ),
+          ],
+        ),
+      );
+    } else if (platform == TargetPlatform.android) {
+      newName = await material.showDialog<String>(
+        context: context,
+        builder: (dialogCtx) => material.AlertDialog(
+          title: material.Text(strings.renameDriveTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.Text(
+                strings.renameDriveDescription,
+                style: material.TextStyle(fontSize: 12, color: theme.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              material.TextField(
+                controller: controller,
+                autofocus: true,
+                autocorrect: false,
+                decoration: const material.InputDecoration(),
+              ),
+            ],
+          ),
+          actions: [
+            material.TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: material.Text(strings.cancel),
+            ),
+            material.FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx, controller.text.trim()),
+              child: material.Text(strings.save),
+            ),
+          ],
+        ),
+      );
+    } else {
+      newName = await fluent.showDialog<String>(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
+          title: fluent.Text(strings.renameDriveTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(strings.renameDriveDescription,
+                  style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+              const SizedBox(height: 12),
+              fluent.TextBox(controller: controller, autofocus: true),
+            ],
+          ),
+          actions: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(dialogCtx, controller.text.trim()),
+                  child: Text(strings.save),
+                ),
+              ),
+            ),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.Button(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: Text(strings.cancel),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final trimmed = newName?.trim() ?? '';
+    if (trimmed.isEmpty || trimmed == currentName) return;
+    await ref
+        .read(remoteRegistryServiceProvider)
+        .rename(remoteId, trimmed);
+    if (!mounted) return;
+    ref.invalidate(remoteEntriesProvider);
+    ref.invalidate(remotesProvider);
+    _showNotification(strings.driveRenamedSuccess(trimmed), isError: false);
   }
 
   Future<bool> _confirmDeleteRemoteAsync(
       BuildContext context, String remoteName, TargetPlatform platform) async {
     final strings = context.strings;
+    // Immer den Anzeigenamen zeigen (Registry), nie die interne Kennung.
+    final displayName = ref.read(remoteDisplayNameProvider(remoteName));
+    // Transparenz vor dem Trennen: wie viele Aufgaben verlieren ihr Ziel?
+    final affectedTasks = ref
+        .read(tasksListProvider)
+        .where((t) => t.targetRemotes.contains(remoteName))
+        .length;
     final title = strings.deleteDriveConfirmTitle;
-    final message = '${strings.deleteDrivePrompt(remoteName)}\n\n${strings.deleteDriveRule6Notice}';
+    var message =
+        '${strings.deleteDrivePrompt(displayName)}\n\n${strings.deleteDriveRule6Notice}';
+    if (affectedTasks > 0) {
+      message = '$message\n\n${strings.deleteDriveTasksWarning(affectedTasks)}';
+    }
 
     if (platform == TargetPlatform.windows) {
       final result = await fluent.showDialog<bool>(
@@ -769,10 +945,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
                 child: fluent.FilledButton(
-                  onPressed: () async {
-                    Navigator.pop(dialogCtx, true);
-                    await _performDelete(remoteName);
-                  },
+                  onPressed: () => Navigator.pop(dialogCtx, true),
                   child: Text(
                     strings.disconnect,
                     style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
@@ -810,10 +983,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             ),
             cupertino.CupertinoDialogAction(
               isDestructiveAction: true,
-              onPressed: () async {
-                Navigator.pop(dialogCtx, true);
-                await _performDelete(remoteName);
-              },
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: Text(strings.disconnect),
             ),
           ],
@@ -833,10 +1003,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             ),
             material.FilledButton(
               style: material.FilledButton.styleFrom(backgroundColor: context.theme.error),
-              onPressed: () async {
-                Navigator.pop(dialogCtx, true);
-                await _performDelete(remoteName);
-              },
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: Text(
                 strings.disconnect,
                 style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
@@ -860,11 +1027,21 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       _deletingRemote = remoteName;
     });
 
+    final displayName = ref.read(remoteDisplayNameProvider(remoteName));
     try {
       await ref.read(rcloneServiceProvider).removeRemote(remoteName);
+      // Registry-Eintrag entfernen (nur die Kennung löscht rclone bereits).
+      await ref.read(remoteRegistryServiceProvider).unregister(remoteName);
+      // Geparkte OAuth-Tokens zum alten Namen/zur Kennung wegräumen.
+      try {
+        final oauth = ref.read(oauthServiceProvider);
+        await oauth.clearToken(remoteName);
+        await oauth.clearToken(displayName);
+      } catch (_) {}
+      ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
-      _showNotification(strings.driveDeletedSuccess(remoteName), isError: false);
+      _showNotification(strings.driveDeletedSuccess(displayName), isError: false);
     } catch (e) {
       _showNotification(e.toString(), isError: true);
     } finally {
@@ -1576,10 +1753,14 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     try {
       final config = await _buildProviderConfig();
 
-      // rclone's config/create expects the backend type name (e.g. `mega`,
-      // `drive`, `s3`), never the human readable provider display name.
-      await ref.read(rcloneServiceProvider).addRemote(
-        name: name,
+      // Identität & Anzeige getrennt: Die Registry generiert eine stabile,
+      // interne Sektionskennung (rclone.conf) und merkt sich den gewählten
+      // Namen als reinen Anzeigenamen. So kann ein Remote später umbenannt
+      // werden, ohne dass Aufgaben ihre Ziele verlieren.
+      // rclone's config/create erwartet den Backend-Typ (mega, drive, s3),
+      // nie den lesbaren Provider-Namen.
+      await ref.read(remoteRegistryServiceProvider).createRemote(
+        displayName: name,
         type: _selectedRcloneType,
         config: config,
       );
@@ -1605,6 +1786,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         );
       }
 
+      ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
 

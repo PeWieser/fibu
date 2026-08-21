@@ -24,8 +24,9 @@ dependencies:
   open_filex: ^4.5.0
   # In-app browser for cloud provider OAuth (Google Drive, OneDrive, Dropbox, ...).
   flutter_web_auth_2: ^4.1.0
-  # Secure storage (Keychain on iOS / Keystore on Android) for OAuth tokens.
-  flutter_secure_storage: ^9.2.2
+  # NOTE: No secure-storage plugin on purpose — iOS uses the native Apple
+  # Keychain directly via the `fibu/keychain` MethodChannel (see
+  # lib/core/services/secure_store_service.dart).
   # Background execution for scheduled syncs (BGTaskScheduler on iOS / WorkManager on Android).
   workmanager: ^0.5.2
   # iOS Home-Screen Quick Actions (long press app icon -> "Jetzt synchronisieren").

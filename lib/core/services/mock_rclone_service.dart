@@ -31,6 +31,12 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  Future<String?> remoteType(String name) async => null;
+
+  @override
+  Future<void> markMirrorAdoption() async {}
+
+  @override
   Future<void> testConnection({
     required String type,
     required Map<String, String> config,

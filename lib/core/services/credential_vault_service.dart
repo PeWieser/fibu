@@ -1,8 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 import 'app_log_service.dart';
+import 'secure_store_service.dart';
 
 /// Ein gespeicherter Zugang für einen Cloud-Provider (Benutzername, Passwort,
 /// optional Host/Port).
@@ -39,24 +38,23 @@ class SavedCredential {
   String get label => host.isNotEmpty ? '$user @ $host' : user;
 }
 
-/// Speichert Credentials pro rclone-Backend-Typ in der sicheren
-/// Plattform-Ablage (iOS: Keychain, Android: Keystore, Windows: DPAPI).
+/// Speichert Credentials pro rclone-Backend-Typ im Apple-Schlüsselbund
+/// (iOS/macOS, nativ via [SecureStore]) bzw. in der privaten Ablage-Datei
+/// auf anderen Plattformen.
 ///
 /// Hintergrund: iOSs systemseitige Schlüsselbund-Autofill kann Einträge nur
-/// pro App und per Associated Domain matchen – für Dritt-Service-Logins wie
-/// MEGA, S3, WebDAV oder SFTP kann die App keine Web-Assoziation liefern.
-/// Darum verwaltet Fibu eine eigene, je Provider gefilterte Vorschlagsliste:
-/// Nach einem erfolgreichen Remote-Setup wird der Zugang abgelegt und beim
-/// nächsten Hinzufügen desselben Provider-Typs direkt wieder angeboten.
+/// pro App und per Associated Domain matchen – darum verwaltet Fibu zusätzlich
+/// eine eigene, je Provider gefilterte Vorschlagsliste: Nach einem
+/// erfolgreichen Remote-Setup wird der Zugang abgelegt und beim nächsten
+/// Hinzufügen desselben Provider-Typs direkt wieder angeboten.
 ///
-/// Sicherheit: Inhalte liegen im Secure Storage (Keychain), nicht in
-/// Klartext-Dateien, und werden niemals ins Protokoll geschrieben.
+/// Sicherheit: Inhalte liegen im Schlüsselbund, nicht in Klartext-Dateien,
+/// und werden niemals ins Protokoll geschrieben.
 class CredentialVaultService {
   CredentialVaultService._();
 
   static final CredentialVaultService instance = CredentialVaultService._();
 
-  static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const int maxEntriesPerProvider = 5;
 
   static String _keyFor(String rcloneType) =>
@@ -65,7 +63,7 @@ class CredentialVaultService {
   /// Liest die gespeicherten Zugänge für [rcloneType] (z. B. `mega`, `s3`).
   Future<List<SavedCredential>> listFor(String rcloneType) async {
     try {
-      final raw = await _storage.read(key: _keyFor(rcloneType));
+      final raw = await SecureStore.read(_keyFor(rcloneType));
       if (raw == null || raw.isEmpty) return const [];
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
@@ -95,9 +93,9 @@ class CredentialVaultService {
       final capped = updated.length > maxEntriesPerProvider
           ? updated.sublist(0, maxEntriesPerProvider)
           : updated;
-      await _storage.write(
-        key: _keyFor(rcloneType),
-        value: jsonEncode(capped.map((c) => c.toJson()).toList()),
+      await SecureStore.write(
+        _keyFor(rcloneType),
+        jsonEncode(capped.map((c) => c.toJson()).toList()),
       );
       AppLog.info('vault',
           'Zugang für Provider „$rcloneType“ gespeichert (Benutzer: ${cred.user})');

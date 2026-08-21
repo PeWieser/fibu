@@ -172,7 +172,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     }
 
     final isEcho = task.syncMode == SyncMode.mirror;
-    final modeLabel = isEcho ? '2-Way Mirror (Echo)' : 'Incremental';
+    final modeLabel = isEcho ? 'Mirror-Sync (2-Wege)' : 'Incremental';
     final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
     state = state.copyWith(
       logs: [...state.logs, startMsg],

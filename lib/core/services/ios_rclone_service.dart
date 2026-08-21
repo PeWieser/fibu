@@ -123,6 +123,21 @@ class IosRcloneService implements RcloneService {
     AppLog.info('remote', 'Remote "$name" gelöscht');
   }
 
+  /// Liest den echten Backend-Typ einer Sektion aus der rclone.conf
+  /// (config/get) — Grundlage für die Provider-Anzeige in der Remote-Registry
+  /// anstelle der früheren Namensraterei.
+  @override
+  Future<String?> remoteType(String name) async {
+    await _ensureEngine();
+    try {
+      final res = await _rc.rpc('config/get', {'name': _normalizeRemoteName(name)});
+      final type = res['type']?.toString() ?? '';
+      return type.isEmpty ? null : type;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<String> obscurePassword(String plainPassword) async {
     await _ensureEngine();
@@ -1022,6 +1037,22 @@ class IosRcloneService implements RcloneService {
   // Virtueller Mirror (manifest-only / Option 3)
   // ---------------------------------------------------------------------------
 
+  /// Modus-Wechsel Inkrementell → Spiegelung: Beim NÄCHSTEN Mirror-Lauf
+  /// werden bereits in der Cloud vorhandene Dateien adoptiert (in die
+  /// Adoptionsliste übernommen), statt alle in die Mediathek zu laden.
+  @override
+  Future<void> markMirrorAdoption() async {
+    try {
+      final root = await _virtualStateRoot();
+      final flag = File('${root.path}/adopt_orphans.flag');
+      await flag.writeAsString(DateTime.now().toIso8601String());
+      AppLog.info('sync',
+          'Mirror-Adoption markiert: Bestehende Cloud-Dateien werden beim nächsten Lauf übernommen, nicht erneut geladen');
+    } catch (e) {
+      AppLog.warn('sync', 'Adoptions-Marker konnte nicht gesetzt werden: $e');
+    }
+  }
+
   /// Ort für den Mirror-Zustand: iOS `Library/Application Support` –
   /// absichtlich NICHT in Dokumente, damit Nutzer darauf keinen Zugriff haben
   /// (via UIFileSharingEnabled zur Files-App) und nichts sichtbar löschen.
@@ -1034,14 +1065,24 @@ class IosRcloneService implements RcloneService {
     return root;
   }
 
-  /// Liest den persistierten Mirror-Zustand (rel → Metadaten + geblockte Pfade).
-  Future<({List<VirtualMediaItem> items, Set<String> blocked})>
-      _loadVirtualState(Directory root) async {
+  /// Liest den persistierten Mirror-Zustand (rel → Metadaten, geblockte
+  /// Pfade sowie adoptierte Cloud-Dateien aus einem Moduswechsel).
+  Future<
+      ({
+        List<VirtualMediaItem> items,
+        Set<String> blocked,
+        Set<String> adopted,
+      })> _loadVirtualState(Directory root) async {
+    const empty = (
+      items: <VirtualMediaItem>[],
+      blocked: <String>{},
+      adopted: <String>{},
+    );
     try {
       final f = File('${root.path}/mirror_state.json');
-      if (!await f.exists()) return (items: const <VirtualMediaItem>[], blocked: <String>{});
+      if (!await f.exists()) return empty;
       final decoded = jsonDecode(await f.readAsString());
-      if (decoded is! Map<String, dynamic>) return (items: const <VirtualMediaItem>[], blocked: <String>{});
+      if (decoded is! Map<String, dynamic>) return empty;
       final items = (decoded['items'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(VirtualMediaItem.fromJson)
@@ -1049,20 +1090,25 @@ class IosRcloneService implements RcloneService {
       final blocked = (decoded['blocked'] as List<dynamic>? ?? const [])
           .whereType<String>()
           .toSet();
-      return (items: items, blocked: blocked);
+      final adopted = (decoded['adopted'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toSet();
+      return (items: items, blocked: blocked, adopted: adopted);
     } catch (_) {
-      return (items: const <VirtualMediaItem>[], blocked: <String>{});
+      return empty;
     }
   }
 
-  Future<void> _saveVirtualState(
-      Directory root, List<Map<String, dynamic>> items, Set<String> blocked) async {
+  Future<void> _saveVirtualState(Directory root,
+      List<Map<String, dynamic>> items, Set<String> blocked,
+      [Set<String> adopted = const {}]) async {
     try {
       final f = File('${root.path}/mirror_state.json');
       await f.writeAsString(jsonEncode({
         'writtenAt': DateTime.now().toIso8601String(),
         'items': items,
         'blocked': blocked.toList(),
+        'adopted': adopted.toList(),
       }));
     } catch (e) {
       AppLog.warn('sync', 'Mirror-Zustand konnte nicht gespeichert werden: $e');
@@ -1233,6 +1279,20 @@ class IosRcloneService implements RcloneService {
     final stateRoot = await _virtualStateRoot();
     final state = await _loadVirtualState(stateRoot);
     final blocked = state.blocked;
+    final adopted = state.adopted;
+
+    // Modus-Wechsel-Marker (Inkrementell → Spiegelung): in diesem einen Lauf
+    // Cloud-only-Dateien ADOPTIEREN statt sie alle in die Mediathek zu laden.
+    var adoptOrphans = false;
+    try {
+      final flag = File('${stateRoot.path}/adopt_orphans.flag');
+      if (await flag.exists()) {
+        adoptOrphans = true;
+        await flag.delete();
+        AppLog.info('sync',
+            'Adoption aktiv: vorhandene Cloud-Dateien werden übernommen (kein erneuter Download, kein Löschen)');
+      }
+    } catch (_) {}
 
     // Lokale Lösch-Erkennung ohne Dateisystem-Spiegel: Pfade, die im alten
     // Zustand standen und jetzt fehlen ─→ Tombstone (nach Safety-Brake).
@@ -1284,10 +1344,12 @@ class IosRcloneService implements RcloneService {
       remoteName: remoteName,
       remotePath: remotePath,
       blockedRels: blocked,
+      adoptedRels: adopted,
+      adoptOrphans: adoptOrphans,
       exportForUpload: exportForUpload,
       importDownloaded: importDownloaded,
       persistLocalState: (entries) =>
-          _saveVirtualState(stateRoot, entries, blocked),
+          _saveVirtualState(stateRoot, entries, blocked, adopted),
       trash: TrashService(this),
       onProgress: (phase, item, done, total) {
         if (progress.isClosed) return;

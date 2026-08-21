@@ -57,6 +57,11 @@ class VirtualMirrorSyncEngine {
   /// [persistLocalState]: Zustandsliste speichern.
   /// [blockedRels]: Pfade, die nie mehr hochgeladen werden sollen (remote
   /// gelöscht; wir löschen Nutzer-Mediathekeninhalte absichtlich nie).
+  /// [adoptedRels]: persistente Menge von Cloud-Dateien, die als adoptiert
+  /// gelten (nur-remote, aber bewusst NICHT herunterladen/löschen — entsteht
+  /// beim Moduswechsel Inkrementell → Spiegelung).
+  /// [adoptOrphans]: einmaliger Baseline-Lauf — alle Cloud-only-Dateien in
+  /// [adoptedRels] aufnehmen statt sie herunterzuladen.
   /// Rückgabewert: MirrorSyncResult (gleiche Zähler wie bei FS-Mirror).
   Future<MirrorSyncResult> sync({
     required Map<String, VirtualMediaItem> localItems,
@@ -64,6 +69,8 @@ class VirtualMirrorSyncEngine {
     required String remoteName,
     required String remotePath,
     required Set<String> blockedRels,
+    Set<String>? adoptedRels,
+    bool adoptOrphans = false,
     required Future<File?> Function(VirtualMediaItem item) exportForUpload,
     required Future<void> Function(List<File> files, List<String> rels) importDownloaded,
     required Future<void> Function(List<Map<String, dynamic>> state) persistLocalState,
@@ -162,14 +169,32 @@ class VirtualMirrorSyncEngine {
 
     // ---------- 4) Cloud-only-Dateien herunterladen --------------------------
     final toDownload = <MapEntry<String, RcloneFileInfo>>[];
+    var adoptedNow = 0;
     for (final entry in remoteFiles.entries) {
       final rel = entry.key;
       if (entry.value.isDir) continue;
       if (rel.startsWith('.fibu') || rel.startsWith("$remotePath/.fibu")) continue;
       if (merged.containsKey(rel)) continue;
       if (localItems.containsKey(rel)) continue;
+      // Adoptierte Dateien: nur-remote ist OK — nie laden, nie anfassen.
+      if (adoptedRels != null && adoptedRels.contains(rel)) continue;
+      if (adoptOrphans && adoptedRels != null) {
+        adoptedRels.add(rel);
+        adoptedNow++;
+        continue;
+      }
       toDownload.add(entry);
     }
+    if (adoptedNow > 0) {
+      AppLog.info('sync',
+          'Adoption (Moduswechsel): $adoptedNow bestehende Cloud-Dateien übernommen — kein Download in die Mediathek');
+    }
+    // Adoptionsliste aufräumen: verschwundene, tombstonierte oder inzwischen
+    // lokal vorhandene Einträge verlassen die Liste wieder.
+    adoptedRels?.removeWhere((rel) =>
+        !remoteFiles.containsKey(rel) ||
+        merged.containsKey(rel) ||
+        localItems.containsKey(rel));
     if (toDownload.isNotEmpty) {
       AppLog.info('sync', 'Virtual-Mirror Download: ${toDownload.length} Dateien ← $remoteName:$remotePath');
     }

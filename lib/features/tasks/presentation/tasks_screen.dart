@@ -14,6 +14,7 @@ import '../../../theme/theme.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../core/localization/app_strings.dart';
 import 'tasks_controller.dart';
@@ -833,6 +834,30 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     }
   }
 
+  /// Anzeigeliste der wählbaren Ziel-Remotes (Registry-IDs) plus evtl.
+  /// verwaiste, in der Aufgabe gespeicherte Referenzen ans Ende.
+  List<String> _wizardRemoteIds() {
+    final entries = ref.watch(remoteEntriesProvider).valueOrNull ?? const [];
+    final known = entries.isNotEmpty
+        ? entries.map((e) => e.id).toList()
+        : TasksScreen._resolveRemotesList(ref);
+    final ids = [...known];
+    for (final sel in _selectedRemotes) {
+      if (!ids.contains(sel)) ids.add(sel);
+    }
+    return ids;
+  }
+
+  /// Zeilen-Label: „Name · Provider“ — verwaiste Kennungen mit Hinweis.
+  String _remoteLabel(String id) {
+    final entries =
+        ref.read(remoteEntriesProvider).valueOrNull ?? const [];
+    for (final e in entries) {
+      if (e.id == id) return '${e.name} · ${RemoteEntry.prettyType(e.type)}';
+    }
+    return '$id (${context.strings.remoteMissingBadge})';
+  }
+
   Future<void> _loadAlbums() async {
     try {
       setState(() => _loadingAlbums = true);
@@ -1324,7 +1349,10 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   Widget build(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
-    final remotesList = TasksScreen._resolveRemotesList(ref);
+    // Registry-basierte Liste der Remote-IDs. In der Aufgabe noch
+    // vermerkte, inzwischen getrennte Remotes bleiben sichtbar (Badge),
+    // damit das Ziel bewusst neu gewählt werden kann.
+    final remotesList = _wizardRemoteIds();
 
     if (widget.platform == TargetPlatform.iOS) {
       return _buildIOSLayout(context, theme, strings, remotesList);
@@ -1749,7 +1777,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
                 padding: EdgeInsets.symmetric(vertical: theme.xs / 2),
                 child: fluent.Checkbox(
                   checked: isChecked,
-                  content: Text(remote),
+                  content: Text(_remoteLabel(remote)),
                   onChanged: (val) {
                     setState(() {
                       if (val == true) {
@@ -2537,7 +2565,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             children: remotesList.map((remote) {
               final isChecked = _selectedRemotes.contains(remote);
               return cupertino.CupertinoListTile(
-                title: Text(remote, style: const TextStyle(fontSize: 14)),
+                title: Text(_remoteLabel(remote), style: const TextStyle(fontSize: 14)),
                 trailing: isChecked
                     ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid, color: theme.accent, size: 22)
                     : Icon(cupertino.CupertinoIcons.circle, color: theme.textSecondary, size: 22),
@@ -3057,7 +3085,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             child: Column(
               children: remotesList.map((remote) {
                 return material.CheckboxListTile(
-                  title: Text(remote, style: const TextStyle(fontSize: 13)),
+                  title: Text(_remoteLabel(remote), style: const TextStyle(fontSize: 13)),
                   value: _selectedRemotes.contains(remote),
                   dense: true,
                   onChanged: (val) {

@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/file_viewer_service.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../theme/theme.dart';
@@ -190,6 +191,9 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       _loadFiles();
     }
   }
+
+  /// Anzeigename (Registry) für eine Remote-Kennung.
+  String _remoteLabel(String id) => ref.watch(remoteDisplayNameProvider(id));
 
   void _changeRemote(String? remoteName) {
     if (remoteName != null && remoteName != _selectedRemote) {
@@ -512,7 +516,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                     children: [
                       _buildDetailRow(strings.filePath, '/$fullFilePath', theme),
                       SizedBox(height: theme.xs),
-                      _buildDetailRow(strings.cloudRemote, _selectedRemote ?? '-', theme),
+                      _buildDetailRow(strings.cloudRemote, _selectedRemote == null ? '-' : _remoteLabel(_selectedRemote!), theme),
                       SizedBox(height: theme.xs),
                       _buildDetailRow(strings.metadataMimeType, mimeType, theme),
                       SizedBox(height: theme.xs),
@@ -1052,7 +1056,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                       value: _selectedRemote,
                       items: remotes.map((r) => fluent.ComboBoxItem(
                         value: r,
-                        child: Text(r, style: TextStyle(color: theme.textPrimary)),
+                        child: Text(_remoteLabel(r), style: TextStyle(color: theme.textPrimary)),
                       )).toList(),
                       onChanged: _changeRemote,
                     ),
@@ -1144,7 +1148,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                     for (final r in remotes)
                       r: Padding(
                         padding: EdgeInsets.symmetric(vertical: theme.xs, horizontal: theme.sm),
-                        child: Text(r, style: TextStyle(fontSize: 13, color: theme.textPrimary)),
+                        child: Text(_remoteLabel(r), style: TextStyle(fontSize: 13, color: theme.textPrimary)),
                       ),
                   },
                   onValueChanged: _changeRemote,
@@ -1171,7 +1175,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                                   _changeRemote(r);
                                 },
                                 child: Text(
-                                  r,
+                                  _remoteLabel(r),
                                   style: TextStyle(
                                     fontWeight: r == _selectedRemote ? FontWeight.bold : FontWeight.normal,
                                     color: r == _selectedRemote ? theme.accent : theme.textPrimary,
@@ -1188,7 +1192,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(_selectedRemote ?? '', style: TextStyle(color: theme.textPrimary, fontSize: 14)),
+                            Text(_selectedRemote == null ? '' : _remoteLabel(_selectedRemote!), style: TextStyle(color: theme.textPrimary, fontSize: 14)),
                             Icon(cupertino.CupertinoIcons.chevron_down, size: 16, color: theme.textSecondary, semanticLabel: strings.remoteDriveSelectorLabel),
                           ],
                         ),
@@ -1270,7 +1274,7 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                         ),
                         items: remotes.map((r) => material.DropdownMenuItem(
                           value: r,
-                          child: Text(r, style: TextStyle(color: theme.textPrimary)),
+                          child: Text(_remoteLabel(r), style: TextStyle(color: theme.textPrimary)),
                         )).toList(),
                         onChanged: _changeRemote,
                       ),

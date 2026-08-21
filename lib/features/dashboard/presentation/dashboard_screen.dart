@@ -12,6 +12,7 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import 'dashboard_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
@@ -52,6 +53,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     setState(() => _isRefreshing = true);
     _spinController.repeat();
 
+    ref.invalidate(remoteEntriesProvider);
     ref.invalidate(remotesProvider);
     ref.invalidate(primaryQuotaProvider);
 

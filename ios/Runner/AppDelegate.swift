@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import Security
 #if canImport(workmanager)
 import workmanager
 #endif
@@ -52,6 +53,9 @@ import Rclone
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WidgetStatusChannel") {
       WidgetStatusChannel.register(with: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KeychainChannel") {
+      KeychainChannel.register(with: registrar.messenger())
+    }
   }
 }
 
@@ -84,6 +88,76 @@ final class WidgetStatusChannel: NSObject {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+}
+
+/// Channel `fibu/keychain`: direkter Apple-Schlüsselbund-Zugriff
+/// (Security.framework, kSecClassGenericPassword) — ersetzt das zuvor
+/// verwendete flutter_secure_storage-Plugin komplett.
+///
+/// Methoden: read {key} → String?, write {key,value}, delete {key}.
+/// Ablage: service = "fibu.secure", account = key. Bar­werte werden nie
+/// geloggt; Zugriffsklasse AfterFirstUnlockThisDeviceOnly, damit
+/// Hintergrund-Syncs lesen können, aber nichts das Gerät per Backup verlässt.
+final class KeychainChannel: NSObject {
+  private static let service = "fibu.secure"
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "fibu/keychain", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard let args = call.arguments as? [String: Any],
+            let key = args["key"] as? String, !key.isEmpty else {
+        result(FlutterError(code: "bad_args", message: "key missing", details: nil))
+        return
+      }
+      switch call.method {
+      case "read":
+        result(readValue(account: key))
+      case "write":
+        guard let value = args["value"] as? String else {
+          result(FlutterError(code: "bad_args", message: "value missing", details: nil))
+          return
+        }
+        writeValue(account: key, value: value)
+        result(nil)
+      case "delete":
+        deleteValue(account: key)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private static func baseQuery(account: String) -> [String: Any] {
+    [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: account,
+    ]
+  }
+
+  private static func readValue(account: String) -> String? {
+    var query = baseQuery(account: account)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    guard status == errSecSuccess, let data = item as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  private static func writeValue(account: String, value: String) {
+    // Erst löschen, dann neu anlegen — so bleibt write idempotent.
+    deleteValue(account: account)
+    var attrs = baseQuery(account: account)
+    attrs[kSecValueData as String] = Data(value.utf8)
+    attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    SecItemAdd(attrs as CFDictionary, nil)
+  }
+
+  private static func deleteValue(account: String) {
+    SecItemDelete(baseQuery(account: account) as CFDictionary)
   }
 }
 

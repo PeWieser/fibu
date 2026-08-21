@@ -131,7 +131,7 @@ private struct _FibuSmall: View {
     }()
     let title: String = {
       guard let s = state else { return FibuText.noTasks }
-      if !s.lastError.isEmpty { return s.lastError.localizedDescription }
+      if !s.lastError.isEmpty { return s.lastError }
       return s.needsSync ? FibuText.needsSync : FibuText.upToDate
     }()
 
@@ -248,19 +248,36 @@ private struct __FibuLargeHeader: View {
   var body: some View {
     let s = entry.status
     let color: Color = {
-      guard let s else { return calmColor }
+      guard let s = s else { return calmColor }
       if !s.lastError.isEmpty { return errorColor }
       return s.needsSync ? pendingColor : okColor
     }()
     let title: String = {
-      guard let s else { return FibuText.noTasks }
-      if !s.lastError.isEmpty { return FibuText.needsSync }
+      guard let s = s else { return FibuText.noTasks }
+      if !s.lastError.isEmpty { return s.lastError }
       return s.needsSync ? FibuText.needsSync : FibuText.upToDate
     }()
 
     HStack(spacing: 12) {
       ZStack {
         Circle().fill(color.opacity(0.16)).frame(width: 46, height: 46)
+        Image(systemName: "arrow.triangle.2.circlepath")
+          .font(.system(size: 18, weight: .semibold))
+          .foregroundColor(color)
+      }
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundColor(color)
+          .lineLimit(2)
+          .minimumScaleFactor(0.8)
+        Text("\(FibuText.lastSync): \(s.map { FibuProvider.formatSyncTime($0.lastSyncIso) } ?? "—")")
+          .font(.system(size: 12))
+          .foregroundColor(Color.secondary)
+          .lineLimit(1)
+      }
+      Spacer()
+    }
   }
 }
 

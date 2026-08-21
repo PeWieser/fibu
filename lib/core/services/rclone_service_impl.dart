@@ -65,6 +65,28 @@ class WindowsRcloneService implements RcloneService {
     }
   }
 
+  @override
+  Future<String?> remoteType(String name) async {
+    try {
+      final result = await Process.run(_executablePath, ['config', 'dump']);
+      if (result.exitCode != 0) return null;
+      final decoded = jsonDecode(result.stdout as String);
+      if (decoded is! Map) return null;
+      final entry = decoded[name];
+      if (entry is Map && entry['type'] != null) {
+        return entry['type'].toString();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Windows nutzt den dateibasierten Mirror-Ordner — dort passen sich
+  /// Download/Löschung von Haus aus an; eine Adoption ist nicht nötig.
+  @override
+  Future<void> markMirrorAdoption() async {}
+
   /// Echter Verbindungstest (Windows): Temp-Config anlegen, Root listen,
   /// wieder löschen. Wirft den echten rclone-Fehlertext bei Problemen.
   @override

@@ -11,6 +11,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../dashboard/presentation/dashboard_controller.dart';
 import 'tasks_controller.dart';
 import 'tasks_screen.dart';
@@ -33,13 +34,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _isSyncing = false;
   String? _syncMessage;
 
-  // Inline-Bearbeitung (kein Wizard-Sprung mehr): Nur Name + Quell-Auswahl.
+  // Inline-Bearbeitung (kein Wizard-Sprung mehr): Name, Album-Auswahl
+  // (nur nicht-leere Alben, mit Zähler) sowie Sync-Modus.
   bool _isEditing = false;
   final TextEditingController _nameCtrl = TextEditingController();
-  String _editSourceChoice = 'all'; // 'all' | 'photos' | 'videos' | 'albums'
   final Set<String> _editAlbumSelection = {};
-  List<String> _editAlbumNames = [];
+  List<_EditAlbumOption> _editAlbumOptions = [];
   bool _editAlbumsLoading = false;
+  SyncMode _editSyncMode = SyncMode.incremental;
+  bool _editIsMediaSource = true;
 
   @override
   void dispose() {
@@ -50,18 +53,20 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   // Aktuelle Aufgabenquelle in die Auswahl überführen.
   void _initEditSource(BackupTask task) {
     final src = task.sourcePath;
-    if (task.selectedAlbums.isNotEmpty) {
-      _editSourceChoice = 'albums';
-      _editAlbumSelection
-        ..clear()
-        ..addAll(task.selectedAlbums);
-    } else if (src == 'photos' || src.startsWith('photos:')) {
-      _editSourceChoice = 'photos';
-    } else if (src == 'videos' || src.startsWith('videos:')) {
-      _editSourceChoice = 'videos';
-    } else {
-      _editSourceChoice = 'all';
-    }
+    _editIsMediaSource = !_isFilesSource(src);
+    _editSyncMode = task.syncMode;
+    _editAlbumSelection
+      ..clear()
+      ..addAll(task.selectedAlbums);
+  }
+
+  /// Dateien-Quellen (`files:`/`folders:`) sind im Inline-Edit bewusst
+  /// nicht umschaltbar — Medien-Quellen bekommen die Albumliste.
+  static bool _isFilesSource(String src) {
+    final lower = src.toLowerCase();
+    return lower.startsWith('files:') ||
+        lower.startsWith('folders:') ||
+        lower.startsWith('folders');
   }
 
   Future<void> _loadEditAlbums() async {
@@ -71,9 +76,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       if (ps.isAuth || ps.hasAccess) {
         final paths = await PhotoManager.getAssetPathList(
             type: RequestType.common, hasAll: true);
+        final options = <_EditAlbumOption>[];
+        for (final p in paths) {
+          int? count;
+          try {
+            count = await p.assetCountAsync;
+          } catch (_) {}
+          // AUCH HIER: Alben ohne Inhalt gar nicht erst zeigen.
+          if (count == 0) continue;
+          options.add(_EditAlbumOption(p, count));
+        }
         if (!mounted) return;
         setState(() {
-          _editAlbumNames = paths.map((p) => p.name).toList();
+          _editAlbumOptions = options;
           _editAlbumsLoading = false;
         });
       } else {
@@ -90,36 +105,62 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       _nameCtrl.text = task.name;
     });
     _initEditSource(task);
-    if (_editAlbumNames.isEmpty) {
+    if (_editIsMediaSource) {
       _loadEditAlbums();
     }
   }
 
-  void _finishInlineEdit(BackupTask task) {
+  Future<void> _finishInlineEdit(BackupTask task) async {
     final newName = _nameCtrl.text.trim();
     String newSource = task.sourcePath;
     List<String> newAlbums = task.selectedAlbums;
-    if (_editSourceChoice == 'all') {
-      newSource = 'all';
-      newAlbums = const [];
-    } else if (_editSourceChoice == 'photos') {
-      newSource = 'photos';
-      newAlbums = const [];
-    } else if (_editSourceChoice == 'videos') {
-      newSource = 'videos';
-      newAlbums = const [];
-    } else if (_editSourceChoice == 'albums' && _editAlbumSelection.isNotEmpty) {
-      newSource = 'photos:${_editAlbumSelection.join('|')}';
-      newAlbums = _editAlbumSelection.toList();
+    if (_editIsMediaSource) {
+      // Gleiche Kodierung wie der Task-Wizard: „all:A|B“ bzw. „all“.
+      if (_editAlbumSelection.isEmpty) {
+        newSource = 'all';
+        newAlbums = const [];
+      } else {
+        final ordered = _editAlbumOptions
+            .map((o) => o.name)
+            .where((n) => _editAlbumSelection.contains(n))
+            .toList();
+        // Falls ein gewähltes Album aktuell nicht (mehr) geladen werden kann,
+        // bleibt es trotzdem in der Auswahl (kein stiller Datenverlust).
+        for (final sel in _editAlbumSelection) {
+          if (!ordered.contains(sel)) ordered.add(sel);
+        }
+        newSource = 'all:${ordered.join('|')}';
+        newAlbums = ordered;
+      }
     }
+    final switchedToMirror =
+        _editSyncMode == SyncMode.mirror && task.syncMode != SyncMode.mirror;
     final updated = task.copyWith(
       name: newName.isNotEmpty ? newName : task.name,
       sourcePath: newSource,
       selectedAlbums: newAlbums,
+      syncMode: _editSyncMode,
     );
     ref.read(tasksListProvider.notifier).updateTask(task.id, updated);
-    setState(() => _isEditing = false);
+    // Wechsel Inkrementell → Spiegelung: bestehende Cloud-Dateien beim
+    // ersten Spiegel-Lauf adoptieren (kein Massen-Download in die Mediathek).
+    if (switchedToMirror) {
+      try {
+        await ref.read(rcloneServiceProvider).markMirrorAdoption();
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _isEditing = false);
   }
+
+  /// Anzeigename je Remote-ID auflösen (Registry); fehlende markieren.
+  String _remoteLabelFor(String id) {
+    final entry = ref.watch(remoteEntryProvider(id));
+    if (entry != null) return entry.name;
+    return '$id (${context.strings.remoteMissingBadge})';
+  }
+
+  String _joinRemoteNames(BackupTask task) =>
+      task.targetRemotes.map(_remoteLabelFor).join(', ');
 
   Future<void> _handleSyncNow(BackupTask task) async {
     final strings = context.strings;
@@ -610,7 +651,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     const SizedBox(height: 8),
                     const fluent.Divider(),
                     const SizedBox(height: 8),
-                    _buildWindowsInfoRow(strings.destinationPrefix, task.targetRemotes.join(', '), theme),
+                    _buildWindowsInfoRow(strings.destinationPrefix, _joinRemoteNames(task), theme),
                     const SizedBox(height: 8),
                     const fluent.Divider(),
                     const SizedBox(height: 8),
@@ -856,7 +897,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     leading: Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, size: 22),
                     title: Text(strings.destinationPrefix, style: const TextStyle(fontSize: 16)),
                     trailing: Text(
-                      task.targetRemotes.join(', '),
+                      _joinRemoteNames(task),
                       style: TextStyle(color: theme.textSecondary, fontSize: 15),
                     ),
                   ),
@@ -881,90 +922,139 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 ],
               ),
 
-              // 2b. Quell-Auswahl — nur im Bearbeiten-Modus sichtbar.
-              if (_isEditing)
+              // 2b. Album-Auswahl — nur im Bearbeiten-Modus, nur für
+              // Medien-Quellen: ausschließlich die Albenliste (mit Zähler,
+              // leere Alben ausgeblendet, vorhandene Auswahl vorgehakt).
+              if (_isEditing && _editIsMediaSource)
                 cupertino.CupertinoListSection.insetGrouped(
-                  header: Text(strings.sourceCategoryLabel.toUpperCase()),
+                  header: Text(strings.albumsSectionTitle.toUpperCase()),
+                  footer: Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(strings.albumsEditNote),
+                  ),
                   children: [
-                    Padding(
-                      padding: EdgeInsets.all(theme.md),
-                      child: cupertino.CupertinoSlidingSegmentedControl<String>(
-                        groupValue: _editSourceChoice,
-                        children: {
-                          'all': Text(strings.allMedia, style: const TextStyle(fontSize: 13)),
-                          'photos': Text(strings.allPhotos, style: const TextStyle(fontSize: 13)),
-                          'videos': Text(strings.allVideos, style: const TextStyle(fontSize: 13)),
-                          'albums': Text(strings.onlySpecificAlbums, style: const TextStyle(fontSize: 13)),
-                        },
-                        onValueChanged: (v) {
-                          if (v == null) return;
-                          setState(() => _editSourceChoice = v);
-                          if (v == 'albums' && _editAlbumNames.isEmpty && !_editAlbumsLoading) {
-                            _loadEditAlbums();
-                          }
-                        },
-                      ),
-                    ),
-                    if (_editSourceChoice == 'albums') ...[
-                      if (_editAlbumsLoading)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: cupertino.CupertinoActivityIndicator()),
-                        )
-                      else if (_editAlbumNames.isEmpty)
-                        Padding(
-                          padding: EdgeInsets.all(theme.md),
-                          child: Text(
-                            strings.noAlbumsFound,
-                            style: TextStyle(color: theme.textSecondary, fontSize: 13),
-                          ),
-                        )
-                      else
-                        ..._editAlbumNames.map((name) {
-                          final checked = _editAlbumSelection.contains(name);
-                          return cupertino.CupertinoListTile(
-                            title: Text(name, style: const TextStyle(fontSize: 14)),
-                            trailing: checked
-                                ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid,
-                                    color: theme.accent, size: 22)
-                                : Icon(cupertino.CupertinoIcons.circle,
-                                    color: theme.textSecondary, size: 22),
-                            onTap: () {
-                              setState(() {
-                                if (checked) {
-                                  _editAlbumSelection.remove(name);
-                                } else {
-                                  _editAlbumSelection.add(name);
-                                }
-                              });
-                            },
-                          );
-                        }),
-                    ],
+                    if (_editAlbumsLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: cupertino.CupertinoActivityIndicator()),
+                      )
+                    else if (_editAlbumOptions.isEmpty)
+                      Padding(
+                        padding: EdgeInsets.all(theme.md),
+                        child: Text(
+                          strings.noAlbumsFound,
+                          style: TextStyle(color: theme.textSecondary, fontSize: 13),
+                        ),
+                      )
+                    else
+                      ...() {
+                        // Gewählte, gerade nicht ladbare Alben (z. B. gelöscht)
+                        // sichtbar halten, damit sie nicht still verschwinden.
+                        final known = _editAlbumOptions.map((o) => o.name).toSet();
+                        final stale = _editAlbumSelection
+                            .where((n) => !known.contains(n))
+                            .toList();
+                        final rows = <Widget>[
+                          for (final o in _editAlbumOptions)
+                            (() {
+                              final checked = _editAlbumSelection.contains(o.name);
+                              return cupertino.CupertinoListTile(
+                                title: Text(o.name, style: const TextStyle(fontSize: 14)),
+                                subtitle: o.count != null
+                                    ? Text('${o.count}',
+                                        style: TextStyle(color: theme.textSecondary, fontSize: 12))
+                                    : null,
+                                trailing: checked
+                                    ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid,
+                                        color: theme.accent, size: 22)
+                                    : Icon(cupertino.CupertinoIcons.circle,
+                                        color: theme.textSecondary, size: 22),
+                                onTap: () {
+                                  setState(() {
+                                    if (checked) {
+                                      _editAlbumSelection.remove(o.name);
+                                    } else {
+                                      _editAlbumSelection.add(o.name);
+                                    }
+                                  });
+                                },
+                              );
+                            })(),
+                          for (final name in stale)
+                            cupertino.CupertinoListTile(
+                              title: Text(
+                                '$name (${strings.remoteMissingBadge})',
+                                style: TextStyle(fontSize: 14, color: theme.textSecondary),
+                              ),
+                              trailing: Icon(cupertino.CupertinoIcons.check_mark_circled_solid,
+                                  color: theme.accent, size: 22),
+                              onTap: () {
+                                setState(() => _editAlbumSelection.remove(name));
+                              },
+                            ),
+                        ];
+                        return rows;
+                      }(),
                   ],
                 ),
 
-              // 3. Sync Mode Section
+              // 3. Sync Mode Section — im Bearbeiten-Modus umschaltbar
+              // (Inkrementell ↔ Spiegelung). Beim Wechsel AUF Spiegelung
+              // werden bestehende Cloud-Dateien beim ersten Lauf adoptiert.
               cupertino.CupertinoListSection.insetGrouped(
                 header: Text(strings.syncSettingsSection.toUpperCase()),
                 footer: Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: Text(_formatSyncModeDescription(strings, task.syncMode)),
+                  child: Text(
+                    () {
+                      if (!_isEditing) {
+                        return _formatSyncModeDescription(strings, task.syncMode);
+                      }
+                      final shown = _editSyncMode == SyncMode.mirror
+                          ? strings.syncModeMirrorDescription
+                          : strings.syncModeIncrementalDescription;
+                      final switchedToMirror = _editSyncMode == SyncMode.mirror &&
+                          task.syncMode != SyncMode.mirror;
+                      return switchedToMirror
+                          ? '$shown\n\n${strings.mirrorDeletionWarningEdit}\n${strings.mirrorAdoptionHint}\n\n${strings.syncModeChangedNote}'
+                          : '$shown\n\n${strings.syncModeChangedNote}';
+                    }(),
+                  ),
                 ),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(
-                      task.syncMode == SyncMode.mirror
+                      (_isEditing ? _editSyncMode : task.syncMode) == SyncMode.mirror
                           ? cupertino.CupertinoIcons.arrow_2_squarepath
                           : cupertino.CupertinoIcons.arrow_up_circle,
                       color: theme.accent,
                       size: 22,
                     ),
                     title: Text(strings.syncModeLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      _formatSyncMode(strings, task.syncMode),
-                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                    ),
+                    trailing: _isEditing
+                        ? cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
+                            groupValue: _editSyncMode,
+                            children: {
+                              SyncMode.incremental: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(strings.syncModeBadgeIncremental,
+                                    style: const TextStyle(fontSize: 13)),
+                              ),
+                              SyncMode.mirror: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(strings.syncModeBadgeMirror,
+                                    style: const TextStyle(fontSize: 13)),
+                              ),
+                            },
+                            onValueChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _editSyncMode = v);
+                            },
+                          )
+                        : Text(
+                            _formatSyncMode(strings, task.syncMode),
+                            style: TextStyle(color: theme.textSecondary, fontSize: 15),
+                          ),
                   ),
                 ],
               ),
@@ -1116,7 +1206,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   material.ListTile(
                     leading: Icon(material.Icons.cloud_outlined, color: theme.accent),
                     title: Text(strings.destinationPrefix),
-                    trailing: Text(task.targetRemotes.join(', '), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    trailing: Text(_joinRemoteNames(task), style: const TextStyle(fontWeight: FontWeight.w600)),
                   ),
                   const material.Divider(height: 1),
                   material.ListTile(
@@ -1247,4 +1337,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       ],
     );
   }
+}
+
+/// Album-Zeile im Inline-Edit: Name + optionaler Medienzähler
+/// (leere Alben werden bereits beim Laden herausgefiltert).
+class _EditAlbumOption {
+  _EditAlbumOption(this.entity, this.count);
+
+  final AssetPathEntity entity;
+  final int? count;
+
+  String get name => entity.name;
 }

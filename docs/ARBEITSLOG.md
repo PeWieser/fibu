@@ -1,5 +1,52 @@
 # Fibu — Arbeits-Log (Session)
 
+---
+
+## 2026-08-21 — Remote-Identität, Schlüsselbund nativ, Task-Bearbeitung
+
+### Remote-Registry (Identität ≠ Anzeigename)
+- **Problem:** Aufgaben hingen am frei gewählten rclone-Sektionsnamen. Remote
+  gelöscht/neu angelegt (oder umbenannt) → „didn't find section in config file“.
+- **Neu:** `RemoteRegistryService` (`remotes.json` im privaten App-Support).
+  Jedes Remote bekommt eine stabile interne Kennung (`fibu-xxxxxxxx`), die als
+  rclone-Sektionsname dient. Der Nutzername ist ab jetzt ein **reiner
+  Anzeigename** (umbenennbar ohne rclone, Aufgaben-Referenzen bleiben stabil).
+- **Provider-Typ wird echt gespeichert** (beim Anlegen; Alt-Sektionen per
+  `config/get` adoptiert) — die alte Anzeige-Heuristik per Namenssuche
+  (`name.contains('mega')`…) ist entfernt.
+- Alt-Remotes werden beim ersten Start adoptiert (Kennung = bisheriger Name),
+  Aufgaben laufen ohne Migration weiter.
+- Laufwerksliste & alle Anzeigestellen (Explorer, Wizard-Chips, Task-Detail)
+  zeigen Anzeigename + echten Provider; verwaiste Referenzen bekommen ein
+  „(nicht gefunden)“-Badge und können im Wizard bewusst neu zugeordnet werden.
+- Trennen-Dialog warnt, wenn Aufgaben das Laufwerk noch nutzen; Trennen räumt
+  Registry + OAuth-Tokens auf. Doppel-Delete-Bug (Dialog + Aufrufer) behoben.
+
+### Apple-Schlüsselbund ohne Plugin
+- `flutter_secure_storage` komplett entfernt. Neuer `SecureStore`: iOS/macOS →
+  nativer Keychain via `fibu/keychain`-MethodChannel (Security.framework,
+  `AfterFirstUnlockThisDeviceOnly`), andere Plattformen → private Ablage-Datei
+  (gleiches Niveau wie rclone.conf). Vault + OAuth-Tokens nutzen SecureStore.
+- **Associated Domains** (`webcredentials:`) für MEGA, Google, Dropbox,
+  pCloud, Microsoft (live.com/microsoftonline.com), Box, Yandex, Backblaze
+  (Apex + Wildcard) in Runner.entitlements → iOS-Autofill schlägt passende
+  Zugänge vor und ordnet neu Gespeicherte den Domains zu.
+
+### Task-Bearbeitung (Detail)
+- Medien-Quelle bearbeitet man jetzt NUR über die Albumliste: Zähler je Album,
+  leere Alben ausgeblendet, bisherige Auswahl vorgehakt; leere Auswahl =
+  gesamte Mediathek. Abgewählte/verschwundene Alben bleiben sichtbar.
+- **Sync-Modus nachträglich umschaltbar** (Inkrementell ↔ Spiegelung) mit
+  Erklär-Footer. Wechsel auf Spiegelung markiert `_runVirtualMirrorSync` per
+  Flag-Datei: bestehende Cloud-Dateien werden **adoptiert** statt alle in die
+  Mediathek zu laden (adoptions-Liste im Mirror-State).
+
+### Fix
+- Widget-Extension-Compile-Fehler (unvollständiger Header-Block in
+  `FibuWidget.swift`) korrigiert; `String.localizedDescription`-Fauxpas
+  entfernt.
+
+
 **Branch:** `arena/01a01152-fibu` (Stand `main` @ `3c3925f`)
 **Datum:** 2026-08-17
 **Fokus dieser Session:** Datei-Vorschau + Einbindung des rclone-Frameworks (kein `librclone_missing`-Fehler mehr).

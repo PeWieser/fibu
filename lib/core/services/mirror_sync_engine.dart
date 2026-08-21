@@ -309,14 +309,22 @@ class MirrorSyncEngine {
     String remotePath, {
     MirrorProgressCallback? onProgress,
   }) async {
-    final result = <String, RcloneFileInfo>{};
+        final result = <String, RcloneFileInfo>{};
     var dirsScanned = 0;
+    final prefix = remotePath.isEmpty ? '' : '$remotePath/';
+
     Future<void> walk(String dir) async {
       final items = await _rclone.listFiles(remoteName, dir);
       dirsScanned++;
       onProgress?.call('scan', dir, dirsScanned, 0);
       for (final item in items) {
-        final rel = dir.isEmpty ? item.name : '$dir/${item.name}';
+        final fullRel = dir.isEmpty ? item.name : '$dir/${item.name}';
+        // WICHTIG: rel muss RELATIV zu remotePath sein (wird später wieder mit
+        // _joinRemote geprefixt) — sonst entsteht „fibu-backup/fibu-backup/…"
+        // und Downloads schlagen mit 404 fehl (im echten Log beobachtet).
+        final rel = prefix.isNotEmpty && fullRel.startsWith(prefix)
+            ? fullRel.substring(prefix.length)
+            : fullRel;
         // Meta-Ordner (Löschprotokoll, Remote-Papierkorb) nie als Inhalt
         // behandeln — sonst würden sie lokal neu heruntergeladen.
         if (item.isDir && (item.name == '.fibu' || item.name == '.fibu-trash')) {
@@ -324,14 +332,11 @@ class MirrorSyncEngine {
         }
         result[rel] = item;
         if (item.isDir) {
-          await walk(rel);
+          await walk(fullRel);
         }
       }
     }
 
-    // Fehler beim Cloud-Scan werden NICHT verschluckt (sonst sähe die Engine
-    // fälschlich eine „leere Cloud" und würde alles erneut hochladen) –
-    // stattdessen wird geloggt und der Sync bricht sauber mit Fehler ab.
     try {
       await walk(remotePath);
     } catch (e) {

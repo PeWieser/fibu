@@ -174,6 +174,13 @@ abstract class RcloneService {
   /// Deletes a file from the remote storage.
   Future<void> deleteFile(String remoteName, String path);
 
+  /// Deletes an entire remote directory (recursively) — used for the
+  /// type-to-confirm „delete task target folder" action in the task detail.
+  Future<void> purgeRemoteDirectory({
+    required String remoteName,
+    required String remotePath,
+  });
+
   /// Reads a file from remote storage and returns its string content, or null if not found.
   Future<String?> catFile(String remoteName, String path);
 

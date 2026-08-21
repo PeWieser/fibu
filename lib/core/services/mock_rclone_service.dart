@@ -40,6 +40,15 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> purgeRemoteDirectory({
+    required String remoteName,
+    required String remotePath,
+  }) async {
+    // Mock: kein echtes Remote — nur simuliert.
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  @override
   Future<void> removeRemote(String name) async {
     await Future.delayed(const Duration(milliseconds: 200));
     if (!_remotes.contains(name)) {

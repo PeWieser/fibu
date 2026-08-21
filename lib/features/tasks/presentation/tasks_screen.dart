@@ -66,9 +66,11 @@ class TasksScreen extends ConsumerWidget {
           ],
         ),
       ),
-      content: tasks.isEmpty
-          ? _buildEmptyState(context, ref, TargetPlatform.windows, theme, strings)
-          : ListView.separated(
+      content: !ref.watch(tasksLoadedProvider)
+          ? const Center(child: fluent.ProgressRing())
+          : tasks.isEmpty
+              ? _buildEmptyState(context, ref, TargetPlatform.windows, theme, strings)
+              : ListView.separated(
               padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
@@ -160,75 +162,78 @@ class TasksScreen extends ConsumerWidget {
           ),
         ),
       ),
+      backgroundColor: theme.canvas,
+      backgroundColor: theme.canvas,
       child: SafeArea(
-        child: tasks.isEmpty
-            ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
-            : SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    IosTheme.largeTitle(strings.tasksTitle, theme),
-                    cupertino.CupertinoListSection.insetGrouped(
-                  children: tasks.map((task) {
-                    return Dismissible(
-                      key: ValueKey(task.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        color: theme.error,
-                        child: const Icon(
-                          cupertino.CupertinoIcons.trash,
-                          color: cupertino.CupertinoColors.white,
-                          size: 22,
+        child: !ref.watch(tasksLoadedProvider)
+            ? const Center(child: cupertino.CupertinoActivityIndicator())
+            : (tasks.isEmpty
+                ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
+                : SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        IosTheme.largeTitle(strings.tasksTitle, theme),
+                        cupertino.CupertinoListSection.insetGrouped(
+                          children: tasks.map((task) {
+                            return Dismissible(
+                              key: ValueKey(task.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                color: theme.error,
+                                child: const Icon(
+                                  cupertino.CupertinoIcons.trash,
+                                  color: cupertino.CupertinoColors.white,
+                                  size: 22,
+                                ),
+                              ),
+                              confirmDismiss: (_) async {
+                                return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
+                              },
+                              onDismissed: (_) {
+                                ref.read(tasksListProvider.notifier).removeTask(task.id);
+                              },
+                              child: cupertino.CupertinoListTile.notched(
+                                leading: Icon(
+                                  cupertino.CupertinoIcons.folder_fill,
+                                  color: theme.accent,
+                                  size: 22,
+                                  semanticLabel: task.name,
+                                ),
+                                title: Text(
+                                  task.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                ),
+                                additionalInfo: Text(
+                                  task.isActive ? strings.statusActive : strings.statusInactive,
+                                  style: TextStyle(
+                                    color: task.isActive ? theme.accent : theme.textSecondary,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  cupertino.CupertinoIcons.chevron_forward,
+                                  size: 18,
+                                  color: cupertino.CupertinoColors.inactiveGray,
+                                ),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    cupertino.CupertinoPageRoute(
+                                      builder: (_) => TaskDetailScreen(taskId: task.id),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      ),
-                      confirmDismiss: (_) async {
-                        // Nur Bestätigung erfragen; das Entfernen erfolgt in onDismissed,
-                        // damit die Dismissible-Animation sauber abschließen kann.
-                        return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
-                      },
-                      onDismissed: (_) {
-                        ref.read(tasksListProvider.notifier).removeTask(task.id);
-                      },
-                      child: cupertino.CupertinoListTile.notched(
-                        leading: Icon(
-                          cupertino.CupertinoIcons.folder_fill,
-                          color: theme.accent,
-                          size: 22,
-                          semanticLabel: task.name,
-                        ),
-                        title: Text(
-                          task.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                        ),
-                        additionalInfo: Text(
-                          task.isActive ? strings.statusActive : strings.statusInactive,
-                          style: TextStyle(
-                            color: task.isActive ? theme.accent : theme.textSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                        trailing: const Icon(
-                          cupertino.CupertinoIcons.chevron_forward,
-                          size: 18,
-                          color: cupertino.CupertinoColors.inactiveGray,
-                        ),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            cupertino.CupertinoPageRoute(
-                              builder: (_) => TaskDetailScreen(taskId: task.id),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  }).toList(),
+                      ],
+                    ),
+                  ),
                 ),
-                  ],
-                ),
-              ),
       ),
     );
   }
@@ -245,9 +250,12 @@ class TasksScreen extends ConsumerWidget {
       appBar: material.AppBar(
         title: Text(strings.tasksTitle),
       ),
-      body: tasks.isEmpty
-          ? _buildEmptyState(context, ref, TargetPlatform.android, theme, strings)
-          : ListView.separated(
+      backgroundColor: theme.canvas,
+      body: !ref.watch(tasksLoadedProvider)
+          ? const Center(child: material.CircularProgressIndicator())
+          : tasks.isEmpty
+              ? _buildEmptyState(context, ref, TargetPlatform.android, theme, strings)
+              : ListView.separated(
               padding: EdgeInsets.all(theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),

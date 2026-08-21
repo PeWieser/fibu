@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import '../utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/theme.dart';
@@ -75,8 +75,8 @@ class AppSettingsData {
 /// Service to persist and load application settings (Theme, Wada Palettes, Locale, Onboarding).
 class SettingsService {
   static Future<File> _getFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/settings.json');
+    // Privat (App-Support): Nutzer sehen settings.json nicht in der Dateien-App.
+    return privateAppFile('settings.json');
   }
 
   static Future<AppSettingsData?> loadSettings() async {

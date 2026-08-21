@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/rclone_service.dart';
+import '../../../core/services/rclone_provider.dart';
 import '../../dashboard/presentation/dashboard_controller.dart';
 import 'tasks_controller.dart';
 import 'tasks_screen.dart';
@@ -29,6 +30,54 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _isSyncing = false;
   String? _syncMessage;
+
+  // Inline-Bearbeitung (kein Wizard-Sprung mehr)
+  bool _isEditing = false;
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _folderCtrl = TextEditingController();
+  String _editScheduleDay = 'Daily';
+  String _editHour = '02';
+  String _editMinute = '00';
+  SyncMode _editSyncMode = SyncMode.incremental;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _folderCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startInlineEdit(BackupTask task) {
+    setState(() {
+      _isEditing = true;
+      _nameCtrl.text = task.name;
+      _folderCtrl.text = task.targetFolderName;
+      _editScheduleDay = task.scheduleDay;
+      final t = task.scheduleTime;
+      if (t.contains(':')) {
+        final parts = t.split(':');
+        _editHour = parts[0];
+        _editMinute = parts[1];
+      }
+      _editSyncMode = task.syncMode;
+    });
+  }
+
+  void _finishInlineEdit(BackupTask task) {
+    final strings = context.strings;
+    final newName = _nameCtrl.text.trim();
+    final newFolder = _folderCtrl.text.trim();
+    final updated = task.copyWith(
+      name: newName.isNotEmpty ? newName : task.name,
+      targetFolderName: newFolder,
+      scheduleDay: _editScheduleDay,
+      scheduleTime: '$_editHour:$_editMinute',
+      schedule: strings.scheduleDisplay(day: _editScheduleDay, time: '$_editHour:$_editMinute'),
+      syncMode: _editSyncMode,
+    );
+    ref.read(tasksListProvider.notifier).updateTask(task.id, updated);
+    setState(() => _isEditing = false);
+  }
 
   Future<void> _handleSyncNow(BackupTask task) async {
     final strings = context.strings;
@@ -133,6 +182,158 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// GitHub-Style Doppelbestätigung: Der Zielordner-Pfad muss EXAKT erneut
+  /// eingegeben werden, bevor der Remote-Ordner rekursiv gelöscht wird.
+  Future<void> _confirmAndPurgeRemoteFolder(BuildContext context, BackupTask task) async {
+    final strings = context.strings;
+    final folder = task.targetFolderName.trim().replaceAll(RegExp(r'^/+|/+\$'), '');
+    if (folder.isEmpty) return;
+    if (task.targetRemotes.isEmpty) return;
+    final remote = task.targetRemotes.first;
+    final platform = defaultTargetPlatform;
+    final typed = TextEditingController();
+    var confirmed = false;
+
+    Future<void> doPurge() async {
+      Navigator.of(context).pop();
+      try {
+        await ref.read(rcloneServiceProvider).purgeRemoteDirectory(
+              remoteName: remote,
+              remotePath: folder,
+            );
+        ref.invalidate(remotesProvider);
+        ref.invalidate(primaryQuotaProvider);
+        if (mounted) setState(() => _syncMessage = strings.remoteFolderDeleted);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _syncMessage =
+              '${strings.remoteFolderDeleteError} ${e.toString().replaceAll('Exception: ', '').trim()}');
+        }
+      }
+    }
+
+    if (platform == TargetPlatform.windows) {
+      confirmed = false;
+      await fluent.showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (ctx, setInner) => fluent.ContentDialog(
+            title: fluent.Text(strings.deleteRemoteFolderLabel),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(strings.deleteRemoteFolderPrompt(folder)),
+                const SizedBox(height: 12),
+                fluent.TextBox(
+                  controller: typed,
+                  placeholder: folder,
+                  onChanged: (_) => setInner(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              fluent.FilledButton(
+                onPressed: typed.text.trim() == folder
+                    ? () {
+                        confirmed = true;
+                        Navigator.pop(dialogCtx);
+                      }
+                    : null,
+                child: Text(strings.delete, style: const TextStyle(color: Color(0xFFFFFFFF))),
+              ),
+              fluent.Button(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(strings.cancel),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      await cupertino.showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (ctx, setInner) => cupertino.CupertinoAlertDialog(
+            title: Text(strings.deleteRemoteFolderLabel),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(strings.deleteRemoteFolderPrompt(folder), style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 10),
+                  cupertino.CupertinoTextField(
+                    controller: typed,
+                    placeholder: folder,
+                    onChanged: (_) => setInner(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              cupertino.CupertinoDialogAction(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(strings.cancel),
+              ),
+              cupertino.CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: typed.text.trim() == folder
+                    ? () {
+                        confirmed = true;
+                        Navigator.pop(dialogCtx);
+                      }
+                    : null,
+                child: Text(strings.delete),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      await material.showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (ctx, setInner) => material.AlertDialog(
+            title: Text(strings.deleteRemoteFolderLabel),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(strings.deleteRemoteFolderPrompt(folder), style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 10),
+                material.TextField(
+                  controller: typed,
+                  decoration: material.InputDecoration(hintText: folder),
+                  onChanged: (_) => setInner(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              material.TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(strings.cancel),
+              ),
+              material.FilledButton(
+                style: material.FilledButton.styleFrom(backgroundColor: theme.error),
+                onPressed: typed.text.trim() == folder
+                    ? () {
+                        confirmed = true;
+                        Navigator.pop(dialogCtx);
+                      }
+                    : null,
+                child: Text(strings.delete),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    typed.dispose();
+    if (confirmed) await doPurge();
   }
 
   void _confirmDeleteTask(BuildContext context, BackupTask task, TargetPlatform platform) {
@@ -479,6 +680,31 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   ),
                 ],
               ),
+              SizedBox(height: theme.sm),
+              Row(
+                children: [
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 220, minHeight: 44),
+                      child: fluent.Button(
+                        onPressed: () => _confirmAndPurgeRemoteFolder(context, task),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(fluent.FluentIcons.delete, size: 16, color: theme.error),
+                            SizedBox(width: theme.sm),
+                            Text(
+                              strings.deleteRemoteFolderLabel,
+                              style: TextStyle(color: theme.error, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               SizedBox(height: theme.xl),
             ],
           ),
@@ -496,14 +722,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
-        middle: Text(task.name),
-        trailing: SizedBox(
-          width: 44,
-          height: 44,
-          child: cupertino.CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () => _openEditTask(context, task, TargetPlatform.iOS),
-            child: Icon(cupertino.CupertinoIcons.pencil, semanticLabel: strings.editTask),
+        middle: Text(_isEditing ? _nameCtrl.text : task.name),
+        trailing: cupertino.CupertinoButton(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          onPressed: () {
+            if (_isEditing) {
+              _finishInlineEdit(task);
+            } else {
+              _startInlineEdit(task);
+            }
+          },
+          child: Text(
+            _isEditing ? strings.doneEditing : strings.editTaskInline,
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
       ),
@@ -539,6 +770,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               cupertino.CupertinoListSection.insetGrouped(
                 header: Text(strings.generalSection.toUpperCase()),
                 children: [
+                  if (_isEditing)
+                    cupertino.CupertinoListTile(
+                      leading: Icon(cupertino.CupertinoIcons.text_cursor, color: theme.accent, size: 22),
+                      title: Text(strings.taskNameLabel, style: const TextStyle(fontSize: 16)),
+                      trailing: SizedBox(
+                        width: 170,
+                        child: cupertino.CupertinoTextField(
+                          controller: _nameCtrl,
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ),
                   cupertino.CupertinoListTile(
                     leading: Icon(
                       task.isActive ? cupertino.CupertinoIcons.checkmark_alt_circle_fill : cupertino.CupertinoIcons.pause_circle_fill,
@@ -577,10 +820,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.folder_badge_plus, color: theme.accent, size: 22),
                     title: Text(strings.targetFolderLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      _formatTargetFolder(strings, task),
-                      style: TextStyle(color: theme.textSecondary, fontSize: 14),
-                    ),
+                    trailing: _isEditing
+                        ? SizedBox(
+                            width: 150,
+                            child: cupertino.CupertinoTextField(
+                              controller: _folderCtrl,
+                              textAlign: TextAlign.end,
+                            ),
+                          )
+                        : Text(
+                            _formatTargetFolder(strings, task),
+                            style: TextStyle(color: theme.textSecondary, fontSize: 14),
+                          ),
                   ),
                   if (task.targetRemotes.length > 1)
                     cupertino.CupertinoListTile(
@@ -612,10 +863,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       size: 22,
                     ),
                     title: Text(strings.syncModeLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      _formatSyncMode(strings, task.syncMode),
-                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                    ),
+                    trailing: _isEditing
+                        ? cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
+                            groupValue: _editSyncMode,
+                            children: {
+                              SyncMode.incremental: Text(strings.syncModeBadgeIncremental),
+                              SyncMode.mirror: Text(strings.syncModeBadgeMirror),
+                            },
+                            onValueChanged: (v) {
+                              if (v != null) setState(() => _editSyncMode = v);
+                            },
+                          )
+                        : Text(
+                            _formatSyncMode(strings, task.syncMode),
+                            style: TextStyle(color: theme.textSecondary, fontSize: 15),
+                          ),
                   ),
                 ],
               ),
@@ -627,10 +889,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.clock, color: theme.accent, size: 22),
                     title: Text(strings.scheduleLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      task.scheduleDescription,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                    ),
+                    trailing: _isEditing
+                        ? SizedBox(
+                            width: 190,
+                            child: cupertino.CupertinoTextField(
+                              controller: TextEditingController(text: '$_editScheduleDay $_editHour:$_editMinute'),
+                              onChanged: (val) {
+                                // akzeptiert "Daily 02:00", "iOS System", "Monday 12:00" usw.
+                                final t = val.trim();
+                                final parts = t.split(RegExp(r'\s+'));
+                                final dayPart = parts.first;
+                                if (dayPart.isNotEmpty) _editScheduleDay = dayPart;
+                                final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(t);
+                                if (timeMatch != null) {
+                                  _editHour = timeMatch.group(1)!.padLeft(2, '0');
+                                  _editMinute = timeMatch.group(2)!;
+                                }
+                              },
+                            ),
+                          )
+                        : Text(
+                            task.scheduleDescription,
+                            style: TextStyle(color: theme.textSecondary, fontSize: 15),
+                          ),
                   ),
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.slider_horizontal_3, color: theme.accent, size: 22),
@@ -643,9 +924,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 ],
               ),
 
-              // 5. Actions Section
+              // 5a. Sync Section (sync ist bewusst NICHT im Löschbereich)
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.dangerZone.toUpperCase()),
+                header: Text(strings.syncSection.toUpperCase()),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: _isSyncing
@@ -657,6 +938,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     ),
                     onTap: _isSyncing ? null : () => _handleSyncNow(task),
                   ),
+                ],
+              ),
+
+              // 5b. Danger Zone (nur Lösch-Aktionen)
+              cupertino.CupertinoListSection.insetGrouped(
+                header: Text(strings.dangerZone.toUpperCase()),
+                children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.trash, color: theme.error, size: 22),
                     title: Text(
@@ -664,6 +952,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 16),
                     ),
                     onTap: () => _confirmDeleteTask(context, task, TargetPlatform.iOS),
+                  ),
+                  cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.cloud_bolt_fill, color: theme.error, size: 22),
+                    title: Text(
+                      strings.deleteRemoteFolderLabel,
+                      style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 16),
+                    ),
+                    onTap: () => _confirmAndPurgeRemoteFolder(context, task),
                   ),
                 ],
               ),
@@ -847,6 +1143,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     icon: Icon(material.Icons.delete_outline, color: theme.error),
                     label: Text(strings.deleteTask, style: TextStyle(color: theme.error)),
                     onPressed: () => _confirmDeleteTask(context, task, TargetPlatform.android),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: theme.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: material.OutlinedButton.icon(
+                    icon: Icon(material.Icons.cloud_off, color: theme.error),
+                    label: Text(
+                      strings.deleteRemoteFolderLabel,
+                      style: TextStyle(color: theme.error),
+                    ),
+                    onPressed: () => _confirmAndPurgeRemoteFolder(context, task),
                   ),
                 ),
               ],

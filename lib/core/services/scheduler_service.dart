@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:path_provider/path_provider.dart';
+import '../utils/app_paths.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'ios_rclone_service.dart';
@@ -186,8 +186,7 @@ class SchedulerService {
 
   static Future<List<Map<String, dynamic>>> _loadTasks() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/tasks.json');
+      final file = await privateAppFile('tasks.json');
       if (!await file.exists()) return const [];
       final content = await file.readAsString();
       if (content.isEmpty) return const [];

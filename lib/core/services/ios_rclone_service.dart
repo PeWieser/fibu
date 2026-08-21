@@ -11,6 +11,7 @@ import 'librclone_channel.dart';
 import 'mirror_sync_engine.dart';
 import 'photo_kit_bridge.dart';
 import 'virtual_mirror_sync.dart';
+import '../utils/app_paths.dart';
 import 'app_log_service.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
@@ -59,9 +60,11 @@ class IosRcloneService implements RcloneService {
       };
 
   Future<void> _ensureEngine() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final configPath = '${dir.path}/rclone.conf';
-    await _rc.ensureInitialized(configPath);
+    // rclone.conf lebt in Library/Application Support (via privateAppFile:
+    // migriert eine Alt-Datei aus Documents einmalig herüber). Nutzer sollen
+    // davon in der Dateien-App nichts sehen — sichtbar bleibt nur fibu.log.
+    final file = await privateAppFile('rclone.conf');
+    await _rc.ensureInitialized(file.path);
   }
 
   // ---------------------------------------------------------------------------
@@ -220,6 +223,22 @@ class IosRcloneService implements RcloneService {
       '_config': _fastFailConfig,
     });
     AppLog.info('remote', 'Remote-Datei gelöscht: $remote:$path');
+  }
+
+  @override
+  Future<void> purgeRemoteDirectory({
+    required String remoteName,
+    required String remotePath,
+  }) async {
+    await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
+    // operations/purge löscht den gesamten entfernten Verzeichnisbaum.
+    await _rc.rpc('operations/purge', {
+      'fs': '$remote:',
+      'remote': remotePath,
+      '_config': _transferConfig,
+    }, const Duration(minutes: 10));
+    AppLog.warn('remote', 'Remote-Ordner gelöscht (purge): $remote:$remotePath');
   }
 
   @override

@@ -271,6 +271,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     final remotesAsync = ref.watch(remotesProvider);
 
     return cupertino.CupertinoPageScaffold(
+      backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudDrivesTitle),
         trailing: Row(
@@ -447,7 +448,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             }
             return false;
           },
-          child: cupertino.CupertinoListTile(
+          child: cupertino.CupertinoListTile.notched(
             title: Text(remote),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import '../../../core/utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Backup synchronization mode.
@@ -227,13 +227,15 @@ class BackupTask {
 /// State notifier managing the list of user-configured backup tasks.
 /// Persists tasks locally to a JSON file with NO mock dummy data.
 class TasksListNotifier extends StateNotifier<List<BackupTask>> {
-  TasksListNotifier() : super(const []) {
+  TasksListNotifier(this._ref) : super(const []) {
     _loadTasks();
   }
 
+  final Ref _ref;
+
   Future<File> _getTasksFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/tasks.json');
+    // Privat (App-Support): Nutzer sehen tasks.json nicht in der Dateien-App.
+    return privateAppFile('tasks.json');
   }
 
   Future<void> _loadTasks() async {
@@ -291,6 +293,8 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       }
     } catch (_) {
       // Catch exceptions silently in unit tests (e.g. MissingPluginException for path_provider)
+    } finally {
+      _ref.read(tasksLoadedProvider.notifier).state = true;
     }
   }
 
@@ -372,7 +376,12 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
   }
 }
 
+/// Wird true, sobald der initiale Lesevorgang von tasks.json fertig ist.
+/// Die UI kann solange einen Ladeindikator zeigen statt „keine Tasks" zu
+/// blinken (Kaltstart wart bis zu einer Sekunde leer gewirkt).
+final tasksLoadedProvider = StateProvider<bool>((ref) => false);
+
 /// Riverpod provider for the tasks list.
 final tasksListProvider = StateNotifierProvider<TasksListNotifier, List<BackupTask>>((ref) {
-  return TasksListNotifier();
+  return TasksListNotifier(ref);
 });

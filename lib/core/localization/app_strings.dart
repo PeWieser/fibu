@@ -656,6 +656,18 @@ class AppStrings {
   String get distributionLabel => isGerman ? 'Verteilung' : 'Distribution';
   String get excludedFilesLabel => isGerman ? 'Dateifilter' : 'File Filters';
   String get noExcludedFiles => isGerman ? 'Keine (Alle Dateien)' : 'None (All files)';
+  // --- In-Place-Bearbeitung & Remote-Ordner-Löschung (Task-Detail) ---
+  String get editTaskInline => isGerman ? 'Bearbeiten' : 'Edit';
+  String get doneEditing => isGerman ? 'Fertig' : 'Done';
+  String get syncSection => isGerman ? 'Synchronisieren' : 'Synchronize';
+  String get deleteRemoteFolderLabel => isGerman ? 'Zielordner in der Cloud löschen' : 'Delete Target Folder in Cloud';
+  String deleteRemoteFolderPrompt(String path) => isGerman
+      ? 'Löscht den kompletten Ordner „$path“ samt Inhalt unwiderruflich aus der Cloud. Gib zur Bestätigung exakt den Ordnerpfad ein:'
+      : 'This permanently deletes the entire cloud folder "$path" including all contents. Type the exact folder path to confirm:';
+  String get deleteRemoteFolderTypeHint => isGerman ? 'Ordnerpfad eingeben' : 'Enter folder path';
+  String get confirmationMismatch => isGerman ? 'Der eingegebene Name stimmt nicht überein.' : 'The typed name does not match.';
+  String get remoteFolderDeleted => isGerman ? 'Cloud-Ordner wurde gelöscht.' : 'Cloud folder deleted.';
+  String get remoteFolderDeleteError => isGerman ? 'Cloud-Ordner konnte nicht gelöscht werden.' : 'Could not delete the cloud folder.';
   String get dangerZone => isGerman ? 'Aktionen' : 'Actions';
 }
 

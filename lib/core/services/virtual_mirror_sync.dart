@@ -238,17 +238,31 @@ class VirtualMirrorSyncEngine {
   Future<Map<String, RcloneFileInfo>> _listRemoteRecursive(
       String remoteName, String remotePath,
       {MirrorProgressCallback? onProgress}) async {
-    final result = <String, RcloneFileInfo>{};
+        final result = <String, RcloneFileInfo>{};
     var dirsScanned = 0;
+    final prefix = remotePath.isEmpty ? '' : '$remotePath/';
+
     Future<void> walk(String dir) async {
       final items = await _rclone.listFiles(remoteName, dir);
       dirsScanned++;
       onProgress?.call('scan', dir, dirsScanned, 0);
       for (final item in items) {
-        final rel = dir.isEmpty ? item.name : '$dir/${item.name}';
-        if (item.isDir && (item.name == '.fibu' || item.name == '.fibu-trash')) continue;
+        final fullRel = dir.isEmpty ? item.name : '$dir/${item.name}';
+        // WICHTIG: rel muss RELATIV zu remotePath sein (wird später wieder mit
+        // _joinRemote geprefixt) — sonst entsteht „fibu-backup/fibu-backup/…"
+        // und Downloads schlagen mit 404 fehl (im echten Log beobachtet).
+        final rel = prefix.isNotEmpty && fullRel.startsWith(prefix)
+            ? fullRel.substring(prefix.length)
+            : fullRel;
+        // Meta-Ordner (Löschprotokoll, Remote-Papierkorb) nie als Inhalt
+        // behandeln — sonst würden sie lokal neu heruntergeladen.
+        if (item.isDir && (item.name == '.fibu' || item.name == '.fibu-trash')) {
+          continue;
+        }
         result[rel] = item;
-        if (item.isDir) await walk(rel);
+        if (item.isDir) {
+          await walk(fullRel);
+        }
       }
     }
 

@@ -92,6 +92,24 @@ class WindowsRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> purgeRemoteDirectory({
+    required String remoteName,
+    required String remotePath,
+  }) async {
+    try {
+      final target =
+          remotePath.isEmpty ? '$remoteName:' : '$remoteName:$remotePath';
+      final result = await Process.run(_executablePath, ['purge', target])
+          .timeout(const Duration(minutes: 10));
+      if (result.exitCode != 0) {
+        throw Exception('Rclone failed to purge remote directory: ${result.stderr}');
+      }
+    } catch (e) {
+      throw Exception('Failed to purge remote directory: $e');
+    }
+  }
+
+  @override
   Future<void> removeRemote(String name) async {
     try {
       final result = await Process.run(_executablePath, ['config', 'delete', name]);

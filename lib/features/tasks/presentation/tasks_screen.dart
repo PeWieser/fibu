@@ -144,80 +144,6 @@ class TasksScreen extends ConsumerWidget {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final tasks = ref.watch(tasksListProvider);
-    final tasksLoaded = ref.watch(tasksLoadedProvider);
-
-    final Widget childContent;
-    if (!tasksLoaded) {
-      childContent = const Center(child: cupertino.CupertinoActivityIndicator());
-    } else if (tasks.isEmpty) {
-      childContent = _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings);
-    } else {
-      childContent =                 SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        IosTheme.largeTitle(strings.tasksTitle, theme),
-                        cupertino.CupertinoListSection.insetGrouped(
-                          children: tasks.map((task) {
-                            return Dismissible(
-                              key: ValueKey(task.id),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                color: theme.error,
-                                child: const Icon(
-                                  cupertino.CupertinoIcons.trash,
-                                  color: cupertino.CupertinoColors.white,
-                                  size: 22,
-                                ),
-                              ),
-                              confirmDismiss: (_) async {
-                                return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
-                              },
-                              onDismissed: (_) {
-                                ref.read(tasksListProvider.notifier).removeTask(task.id);
-                              },
-                              child: cupertino.CupertinoListTile.notched(
-                                leading: Icon(
-                                  cupertino.CupertinoIcons.folder_fill,
-                                  color: theme.accent,
-                                  size: 22,
-                                  semanticLabel: task.name,
-                                ),
-                                title: Text(
-                                  task.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                                ),
-                                additionalInfo: Text(
-                                  task.isActive ? strings.statusActive : strings.statusInactive,
-                                  style: TextStyle(
-                                    color: task.isActive ? theme.accent : theme.textSecondary,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                trailing: const Icon(
-                                  cupertino.CupertinoIcons.chevron_forward,
-                                  size: 18,
-                                  color: cupertino.CupertinoColors.inactiveGray,
-                                ),
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    cupertino.CupertinoPageRoute(
-                                      builder: (_) => TaskDetailScreen(taskId: task.id),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-;
-    }
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
@@ -237,10 +163,80 @@ class TasksScreen extends ConsumerWidget {
         ),
       ),
       backgroundColor: theme.canvas,
-      child: SafeArea(child: childContent),
+      child: SafeArea(
+        child: !ref.watch(tasksLoadedProvider)
+            ? const Center(child: cupertino.CupertinoActivityIndicator())
+            : tasks.isEmpty
+                ? _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings)
+                : SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    IosTheme.largeTitle(strings.tasksTitle, theme),
+                    cupertino.CupertinoListSection.insetGrouped(
+                  children: tasks.map((task) {
+                    return Dismissible(
+                      key: ValueKey(task.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: theme.error,
+                        child: const Icon(
+                          cupertino.CupertinoIcons.trash,
+                          color: cupertino.CupertinoColors.white,
+                          size: 22,
+                        ),
+                      ),
+                      confirmDismiss: (_) async {
+                        // Nur Bestätigung erfragen; das Entfernen erfolgt in onDismissed,
+                        // damit die Dismissible-Animation sauber abschließen kann.
+                        return await _confirmDeleteTaskAsync(context, ref, task, TargetPlatform.iOS);
+                      },
+                      onDismissed: (_) {
+                        ref.read(tasksListProvider.notifier).removeTask(task.id);
+                      },
+                      child: cupertino.CupertinoListTile.notched(
+                        leading: Icon(
+                          cupertino.CupertinoIcons.folder_fill,
+                          color: theme.accent,
+                          size: 22,
+                          semanticLabel: task.name,
+                        ),
+                        title: Text(
+                          task.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                        additionalInfo: Text(
+                          task.isActive ? strings.statusActive : strings.statusInactive,
+                          style: TextStyle(
+                            color: task.isActive ? theme.accent : theme.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        trailing: const Icon(
+                          cupertino.CupertinoIcons.chevron_forward,
+                          size: 18,
+                          color: cupertino.CupertinoColors.inactiveGray,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            cupertino.CupertinoPageRoute(
+                              builder: (_) => TaskDetailScreen(taskId: task.id),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+                  ],
+                ),
+              ),
+      ),
     );
   }
-
 
   // =========================================================================
   // ANDROID (Material 3 UI in Minimalist Style)
@@ -878,7 +874,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   /// Lädt die Anzahl der Fotos/Videos je Album asynchron nach
   /// (assetCountAsync pro Album) und aktualisiert die UI schrittweise.
   Future<void> _loadAlbumCounts() async {
-    // Iteration über eine KOPIE: leere Alben werden aus der Auswahl-rvlentfernt.
+    // Iteration über eine KOPIE: leere Alben werden rausgeschmissen.
     for (final album in List.of(_albums)) {
       try {
         final count = await album.entity.assetCountAsync;
@@ -886,14 +882,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         setState(() {
           album.count = count;
           if (count == 0) {
-            // Leere Alben fliegen raus — sie anzubieten verwirrt nur.
             _albums.remove(album);
             _selectedAlbums.remove(album.name);
           }
         });
       } catch (_) {
-        // Zähler einzelner Alben ist rein kosmetisch – bei Fehlern einfach
-        // ohne Anzahl anzeigen, die Auswahl hängt nur am Namen.
+        // Zähler einzelner Alben ist rein kosmetisch – Auswahl hängt am Namen.
       }
     }
   }
@@ -1186,8 +1180,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
     if (widget.platform == TargetPlatform.iOS) {
       // iOS: Quelle muss gewählt sein — mindestens ein Album (Medien-Tab)
-      // bzw. ein Ordner (Dateien-Tab). Eine leere Auswahl gilt seit dem
-      // UX-Konzeptwechsel als Konsensfehler statt stillem „alles sichern".
+      // bzw. ein Ordner (Dateien-Tab).
       if (_sourceTab == 'media' && _selectedAlbums.isEmpty) {
         newSourceError = strings.selectAtLeastOneAlbum;
         hasError = true;
@@ -1223,8 +1216,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     return true;
   }
 
-  /// Wenn auf iOS im Medien-Tab noch kein Album gewählt ist, bleibt ‚Weiter'
-  /// deaktiviert (kein stiller Fallback auf „alles sichern" mehr).
+  /// Wenn im Medien-Tab (iOS) noch kein Album gewählt ist, bleibt ‚Weiter'
+  /// deaktiviert — leere Auswahl bedeutet nicht mehr still „alles sichern“.
   bool get _nextBlocked =>
       _currentStep == 0 &&
       _sourceTab == 'media' &&

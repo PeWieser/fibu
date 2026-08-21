@@ -86,8 +86,12 @@ class CredentialVaultService {
     if (cred.user.isEmpty) return;
     try {
       final existing = await listFor(rcloneType);
-      existing.removeWhere((c) => c.user == cred.user && c.host == cred.host);
-      final updated = [cred, ...existing];
+      // WICHTIG: listFor kann „const []" liefern (unveränderbar) – erst eine
+      // neue, veränderbare Liste aufbauen, bevor gefiltert wird.
+      final filtered = existing
+          .where((c) => !(c.user == cred.user && c.host == cred.host))
+          .toList();
+      final updated = [cred, ...filtered];
       final capped = updated.length > maxEntriesPerProvider
           ? updated.sublist(0, maxEntriesPerProvider)
           : updated;

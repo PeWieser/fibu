@@ -803,14 +803,26 @@ class IosRcloneService implements RcloneService {
     return staging.path;
   }
 
+  /// Letztes nicht-leeres Segment eines URI-Pfads – robust gegenüber
+  /// Directory-URIs mit abschließendem '/' (bei denen `pathSegments.last`
+  /// sonst '' lieferte und direkt zu Datenverlust-Fehlern führte).
+  static String _lastNonEmptyPathSegment(List<String> segments) {
+    for (var i = segments.length - 1; i >= 0; i--) {
+      if (segments[i].isNotEmpty) return segments[i];
+    }
+    return '';
+  }
+
   Future<void> _copyTree(Directory src, Directory dst) async {
     if (!await dst.exists()) await dst.create(recursive: true);
     await for (final entity in src.list(followLinks: false)) {
+      final baseName = _lastNonEmptyPathSegment(entity.uri.pathSegments);
+      if (baseName.isEmpty) continue;
       if (entity is Directory) {
-        await _copyTree(entity, Directory('${dst.path}/${entity.uri.pathSegments.last}'));
+        await _copyTree(entity, Directory('${dst.path}/$baseName'));
       } else if (entity is File) {
         try {
-          await entity.copy('${dst.path}/${entity.uri.pathSegments.last}');
+          await entity.copy('${dst.path}/$baseName');
         } catch (_) {
           // Nicht zugängliche Datei überspringen.
         }
@@ -937,9 +949,16 @@ class IosRcloneService implements RcloneService {
     if (options.isEchoMode && await photosRoot.exists()) {
       await for (final albumDir in photosRoot.list(followLinks: false)) {
         if (albumDir is! Directory) continue;
-        final albumName = albumDir.uri.pathSegments.last;
+        // WICHTIG: Directory.uri endet mit '/', das letzte Pfadsegment wäre
+        // leer — also das letzte NICHT-LEERE Segment nehmen. Bisher wurde
+        // dadurch jedes soeben befüllte Album sofort wieder gelöscht
+        // (Mirror lief danach mit 0 Dateien → nie etwas hochgeladen).
+        final albumName = _lastNonEmptyPathSegment(albumDir.uri.pathSegments);
+        if (albumName.isEmpty) continue;
         if (!existingAlbumDirs.contains(albumName)) {
           try {
+            AppLog.info('media',
+                'Entferne verwaisten Spiegel-Ordner: Photos/${albumName}');
             await albumDir.delete(recursive: true);
             removedAlbumDirs++;
           } catch (_) {}

@@ -13,7 +13,7 @@ import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import 'dashboard_controller.dart';
-import 'widgets/storage_card.dart';
+import 'widgets/multi_remote_storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
 import 'cloud_explorer_screen.dart';
 
@@ -190,10 +190,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                     ),
                   );
                 }
-                return fluent.Tooltip(
-                  message: strings.tooltipStorageCard,
-                  child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
-                );
+                return const MultiRemoteStorageCard();
               },
               loading: () => const fluent.ProgressBar(),
               error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
@@ -256,7 +253,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             style: fluent.FluentTheme.of(context).typography.body,
           ),
           SizedBox(height: theme.sm),
-          fluent.ProgressBar(value: job.percentage),
+          fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
           if (job.itemsTotal > 0) ...[
             SizedBox(height: theme.sm),
             fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
@@ -265,7 +262,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              fluent.Text('ETA: ${job.eta}'),
+              if (job.eta.isNotEmpty) fluent.Text('ETA: ${job.eta}') else fluent.Text(''),
               fluent.Text('${job.percentage.toStringAsFixed(1)}%'),
             ],
           ),
@@ -417,10 +414,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                       ],
                     );
                   }
-                  return Semantics(
-                    label: strings.tooltipStorageCard,
-                    child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
-                  );
+                  return const MultiRemoteStorageCard();
                 },
                 loading: () => const cupertino.CupertinoActivityIndicator(),
                 error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
@@ -559,7 +553,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                   Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
                   FractionallySizedBox(
                     widthFactor: job.percentage / 100,
-                    child: Container(color: cupertino.CupertinoColors.activeGreen.resolveFrom(context)),
+                    child: Container(color: theme.accent),
                   ),
                 ],
               ),
@@ -576,7 +570,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+              if (job.eta.isNotEmpty)
+                Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary))
+              else
+                const SizedBox.shrink(),
               Text('${job.percentage.toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
             ],
           )
@@ -663,10 +660,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                     ),
                   );
                 }
-                return material.Tooltip(
-                  message: strings.tooltipStorageCard,
-                  child: StorageCard(quota: quota, title: strings.cloudBackupStorage),
-                );
+                return const MultiRemoteStorageCard();
               },
               loading: () => const material.CircularProgressIndicator(),
               error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
@@ -746,7 +740,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: theme.sm),
-            material.LinearProgressIndicator(value: job.percentage / 100),
+            material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
             if (job.itemsTotal > 0) ...[
               SizedBox(height: theme.sm),
               Text(
@@ -758,7 +752,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ETA: ${job.eta}', style: material.Theme.of(context).textTheme.bodySmall),
+                if (job.eta.isNotEmpty) Text('ETA: ${job.eta}', style: material.Theme.of(context).textTheme.bodySmall) else const SizedBox.shrink(),
                 Text('${job.percentage.toStringAsFixed(1)}%', style: material.Theme.of(context).textTheme.bodySmall),
               ],
             )

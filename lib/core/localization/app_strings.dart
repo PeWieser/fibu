@@ -573,6 +573,15 @@ class AppStrings {
       : 'Not enough storage space available on the cloud drive.';
   String syncItemsProgress(int done, int total) =>
       isGerman ? '$done von $total Dateien' : '$done of $total files';
+  String get mirrorUpToDate => isGerman
+      ? 'Alles aktuell — nichts zu übertragen.'
+      : 'Everything is up to date — nothing to transfer.';
+  String get selectAtLeastOneAlbum => isGerman
+      ? 'Bitte wähle mindestens ein Album aus.'
+      : 'Please select at least one album.';
+  String get taskWizardNextBlockedHint => isGerman
+      ? 'Wähle zuerst ein Album oder eine Datei-Quelle aus.'
+      : 'Select an album or file source first.';
 
   // --- Speicherplatz-Anzeige der Cloud-Laufwerke ---
   String get storageNotAvailable => isGerman ? 'n. v.' : 'n/a';

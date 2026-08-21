@@ -120,7 +120,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
     final Widget bar;
     if (platform == TargetPlatform.windows) {
-      bar = fluent.ProgressBar(value: job.percentage);
+      bar = fluent.ProgressBar(value: job.percentage, activeColor: theme.accent);
     } else if (platform == TargetPlatform.iOS) {
       bar = ClipRRect(
         borderRadius: BorderRadius.circular(3),
@@ -138,7 +138,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         ),
       );
     } else {
-      bar = material.LinearProgressIndicator(value: pct);
+      bar = material.LinearProgressIndicator(value: pct, valueColor: material.AlwaysStoppedAnimation(theme.accent));
     }
 
     return Padding(
@@ -188,6 +188,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   /// eingegeben werden, bevor der Remote-Ordner rekursiv gelöscht wird.
   Future<void> _confirmAndPurgeRemoteFolder(BuildContext context, BackupTask task) async {
     final strings = context.strings;
+    final theme = context.theme;
     final folder = task.targetFolderName.trim().replaceAll(RegExp(r'^/+|/+\$'), '');
     if (folder.isEmpty) return;
     if (task.targetRemotes.isEmpty) return;

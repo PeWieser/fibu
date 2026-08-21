@@ -550,10 +550,11 @@ class IosRcloneService implements RcloneService {
             bytesTransferred: 0,
             totalBytes: 0,
             percentage: 100,
-            currentFile:
-                'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
-                '🗑${result.trashedLocal}/${result.trashedRemote} + '
-                '${result.deletedLocal}/${result.deletedRemote})',
+            currentFile: result.hasChanges
+                ? 'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+                    '🗑${result.trashedLocal}/${result.trashedRemote} + '
+                    '${result.deletedLocal}/${result.deletedRemote})'
+                : 'Alles aktuell — nichts zu übertragen.',
             eta: '0s',
             speedBytesPerSecond: 0,
           ));
@@ -1323,10 +1324,11 @@ class IosRcloneService implements RcloneService {
         bytesTransferred: 0,
         totalBytes: 0,
         percentage: 100,
-        currentFile:
-            'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
-            '🗑${result.trashedLocal}/${result.trashedRemote} + '
-            '${result.deletedLocal}/${result.deletedRemote})',
+        currentFile: result.hasChanges
+            ? 'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+                '🗑${result.trashedLocal}/${result.trashedRemote} + '
+                '${result.deletedLocal}/${result.deletedRemote})'
+            : 'Alles aktuell — nichts zu übertragen.',
         eta: '0s',
         speedBytesPerSecond: 0,
         itemsDone: result.uploaded + result.downloaded,

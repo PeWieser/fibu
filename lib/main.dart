@@ -56,6 +56,16 @@ fluent.AccentColor _createFluentAccent(Color accent, bool isDark) {
   }
 }
 
+/// Wischt die Tastatur weg, sobald der Nutzer IRGENDEINEN Nicht-Text-Bereich
+/// tippt (sonst bleibt sie nach Wizard/Textfeldern hartnäckig offen).
+Widget _dismissKeyboardOnOutsideTap(Widget child) {
+  return GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+    child: child,
+  );
+}
+
 class FibuApp extends ConsumerStatefulWidget {
   const FibuApp({super.key});
 
@@ -212,14 +222,14 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
           ),
         ),
         debugShowCheckedModeBanner: false,
-        home: homeWidget,
+        home: _dismissKeyboardOnOutsideTap(homeWidget),
       );
     } else if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoApp(
         title: 'Fibu',
         theme: IosTheme.build(themeData),
         debugShowCheckedModeBanner: false,
-        home: homeWidget,
+        home: _dismissKeyboardOnOutsideTap(homeWidget),
       );
     } else {
       // Default to Android/Material 3
@@ -353,7 +363,7 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
           ),
         ),
         debugShowCheckedModeBanner: false,
-        home: homeWidget,
+        home: _dismissKeyboardOnOutsideTap(homeWidget),
       );
     }
   }

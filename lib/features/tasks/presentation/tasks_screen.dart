@@ -163,7 +163,6 @@ class TasksScreen extends ConsumerWidget {
         ),
       ),
       backgroundColor: theme.canvas,
-      backgroundColor: theme.canvas,
       child: SafeArea(
         child: !ref.watch(tasksLoadedProvider)
             ? const Center(child: cupertino.CupertinoActivityIndicator())
@@ -874,11 +873,19 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   /// Lädt die Anzahl der Fotos/Videos je Album asynchron nach
   /// (assetCountAsync pro Album) und aktualisiert die UI schrittweise.
   Future<void> _loadAlbumCounts() async {
-    for (final album in _albums) {
+    // Iteration über eine KOPIE: leere Alben werden aus der Auswahl-rvlentfernt.
+    for (final album in List.of(_albums)) {
       try {
         final count = await album.entity.assetCountAsync;
         if (!mounted || !_albums.contains(album)) return;
-        setState(() => album.count = count);
+        setState(() {
+          album.count = count;
+          if (count == 0) {
+            // Leere Alben fliegen raus — sie anzubieten verwirrt nur.
+            _albums.remove(album);
+            _selectedAlbums.remove(album.name);
+          }
+        });
       } catch (_) {
         // Zähler einzelner Alben ist rein kosmetisch – bei Fehlern einfach
         // ohne Anzahl anzeigen, die Auswahl hängt nur am Namen.
@@ -1173,8 +1180,13 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     }
 
     if (widget.platform == TargetPlatform.iOS) {
-      // iOS: Quelle muss gewählt sein (mind. ein Album/Ordner ODER "alle").
-      if (_sourceTab == 'files' && _selectedFolders.isEmpty) {
+      // iOS: Quelle muss gewählt sein — mindestens ein Album (Medien-Tab)
+      // bzw. ein Ordner (Dateien-Tab). Eine leere Auswahl gilt seit dem
+      // UX-Konzeptwechsel als Konsensfehler statt stillem „alles sichern".
+      if (_sourceTab == 'media' && _selectedAlbums.isEmpty) {
+        newSourceError = strings.selectAtLeastOneAlbum;
+        hasError = true;
+      } else if (_sourceTab == 'files' && _selectedFolders.isEmpty) {
         newSourceError = strings.sourcePathRequiredError;
         hasError = true;
       }
@@ -1205,6 +1217,14 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     });
     return true;
   }
+
+  /// Wenn auf iOS im Medien-Tab noch kein Album gewählt ist, bleibt ‚Weiter'
+  /// deaktiviert (kein stiller Fallback auf „alles sichern" mehr).
+  bool get _nextBlocked =>
+      _currentStep == 0 &&
+      _sourceTab == 'media' &&
+      widget.platform == TargetPlatform.iOS &&
+      _selectedAlbums.isEmpty;
 
   void _handleNext(AppStrings strings) {
     if (_currentStep == 0) {
@@ -1567,7 +1587,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
                     ],
                     if (_currentStep < 2)
                       fluent.FilledButton(
-                        onPressed: () => _handleNext(strings),
+                        onPressed: _nextBlocked ? null : () => _handleNext(strings),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -2198,7 +2218,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
                     if (_currentStep < 2)
                       cupertino.CupertinoButton.filled(
                         padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.xs),
-                        onPressed: () => _handleNext(strings),
+                        onPressed: _nextBlocked ? null : () => _handleNext(strings),
                         child: Text(
                           strings.next,
                           style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
@@ -2950,7 +2970,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
                   ],
                   if (_currentStep < 2)
                     material.FilledButton(
-                      onPressed: () => _handleNext(strings),
+                      onPressed: _nextBlocked ? null : () => _handleNext(strings),
                       child: Text(
                         strings.next,
                         style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),

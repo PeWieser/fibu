@@ -226,34 +226,36 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: isDeleting ? null : () => _showRemoteActions(context, remote, TargetPlatform.windows),
+          onTap: isDeleting
+              ? null
+              : () => _showRemoteActions(context, remote, TargetPlatform.windows),
           child: fluent.Card(
-          padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md + 4, theme.md),
-          child: Row(
-            children: [
-              Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 28, semanticLabel: 'Cloud Remote'),
-              SizedBox(width: theme.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(remote, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    SizedBox(height: theme.xs),
-                    Text(type, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    _remoteStorageInfo(theme, strings, remote),
-                  ],
+            padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md + 4, theme.md),
+            child: Row(
+              children: [
+                Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 28, semanticLabel: 'Cloud Remote'),
+                SizedBox(width: theme.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(remote, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      SizedBox(height: theme.xs),
+                      Text(type, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                      _remoteStorageInfo(theme, strings, remote),
+                    ],
+                  ),
                 ),
-              ),
-              if (isDeleting)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: fluent.ProgressRing(strokeWidth: 2.5),
-                )
-              else
-                Icon(fluent.FluentIcons.chevron_right, size: 14, color: theme.textSecondary, semanticLabel: strings.openInDefaultApp),
-            ],
-          ),
+                if (isDeleting)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: fluent.ProgressRing(strokeWidth: 2.5),
+                  )
+                else
+                  Icon(fluent.FluentIcons.chevron_right, size: 14, color: theme.textSecondary, semanticLabel: strings.openInDefaultApp),
+              ],
+            ),
           ),
         );
       },
@@ -386,7 +388,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               style: TextStyle(color: theme.textSecondary),
             ),
             SizedBox(height: theme.lg),
-            // Aktionsfähiger Leerzustand (Apple HIG): CTA zum Hinzufügen.
             Semantics(
               label: strings.addCloudDrive,
               button: true,
@@ -415,30 +416,32 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
 
     return cupertino.CupertinoListSection.insetGrouped(
       header: Text(strings.connectedDrives.toUpperCase()),
-      children: remotes.map((remote) {
-        final type = _getProviderType(remote);
-        final isDeleting = _deletingRemote == remote;
-
-        return cupertino.CupertinoListTile.notched(
-          title: Text(remote),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(type),
-              _remoteStorageInfo(theme, strings, remote),
-            ],
-          ),
-          leading: Icon(cupertino.CupertinoIcons.cloud,
-              color: theme.accent, semanticLabel: 'Cloud Remote'),
-          trailing: isDeleting
-              ? const cupertino.CupertinoActivityIndicator()
-              : const Icon(cupertino.CupertinoIcons.chevron_forward,
-                  size: 18, color: cupertino.CupertinoColors.inactiveGray),
-          onTap: isDeleting
-              ? null
-              : () => _showRemoteActions(context, remote, TargetPlatform.iOS),
-        );
-      }).toList(),
+      children: [
+        for (final remote in remotes)
+          () {
+            final type = _getProviderType(remote);
+            final isDeleting = _deletingRemote == remote;
+            return cupertino.CupertinoListTile.notched(
+              title: Text(remote),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type),
+                  _remoteStorageInfo(theme, strings, remote),
+                ],
+              ),
+              leading: Icon(cupertino.CupertinoIcons.cloud,
+                  color: theme.accent, semanticLabel: 'Cloud Remote'),
+              trailing: isDeleting
+                  ? const cupertino.CupertinoActivityIndicator()
+                  : const Icon(cupertino.CupertinoIcons.chevron_forward,
+                      size: 18, color: cupertino.CupertinoColors.inactiveGray),
+              onTap: isDeleting
+                  ? null
+                  : () => _showRemoteActions(context, remote, TargetPlatform.iOS),
+            );
+          }(),
+      ],
     );
   }
 
@@ -688,11 +691,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   }
 
   // --- Remote Deletion Confirmation (Destructive Action Rule 6) ---
-  /// Aktionsmenü nach Tap auf einen Remote (kein dauerhaftes Mülleimersymbol
-  /// mehr in der Übersicht — Apple-HIG).
+  /// Aktionsmenü nach Tap auf einen Remote — Übersicht bleibt clean,
+  /// Trennen passiert gezielt über das Aktionsblatt (kein Trash-Symbol mehr).
   Future<void> _showRemoteActions(
       BuildContext context, String remote, TargetPlatform platform) async {
     final strings = context.strings;
+    final theme = context.theme;
     if (platform == TargetPlatform.iOS) {
       await cupertino.showCupertinoModalPopup(
         context: context,
@@ -727,12 +731,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               const material.Divider(height: 1),
               material.ListTile(
                 leading: Icon(material.Icons.link_off, color: theme.error),
-                title:
-                    Text(strings.disconnect, style: TextStyle(color: theme.error)),
+                title: Text(strings.disconnect,
+                    style: TextStyle(color: theme.error)),
                 onTap: () async {
                   Navigator.pop(sheetCtx);
-                  final confirmed =
-                      await _confirmDeleteRemoteAsync(context, remote, platform);
+                  final confirmed = await _confirmDeleteRemoteAsync(
+                      context, remote, platform);
                   if (confirmed) _performDelete(remote);
                 },
               ),
@@ -741,7 +745,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ),
       );
     } else {
-      // Windows: direkte Bestätigung.
       final confirmed =
           await _confirmDeleteRemoteAsync(context, remote, platform);
       if (confirmed) _performDelete(remote);

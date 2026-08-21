@@ -76,38 +76,225 @@ class TasksScreen extends ConsumerWidget {
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
                 final task = tasks[index];
-                return material.Card(.Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(theme.radiusLg),
-                      side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-                    ),
-                    child: material.ListTile(
-                      leading: Icon(
-                        material.Icons.backup_outlined,
-                        color: theme.accent,
-                        semanticLabel: strings.tasksTitle,
-                      ),
-                      title: Text(task.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                        task.isActive ? strings.statusActive : strings.statusInactive,
-                        style: TextStyle(
-                          color: task.isActive ? theme.accent : theme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: Icon(
-                        material.Icons.chevron_right,
-                        color: theme.textSecondary,
-                      ),
+                return MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: fluent.Card(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () {
                         Navigator.of(context).push(
-                          material.MaterialPageRoute(
+                          fluent.FluentPageRoute(
                             builder: (_) => TaskDetailScreen(taskId: task.id),
                           ),
                         );
                       },
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: Row(
+                          children: [
+                            Icon(
+                              fluent.FluentIcons.task_manager,
+                              size: 20,
+                              color: theme.accent,
+                              semanticLabel: strings.tasksTitle,
+                            ),
+                            SizedBox(width: theme.md),
+                            Expanded(
+                              child: Text(
+                                task.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
+                              decoration: BoxDecoration(
+                                color: (task.isActive ? theme.accent : theme.textSecondary).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(theme.radiusSm),
+                              ),
+                              child: Text(
+                                task.isActive ? strings.statusActive : strings.statusInactive,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: task.isActive ? theme.accent : theme.textSecondary,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: theme.md),
+                            Icon(
+                              fluent.FluentIcons.chevron_right,
+                              size: 12,
+                              color: theme.textSecondary,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  // =========================================================================
+  // IOS (Cupertino UI in Apple Minimalist Style)
+  // =========================================================================
+  Widget _buildIOS(BuildContext context, WidgetRef ref) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final tasks = ref.watch(tasksListProvider);
+
+    // Lade-Gate: Beim Kaltstart kurz Spinner statt falschem Leerzustand.
+    if (!ref.watch(tasksLoadedProvider)) {
+      return cupertino.CupertinoPageScaffold(
+        backgroundColor: theme.canvas,
+        child: const SafeArea(
+          child: Center(child: cupertino.CupertinoActivityIndicator()),
+        ),
+      );
+    }
+
+    final Widget listContent;
+    if (tasks.isEmpty) {
+      listContent = _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings);
+    } else {
+      listContent = SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IosTheme.largeTitle(strings.tasksTitle, theme),
+            cupertino.CupertinoListSection.insetGrouped(
+              children: [
+                for (final task in tasks)
+                  _buildIOSTaskRow(context, ref, task, theme, strings),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return cupertino.CupertinoPageScaffold(
+      navigationBar: cupertino.CupertinoNavigationBar(
+        middle: const SizedBox.shrink(),
+        trailing: SizedBox(
+          width: 44,
+          height: 44,
+          child: cupertino.CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              IosHaptics.light();
+              showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS);
+            },
+            child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
+          ),
+        ),
+      ),
+      backgroundColor: theme.canvas,
+      child: SafeArea(child: listContent),
+    );
+  }
+
+  /// Eine Task-Zeile (iOS) — Apple-konform ohne Swipe-Mülleimer; Löschen
+  /// passiert nur in der Detailansicht (Bearbeiten-Modus).
+  Widget _buildIOSTaskRow(BuildContext context, WidgetRef ref, BackupTask task,
+      AppThemeData theme, AppStrings strings) {
+    return cupertino.CupertinoListTile.notched(
+      leading: Icon(
+        cupertino.CupertinoIcons.folder_fill,
+        color: theme.accent,
+        size: 22,
+        semanticLabel: task.name,
+      ),
+      title: Text(
+        task.name,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+      additionalInfo: Text(
+        task.isActive ? strings.statusActive : strings.statusInactive,
+        style: TextStyle(
+          color: task.isActive ? theme.accent : theme.textSecondary,
+          fontSize: 14,
+        ),
+      ),
+      trailing: const Icon(
+        cupertino.CupertinoIcons.chevron_forward,
+        size: 18,
+        color: cupertino.CupertinoColors.inactiveGray,
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          cupertino.CupertinoPageRoute(
+            builder: (_) => TaskDetailScreen(taskId: task.id),
+          ),
+        );
+      },
+    );
+  }
+
+  // =========================================================================
+  // ANDROID (Material 3 UI in Minimalist Style)
+  // =========================================================================
+  Widget _buildAndroid(BuildContext context, WidgetRef ref) {
+    final theme = context.theme;
+    final strings = ref.watch(stringsProvider);
+    final tasks = ref.watch(tasksListProvider);
+
+    // Lade-Gate genauso wie iOS.
+    if (!ref.watch(tasksLoadedProvider)) {
+      return material.Scaffold(
+        backgroundColor: theme.canvas,
+        appBar: material.AppBar(title: Text(strings.tasksTitle)),
+        body: const Center(child: material.CircularProgressIndicator()),
+      );
+    }
+
+    return material.Scaffold(
+      appBar: material.AppBar(title: Text(strings.tasksTitle)),
+      backgroundColor: theme.canvas,
+      body: tasks.isEmpty
+          ? _buildEmptyState(context, ref, TargetPlatform.android, theme, strings)
+          : ListView.separated(
+              padding: EdgeInsets.all(theme.lg),
+              itemCount: tasks.length,
+              separatorBuilder: (_, __) => SizedBox(height: theme.sm),
+              itemBuilder: (context, index) {
+                final task = tasks[index];
+                return material.Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(theme.radiusLg),
+                    side: BorderSide(
+                        color: material.Theme.of(context).colorScheme.outlineVariant),
+                  ),
+                  child: material.ListTile(
+                    leading: Icon(
+                      material.Icons.backup_outlined,
+                      color: theme.accent,
+                      semanticLabel: strings.tasksTitle,
+                    ),
+                    title: Text(task.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      task.isActive ? strings.statusActive : strings.statusInactive,
+                      style: TextStyle(
+                        color: task.isActive ? theme.accent : theme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Icon(
+                      material.Icons.chevron_right,
+                      color: theme.textSecondary,
+                    ),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        material.MaterialPageRoute(
+                          builder: (_) => TaskDetailScreen(taskId: task.id),
+                        ),
+                      );
+                    },
                   ),
                 );
               },
@@ -118,8 +305,10 @@ class TasksScreen extends ConsumerWidget {
         child: material.FloatingActionButton(
           tooltip: strings.addTask,
           backgroundColor: theme.accent,
-          onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
-          child: const Icon(material.Icons.add, color: Color(0xFFFFFFFF), semanticLabel: 'Add Task'),
+          onPressed: () =>
+              _showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
+          child: const Icon(material.Icons.add,
+              color: Color(0xFFFFFFFF), semanticLabel: 'Add Task'),
         ),
       ),
     );

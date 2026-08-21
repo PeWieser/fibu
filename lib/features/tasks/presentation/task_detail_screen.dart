@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
+import 'package:photo_manager/photo_manager.dart';
+
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../dashboard/presentation/dashboard_controller.dart';
@@ -31,49 +33,89 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _isSyncing = false;
   String? _syncMessage;
 
-  // Inline-Bearbeitung (kein Wizard-Sprung mehr)
+  // Inline-Bearbeitung (kein Wizard-Sprung mehr): Nur Name + Quell-Auswahl.
   bool _isEditing = false;
   final TextEditingController _nameCtrl = TextEditingController();
-  final TextEditingController _folderCtrl = TextEditingController();
-  String _editScheduleDay = 'Daily';
-  String _editHour = '02';
-  String _editMinute = '00';
-  SyncMode _editSyncMode = SyncMode.incremental;
+  String _editSourceChoice = 'all'; // 'all' | 'photos' | 'videos' | 'albums'
+  final Set<String> _editAlbumSelection = {};
+  List<String> _editAlbumNames = [];
+  bool _editAlbumsLoading = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _folderCtrl.dispose();
     super.dispose();
+  }
+
+  // Aktuelle Aufgabenquelle in die Auswahl überführen.
+  void _initEditSource(BackupTask task) {
+    final src = task.sourcePath;
+    if (task.selectedAlbums.isNotEmpty) {
+      _editSourceChoice = 'albums';
+      _editAlbumSelection
+        ..clear()
+        ..addAll(task.selectedAlbums);
+    } else if (src == 'photos' || src.startsWith('photos:')) {
+      _editSourceChoice = 'photos';
+    } else if (src == 'videos' || src.startsWith('videos:')) {
+      _editSourceChoice = 'videos';
+    } else {
+      _editSourceChoice = 'all';
+    }
+  }
+
+  Future<void> _loadEditAlbums() async {
+    setState(() => _editAlbumsLoading = true);
+    try {
+      final ps = await PhotoManager.requestPermissionExtend();
+      if (ps.isAuth || ps.hasAccess) {
+        final paths = await PhotoManager.getAssetPathList(
+            type: RequestType.common, hasAll: true);
+        if (!mounted) return;
+        setState(() {
+          _editAlbumNames = paths.map((p) => p.name).toList();
+          _editAlbumsLoading = false;
+        });
+      } else {
+        if (mounted) setState(() => _editAlbumsLoading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _editAlbumsLoading = false);
+    }
   }
 
   void _startInlineEdit(BackupTask task) {
     setState(() {
       _isEditing = true;
       _nameCtrl.text = task.name;
-      _folderCtrl.text = task.targetFolderName;
-      _editScheduleDay = task.scheduleDay;
-      final t = task.scheduleTime;
-      if (t.contains(':')) {
-        final parts = t.split(':');
-        _editHour = parts[0];
-        _editMinute = parts[1];
-      }
-      _editSyncMode = task.syncMode;
     });
+    _initEditSource(task);
+    if (_editAlbumNames.isEmpty) {
+      _loadEditAlbums();
+    }
   }
 
   void _finishInlineEdit(BackupTask task) {
-    final strings = context.strings;
     final newName = _nameCtrl.text.trim();
-    final newFolder = _folderCtrl.text.trim();
+    String newSource = task.sourcePath;
+    List<String> newAlbums = task.selectedAlbums;
+    if (_editSourceChoice == 'all') {
+      newSource = 'all';
+      newAlbums = const [];
+    } else if (_editSourceChoice == 'photos') {
+      newSource = 'photos';
+      newAlbums = const [];
+    } else if (_editSourceChoice == 'videos') {
+      newSource = 'videos';
+      newAlbums = const [];
+    } else if (_editSourceChoice == 'albums' && _editAlbumSelection.isNotEmpty) {
+      newSource = 'photos:${_editAlbumSelection.join('|')}';
+      newAlbums = _editAlbumSelection.toList();
+    }
     final updated = task.copyWith(
       name: newName.isNotEmpty ? newName : task.name,
-      targetFolderName: newFolder,
-      scheduleDay: _editScheduleDay,
-      scheduleTime: '$_editHour:$_editMinute',
-      schedule: strings.scheduleDisplay(day: _editScheduleDay, time: '$_editHour:$_editMinute'),
-      syncMode: _editSyncMode,
+      sourcePath: newSource,
+      selectedAlbums: newAlbums,
     );
     ref.read(tasksListProvider.notifier).updateTask(task.id, updated);
     setState(() => _isEditing = false);
@@ -821,18 +863,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.folder_badge_plus, color: theme.accent, size: 22),
                     title: Text(strings.targetFolderLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: _isEditing
-                        ? SizedBox(
-                            width: 150,
-                            child: cupertino.CupertinoTextField(
-                              controller: _folderCtrl,
-                              textAlign: TextAlign.end,
-                            ),
-                          )
-                        : Text(
-                            _formatTargetFolder(strings, task),
-                            style: TextStyle(color: theme.textSecondary, fontSize: 14),
-                          ),
+                    trailing: Text(
+                      _formatTargetFolder(strings, task),
+                      style: TextStyle(color: theme.textSecondary, fontSize: 14),
+                    ),
                   ),
                   if (task.targetRemotes.length > 1)
                     cupertino.CupertinoListTile(
@@ -846,6 +880,69 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     ),
                 ],
               ),
+
+              // 2b. Quell-Auswahl — nur im Bearbeiten-Modus sichtbar.
+              if (_isEditing)
+                cupertino.CupertinoListSection.insetGrouped(
+                  header: Text(strings.sourceCategoryLabel.toUpperCase()),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(theme.md),
+                      child: cupertino.CupertinoSlidingSegmentedControl<String>(
+                        groupValue: _editSourceChoice,
+                        children: {
+                          'all': Text(strings.allMedia, style: const TextStyle(fontSize: 13)),
+                          'photos': Text(strings.allPhotos, style: const TextStyle(fontSize: 13)),
+                          'videos': Text(strings.allVideos, style: const TextStyle(fontSize: 13)),
+                          'albums': Text(strings.onlySpecificAlbums, style: const TextStyle(fontSize: 13)),
+                        },
+                        onValueChanged: (v) {
+                          if (v == null) return;
+                          setState(() => _editSourceChoice = v);
+                          if (v == 'albums' && _editAlbumNames.isEmpty && !_editAlbumsLoading) {
+                            _loadEditAlbums();
+                          }
+                        },
+                      ),
+                    ),
+                    if (_editSourceChoice == 'albums') ...[
+                      if (_editAlbumsLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: cupertino.CupertinoActivityIndicator()),
+                        )
+                      else if (_editAlbumNames.isEmpty)
+                        Padding(
+                          padding: EdgeInsets.all(theme.md),
+                          child: Text(
+                            strings.noAlbumsFound,
+                            style: TextStyle(color: theme.textSecondary, fontSize: 13),
+                          ),
+                        )
+                      else
+                        ..._editAlbumNames.map((name) {
+                          final checked = _editAlbumSelection.contains(name);
+                          return cupertino.CupertinoListTile(
+                            title: Text(name, style: const TextStyle(fontSize: 14)),
+                            trailing: checked
+                                ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid,
+                                    color: theme.accent, size: 22)
+                                : Icon(cupertino.CupertinoIcons.circle,
+                                    color: theme.textSecondary, size: 22),
+                            onTap: () {
+                              setState(() {
+                                if (checked) {
+                                  _editAlbumSelection.remove(name);
+                                } else {
+                                  _editAlbumSelection.add(name);
+                                }
+                              });
+                            },
+                          );
+                        }),
+                    ],
+                  ],
+                ),
 
               // 3. Sync Mode Section
               cupertino.CupertinoListSection.insetGrouped(
@@ -864,21 +961,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       size: 22,
                     ),
                     title: Text(strings.syncModeLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: _isEditing
-                        ? cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
-                            groupValue: _editSyncMode,
-                            children: {
-                              SyncMode.incremental: Text(strings.syncModeBadgeIncremental),
-                              SyncMode.mirror: Text(strings.syncModeBadgeMirror),
-                            },
-                            onValueChanged: (v) {
-                              if (v != null) setState(() => _editSyncMode = v);
-                            },
-                          )
-                        : Text(
-                            _formatSyncMode(strings, task.syncMode),
-                            style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                          ),
+                    trailing: Text(
+                      _formatSyncMode(strings, task.syncMode),
+                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
+                    ),
                   ),
                 ],
               ),
@@ -890,29 +976,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.clock, color: theme.accent, size: 22),
                     title: Text(strings.scheduleLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: _isEditing
-                        ? SizedBox(
-                            width: 190,
-                            child: cupertino.CupertinoTextField(
-                              controller: TextEditingController(text: '$_editScheduleDay $_editHour:$_editMinute'),
-                              onChanged: (val) {
-                                // akzeptiert "Daily 02:00", "iOS System", "Monday 12:00" usw.
-                                final t = val.trim();
-                                final parts = t.split(RegExp(r'\s+'));
-                                final dayPart = parts.first;
-                                if (dayPart.isNotEmpty) _editScheduleDay = dayPart;
-                                final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(t);
-                                if (timeMatch != null) {
-                                  _editHour = timeMatch.group(1)!.padLeft(2, '0');
-                                  _editMinute = timeMatch.group(2)!;
-                                }
-                              },
-                            ),
-                          )
-                        : Text(
-                            task.scheduleDescription,
-                            style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                          ),
+                    trailing: Text(
+                      task.scheduleDescription,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 15),
+                    ),
                   ),
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.slider_horizontal_3, color: theme.accent, size: 22),
@@ -942,7 +1009,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 ],
               ),
 
-              // 5b. Danger Zone (nur Lösch-Aktionen)
+              // 5b. Danger Zone (Lösch-Aktionen existieren nur im Bearbeiten-Modus)
+              if (_isEditing)
               cupertino.CupertinoListSection.insetGrouped(
                 header: Text(strings.dangerZone.toUpperCase()),
                 children: [

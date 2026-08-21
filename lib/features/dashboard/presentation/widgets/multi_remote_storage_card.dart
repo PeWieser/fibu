@@ -8,35 +8,13 @@ import '../../../../core/utils/format.dart';
 import '../../../../theme/theme.dart';
 import '../../../../core/localization/app_strings.dart';
 
-/// Dashboard-Speicherkarte: Kombiniert die genutzten Bytes aller verbundenen
-/// Cloud-Laufwerke in EINEM gestapelten Balken — je Remote in der
-/// Provider-Farbe; der von Fibu belegte Anteil (gesättigt) ist von
-/// generellem Speicher (abgeblasst) klar unterscheidbar. Mit Legende.
+/// Dashboard-Speicherkarte über ALLE verbundenen Cloud-Laufwerke.
+/// Absichtlich schlicht (Nutzer-Designfeedback, nach HIG):
+///  * Y von Z belegt (Summe aller Remotes),
+///  * ein Balken: Fibu-Beleg in Akzentfarbe, sonstiger belegter Platz in
+///    blasserem Akzent, freier Platz als Theme-Track (hell/dunkel adaptiv).
 class MultiRemoteStorageCard extends ConsumerWidget {
   const MultiRemoteStorageCard({super.key});
-
-  /// Stark vereinfachte Provider-Erkennung anhand des Remote-Namens.
-  static Color _providerColor(String remoteName, Color fallback) {
-    final n = remoteName.toLowerCase();
-    if (n.contains('mega')) return const Color(0xFFD9272E); // MEGA-Rot
-    if (n.contains('dropbox')) return const Color(0xFF0061FF); // Dropbox-Blau
-    if (n.contains('gdrive') || n.contains('drive') || n.contains('google')) {
-      return const Color(0xFF1A73E8); // Google-Blau
-    }
-    if (n.contains('onedrive') || n.contains('one')) return const Color(0xFF0364B8); // OneDrive
-    if (n.contains('box')) return const Color(0xFF0061D5);
-    if (n.contains('pcloud')) return const Color(0xFF00A85B);
-    if (n.contains('yandex')) return const Color(0xFFFC3F1D);
-    if (n.contains('s3') || n.contains('aws') || n.contains('minio')) {
-      return const Color(0xFFFF9900); // AWS-Orange
-    }
-    if (n.contains('b2') || n.contains('backblaze')) return const Color(0xFFE12127);
-    if (n.contains('webdav') || n.contains('nextcloud') || n.contains('owncloud')) {
-      return const Color(0xFF0082C9); // Nextcloud-Blau
-    }
-    if (n.contains('sftp') || n.contains('ftp')) return const Color(0xFF8E8E93);
-    return fallback;
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,34 +27,32 @@ class MultiRemoteStorageCard extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(child: material.CircularProgressIndicator()),
       ),
-      error: (err, _) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+      error: (err, _) =>
+          Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
       data: (remotes) {
         if (remotes.isEmpty) return const SizedBox.shrink();
 
-        // Pro Remote: Quota (kann null/fehlend sein, z. B. MEGA ohne about)
-        // + Fibu-Beleg — werden asymnchron nachgeladen und sofort angezeigt.
-        final entries = remotes.map((remote) {
+        var totalUsed = 0;
+        var totalQuota = 0;
+        var fibuUsed = 0;
+        for (final remote in remotes) {
           final quota = ref.watch(remoteQuotaProvider(remote)).valueOrNull;
-          final fibu = ref.watch(remoteFibuUsageProvider(remote)).valueOrNull ?? -1;
-          return (remote: remote, quota: quota, fibu: fibu);
-        }).toList();
-
-        final totalUsed = entries.fold<int>(
-            0, (sum, e) => sum + (e.quota?.usedBytes ?? 0));
-        final totalQuota = entries.fold<int>(
-            0, (sum, e) => sum + (e.quota?.totalBytes ?? 0));
-
-        final metrics = <int>[];
-        final colors = <Color>[];
-        for (final e in entries) {
-          final base = _providerColor(e.remote, theme.accent);
-          final used = e.quota?.usedBytes ?? 0;
-          final fibu = e.fibu < 0 ? 0 : e.fibu;
-          metrics.add((used - fibu).clamp(0, used));
-          metrics.add(fibu);
-          colors.add(base.withValues(alpha: 0.28)); // anderer Remote-Inhalt, blass
-          colors.add(base); // Fibu-Anteil, gesättigt
+          if (quota != null) {
+            totalUsed += quota.usedBytes;
+            totalQuota += quota.totalBytes;
+          }
+          final fibu = ref.watch(remoteFibuUsageProvider(remote)).valueOrNull;
+          if (fibu != null) fibuUsed += fibu;
         }
+        fibuUsed = fibuUsed.clamp(0, totalUsed);
+        final otherUsed = totalUsed - fibuUsed;
+        final free = totalQuota > totalUsed ? totalQuota - totalUsed : 0;
+
+        // Farbkonzept (wie besprochen): Fibu = Akzent gesättigt, übriger belegt
+        // = blass, frei = Track (je Theme hell/dunkel adaptiv).
+        final fibuColor = theme.accent;
+        final otherColor = theme.accent.withValues(alpha: 0.3);
+        final freeColor = theme.textSecondary.withValues(alpha: 0.15);
 
         return Container(
           padding: EdgeInsets.all(theme.lg),
@@ -96,68 +72,33 @@ class MultiRemoteStorageCard extends ConsumerWidget {
                   fontSize: 16,
                 ),
               ),
-              SizedBox(height: theme.xs),
-              Text(
-                totalQuota > 0
-                    ? '${formatBytes(totalUsed)} von ${formatBytes(totalQuota)}'
-                    : '${formatBytes(totalUsed)} (Gesamt ${strings.storageNotAvailable})',
-                style: TextStyle(color: theme.textSecondary, fontSize: 13),
-              ),
-              SizedBox(height: theme.md),
+              SizedBox(height: theme.sm),
               ClipRRect(
                 borderRadius: BorderRadius.circular(theme.radiusSm),
                 child: SizedBox(
                   height: 10,
-                  child: metrics.every((m) => m == 0)
-                      ? Container(color: theme.textSecondary.withValues(alpha: 0.12))
+                  child: (totalUsed + free) <= 0
+                      ? Container(color: freeColor)
                       : Row(
                           children: [
-                            for (var i = 0; i < metrics.length; i++)
-                              if (metrics[i] > 0)
-                                Expanded(
-                                  flex: metrics[i],
-                                  child: Container(color: colors[i]),
-                                ),
+                            if (fibuUsed > 0)
+                              Expanded(flex: fibuUsed, child: Container(color: fibuColor)),
+                            if (otherUsed > 0)
+                              Expanded(flex: otherUsed, child: Container(color: otherColor)),
+                            if (free > 0)
+                              Expanded(flex: free, child: Container(color: freeColor)),
                           ],
                         ),
                 ),
               ),
-              SizedBox(height: theme.md),
-              // Legende je Remote: Dot in Providerfarbe, Name, belegt + Fibu-Anteil
-              ...entries.map((e) {
-                final color = _providerColor(e.remote, theme.accent);
-                final usedText = e.quota == null
-                    ? strings.storageNotAvailable
-                    : (e.quota!.totalBytes > 0
-                        ? '${formatBytes(e.quota!.usedBytes)} / ${formatBytes(e.quota!.totalBytes)}'
-                        : strings.storageNotAvailable);
-                final fibuText = e.fibu >= 0 ? ' · Fibu: ${formatBytes(e.fibu)}' : '';
-                return Padding(
-                  padding: EdgeInsets.only(bottom: theme.xs),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Text(
-                          e.remote,
-                          style: TextStyle(color: theme.textPrimary, fontSize: 13),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        usedText + fibuText,
-                        style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+              SizedBox(height: theme.sm),
+              Text(
+                totalQuota > 0
+                    ? strings.quotaSummaryUsedOf(
+                        formatBytes(totalUsed), formatBytes(totalQuota))
+                    : '${formatBytes(totalUsed)} · ${strings.quotaSummaryUnavailable}',
+                style: TextStyle(color: theme.textSecondary, fontSize: 12),
+              ),
             ],
           ),
         );

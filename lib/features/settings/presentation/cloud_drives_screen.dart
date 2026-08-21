@@ -224,7 +224,10 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final type = _getProviderType(remote);
         final isDeleting = _deletingRemote == remote;
 
-        return fluent.Card(
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isDeleting ? null : () => _showRemoteActions(context, remote, TargetPlatform.windows),
+          child: fluent.Card(
           padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md + 4, theme.md),
           child: Row(
             children: [
@@ -248,17 +251,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                   child: fluent.ProgressRing(strokeWidth: 2.5),
                 )
               else
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                    child: fluent.IconButton(
-                      icon: Icon(fluent.FluentIcons.delete, color: theme.error, semanticLabel: strings.delete),
-                      onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.windows),
-                    ),
-                  ),
-                ),
+                Icon(fluent.FluentIcons.chevron_right, size: 14, color: theme.textSecondary, semanticLabel: strings.openInDefaultApp),
             ],
+          ),
           ),
         );
       },
@@ -424,54 +419,24 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final type = _getProviderType(remote);
         final isDeleting = _deletingRemote == remote;
 
-        return Dismissible(
-          key: ValueKey(remote),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            color: theme.error,
-            child: const Icon(
-              cupertino.CupertinoIcons.trash,
-              color: cupertino.CupertinoColors.white,
-              size: 22,
-            ),
+        return cupertino.CupertinoListTile.notched(
+          title: Text(remote),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(type),
+              _remoteStorageInfo(theme, strings, remote),
+            ],
           ),
-          confirmDismiss: (_) async {
-            final confirmed =
-                await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.iOS);
-            if (confirmed) {
-              // Löschung läuft asynchron über Provider-Invalidierung. return false,
-              // damit Dismissible die Zeile NICHT selbst animiert/entfernt
-              // (kein "dismissed Dismissible still part of tree"-Fehler).
-              _performDelete(remote);
-            }
-            return false;
-          },
-          child: cupertino.CupertinoListTile.notched(
-            title: Text(remote),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(type),
-                _remoteStorageInfo(theme, strings, remote),
-              ],
-            ),
-            leading: Icon(cupertino.CupertinoIcons.cloud, color: theme.accent, semanticLabel: 'Cloud Remote'),
-            trailing: isDeleting
-                ? const cupertino.CupertinoActivityIndicator()
-                : MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                      child: cupertino.CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        child: Icon(cupertino.CupertinoIcons.trash, color: theme.error, size: 20, semanticLabel: strings.delete),
-                        onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.iOS),
-                      ),
-                    ),
-                  ),
-          ),
+          leading: Icon(cupertino.CupertinoIcons.cloud,
+              color: theme.accent, semanticLabel: 'Cloud Remote'),
+          trailing: isDeleting
+              ? const cupertino.CupertinoActivityIndicator()
+              : const Icon(cupertino.CupertinoIcons.chevron_forward,
+                  size: 18, color: cupertino.CupertinoColors.inactiveGray),
+          onTap: isDeleting
+              ? null
+              : () => _showRemoteActions(context, remote, TargetPlatform.iOS),
         );
       }).toList(),
     );
@@ -605,59 +570,35 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final type = _getProviderType(remote);
         final isDeleting = _deletingRemote == remote;
 
-        return Dismissible(
-          key: ValueKey(remote),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            decoration: BoxDecoration(
-              color: theme.error,
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-            ),
-            child: const Icon(
-              material.Icons.delete_outline,
-              color: material.Colors.white,
-              size: 24,
-            ),
+        return material.Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            side: BorderSide(
+                color: material.Theme.of(context).colorScheme.outlineVariant),
           ),
-          confirmDismiss: (_) async {
-            return await _confirmDeleteRemoteAsync(context, remote, TargetPlatform.android);
-          },
-          child: material.Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-              side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+          child: material.ListTile(
+            contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
+            leading: Icon(material.Icons.cloud_queue,
+                color: theme.accent, semanticLabel: 'Cloud Remote'),
+            title: Text(remote),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(type),
+                _remoteStorageInfo(theme, strings, remote),
+              ],
             ),
-            child: material.ListTile(
-              contentPadding: EdgeInsets.fromLTRB(theme.md, 0, theme.md + 4, 0),
-              leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: 'Cloud Remote'),
-              title: Text(remote),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(type),
-                  _remoteStorageInfo(theme, strings, remote),
-                ],
-              ),
-              trailing: isDeleting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: material.CircularProgressIndicator(strokeWidth: 2.5),
-                    )
-                  : MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                        child: material.IconButton(
-                          icon: Icon(material.Icons.delete_outline, color: theme.error, semanticLabel: strings.delete),
-                          onPressed: () => _confirmDeleteRemote(context, remote, TargetPlatform.android),
-                        ),
-                      ),
-                    ),
-            ),
+            trailing: isDeleting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: material.CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Icon(material.Icons.chevron_right),
+            onTap: isDeleting
+                ? null
+                : () => _showRemoteActions(context, remote, TargetPlatform.android),
           ),
         );
       },
@@ -747,6 +688,66 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   }
 
   // --- Remote Deletion Confirmation (Destructive Action Rule 6) ---
+  /// Aktionsmenü nach Tap auf einen Remote (kein dauerhaftes Mülleimersymbol
+  /// mehr in der Übersicht — Apple-HIG).
+  Future<void> _showRemoteActions(
+      BuildContext context, String remote, TargetPlatform platform) async {
+    final strings = context.strings;
+    if (platform == TargetPlatform.iOS) {
+      await cupertino.showCupertinoModalPopup(
+        context: context,
+        builder: (sheetCtx) => cupertino.CupertinoActionSheet(
+          title: Text(remote),
+          actions: [
+            cupertino.CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () async {
+                Navigator.pop(sheetCtx);
+                final confirmed =
+                    await _confirmDeleteRemoteAsync(context, remote, platform);
+                if (confirmed) _performDelete(remote);
+              },
+              child: Text(strings.disconnect),
+            ),
+          ],
+          cancelButton: cupertino.CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(sheetCtx),
+            child: Text(strings.cancel),
+          ),
+        ),
+      );
+    } else if (platform == TargetPlatform.android) {
+      await material.showModalBottomSheet(
+        context: context,
+        builder: (sheetCtx) => material.SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.ListTile(title: Text(remote)),
+              const material.Divider(height: 1),
+              material.ListTile(
+                leading: Icon(material.Icons.link_off, color: theme.error),
+                title:
+                    Text(strings.disconnect, style: TextStyle(color: theme.error)),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  final confirmed =
+                      await _confirmDeleteRemoteAsync(context, remote, platform);
+                  if (confirmed) _performDelete(remote);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // Windows: direkte Bestätigung.
+      final confirmed =
+          await _confirmDeleteRemoteAsync(context, remote, platform);
+      if (confirmed) _performDelete(remote);
+    }
+  }
+
   Future<bool> _confirmDeleteRemoteAsync(
       BuildContext context, String remoteName, TargetPlatform platform) async {
     final strings = context.strings;

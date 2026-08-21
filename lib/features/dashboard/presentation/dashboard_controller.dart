@@ -87,6 +87,13 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         lower.contains('timeout')) {
       return strings.networkUnavailableError;
     }
+    if (lower.contains('didn\'t find section') ||
+        lower.contains("couldn't find") ||
+        lower.contains('not found in config') ||
+        lower.contains('no such remote') ||
+        lower.contains('no section')) {
+      return strings.remoteNotFoundHint;
+    }
     if (lower.contains('unauthorized') ||
         lower.contains('forbidden') ||
         lower.contains('401') ||

@@ -221,7 +221,6 @@ class SettingsScreen extends ConsumerWidget {
               fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
               fluent.Tooltip(
-                message: strings.wifiOnlySyncDescription,
                 child: fluent.Card(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
@@ -234,7 +233,6 @@ class SettingsScreen extends ConsumerWidget {
                             children: [
                               Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
                               SizedBox(height: theme.xs / 2),
-                              Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
                             ],
                           ),
                         ),
@@ -438,7 +436,6 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   cupertino.CupertinoListTile(
                     title: Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 16)),
-                    subtitle: Text(strings.wifiOnlySyncDescription, style: const TextStyle(fontSize: 12)),
                     trailing: cupertino.CupertinoSwitch(
                       value: ref.watch(wifiOnlySyncProvider),
                       onChanged: (val) {
@@ -648,7 +645,6 @@ class SettingsScreen extends ConsumerWidget {
               ),
               child: material.SwitchListTile(
                 title: Text(strings.wifiOnlySyncLabel),
-                subtitle: Text(strings.wifiOnlySyncDescription, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
                 value: ref.watch(wifiOnlySyncProvider),
                 onChanged: (val) {
                   ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);

@@ -184,8 +184,8 @@ class AppStrings {
       ? 'Insgesamt ${albumMediaCount(count)}'
       : 'Total: ${albumMediaCount(count)}';
   String get emptySelectionAlbumsHint => isGerman
-      ? 'Keine Alben ausgewählt – es werden alle Alben gesichert.'
-      : 'No albums selected – all albums will be backed up.';
+      ? 'Wähle mindestens ein Album aus, damit deine Medien gesichert werden.'
+      : 'Select at least one album so your media gets backed up.';
   String get emptySelectionFoldersHint => isGerman
       ? 'Keine Ordner ausgewählt – bitte mindestens einen Ordner wählen.'
       : 'No folders selected – please choose at least one folder.';
@@ -568,6 +568,9 @@ class AppStrings {
   String get syncAuthError => isGerman
       ? 'Authentifizierung fehlgeschlagen. Bitte verbinde das Cloud-Laufwerk in den Einstellungen neu.'
       : 'Authentication failed. Please reconnect the cloud drive in Settings.';
+  String get remoteNotFoundHint => isGerman
+      ? 'Das Cloud-Laufwerk ist nicht (mehr) verbunden — wurde das Remote gelöscht oder umbenannt? Bitte den Task anpassen oder das Laufwerk neu verbinden.'
+      : 'The cloud drive is no longer connected — was the remote deleted or renamed? Please update the task or reconnect the drive.';
   String get syncQuotaError => isGerman
       ? 'Nicht genügend Speicherplatz im Cloud-Laufwerk verfügbar.'
       : 'Not enough storage space available on the cloud drive.';
@@ -582,6 +585,7 @@ class AppStrings {
   String get taskWizardNextBlockedHint => isGerman
       ? 'Wähle zuerst ein Album oder eine Datei-Quelle aus.'
       : 'Select an album or file source first.';
+  String get onlySpecificAlbums => isGerman ? 'Nur bestimmte Alben' : 'Specific albums only';
 
   // --- Speicherplatz-Anzeige der Cloud-Laufwerke ---
   String get storageNotAvailable => isGerman ? 'n. v.' : 'n/a';

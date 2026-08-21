@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/network_status_service.dart';
+import '../../../core/services/widget_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/settings_service.dart';
@@ -247,6 +248,10 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         state = state.copyWith(
           logs: [...state.logs, endMsg],
         );
+        // Homescreen-Widget informieren: Task ist erfolgreich synchronisiert.
+        await _ref
+            .read(widgetStatusProvider.notifier)
+            .reportTaskRun(task.id, task.name);
       } finally {
         await statusSub.cancel();
       }
@@ -258,6 +263,9 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       final isCancelled = e.toString() == 'Backup cancelled' || _isCancelled;
       final friendly = _friendlySyncError(strings, e);
       final failMsg = '${_timestamp()} Task "${task.name}" failed: $friendly';
+      await _ref
+          .read(widgetStatusProvider.notifier)
+          .reportTaskRun(task.id, task.name, error: friendly);
       state = state.copyWith(
         status: isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
         currentFile: isCancelled ? 'Backup stopped.' : friendly,

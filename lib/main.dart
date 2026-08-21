@@ -14,6 +14,7 @@ import 'core/services/app_log_service.dart';
 import 'core/services/quick_actions_service.dart';
 import 'core/services/scheduler_service.dart';
 import 'core/services/settings_service.dart';
+import 'core/services/widget_status_service.dart';
 import 'features/dashboard/presentation/dashboard_controller.dart';
 import 'features/shell/presentation/shell_screen.dart';
 import 'features/onboarding/presentation/onboarding_controller.dart';
@@ -88,6 +89,12 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
     AppLog.attach(ref);
     AppLog.info('app', 'Fibu gestartet');
     unawaited(AppLog.attachFileSink());
+
+    // Widget-Status initial neu bewerten (App-Start / nach Kaltstart) und
+    // in die Widget-Extension pushen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(widgetStatusProvider.notifier).recomputeAndPush();
+    });
 
     // iOS-Homescreen-Quick-Action „Jetzt synchronisieren“.
     final strings = ref.read(stringsProvider);

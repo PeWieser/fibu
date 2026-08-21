@@ -3,6 +3,9 @@ import UIKit
 #if canImport(workmanager)
 import workmanager
 #endif
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 // The `Rclone` module is produced by `ios/scripts/build_librclone.sh`
 // (gomobile build of rclone's `librclone/gomobile` package) and dropped in as
@@ -45,6 +48,41 @@ import Rclone
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RcloneBridge") {
       RcloneBridge.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WidgetStatusChannel") {
+      WidgetStatusChannel.register(with: registrar.messenger())
+    }
+  }
+}
+
+/// Channel `fibu/widget`: Die Flutter-App schiebt den Sync-Zustand in die
+/// App-Group; die Widget-Extension liest ihn beim nächsten Timeline-Reload.
+final class WidgetStatusChannel: NSObject {
+  static let appGroup = "group.com.example.fibu"
+  static let statusKey = "fibu_widget_status"
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "fibu/widget", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      if call.method == "setStatus",
+         let dict = call.arguments as? [String: Any] {
+        do {
+          let data = try JSONSerialization.data(withJSONObject: dict)
+          if let json = String(data: data, encoding: .utf8),
+             let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(json, forKey: statusKey)
+            defaults.synchronize()
+            #if canImport(WidgetKit) && !targetEnvironment(macCatalyst)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+          }
+          result(nil)
+        } catch {
+          result(FlutterError(code: "widget_write_failed", message: error.localizedDescription, details: nil))
+        }
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
     }
   }
 }

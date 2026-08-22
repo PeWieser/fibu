@@ -46,8 +46,6 @@ class ProviderLoginFields extends StatefulWidget {
 }
 
 class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
-  late final TextEditingController _domainController;
-
   TargetPlatform get platform => widget.platform;
   AppThemeData get theme => widget.theme;
   AppStrings get strings => widget.strings;
@@ -60,33 +58,6 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
   VoidCallback get onToggleAdvanced => widget.onToggleAdvanced;
 
   @override
-  void initState() {
-    super.initState();
-    final domain = descriptor == null
-        ? null
-        : ProviderAuth.autofillDomain(descriptor!.id);
-    _domainController = TextEditingController(
-      text: domain == null ? '' : 'https://$domain',
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant ProviderLoginFields oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final domain = descriptor == null
-        ? null
-        : ProviderAuth.autofillDomain(descriptor!.id);
-    final next = domain == null ? '' : 'https://$domain';
-    if (_domainController.text != next) _domainController.text = next;
-  }
-
-  @override
-  void dispose() {
-    _domainController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final fields = ProviderAuth.visibleFields(
       descriptor,
@@ -94,19 +65,21 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     );
     final hasAdvanced =
         descriptor?.fields.any((f) => f.isAdvanced) ?? false;
-    final domain = descriptor == null
-        ? null
-        : ProviderAuth.autofillDomain(descriptor!.id);
 
     final visible = fields.isEmpty && !ProviderAuth.isOAuth(descriptor)
         ? _fallbackFields()
         : fields;
 
+    // WICHTIG: Kein verstecktes 0×0-URL-Feld mehr in der AutofillGroup.
+    // iOS klassifiziert die Maske anhand der sichtbaren Felder (username +
+    // password); ein unsichtbares URL-Feld hat die Erkennung als
+    // Login-Formular gestört, sodass weder E-Mail- noch Passwort-Vorschläge
+    // erschienen. Die Domain-Zuordnung übernimmt das Associated-Domains-
+    // Entitlement (webcredentials), nicht ein Textfeld.
     return AutofillGroup(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (domain != null) _hiddenDomainField(),
           for (var i = 0; i < visible.length; i++)
             ..._fieldBlock(context, visible[i], isLast: i == visible.length - 1),
           if (hasAdvanced) ...[
@@ -118,38 +91,18 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     );
   }
 
-  List<ConfigFieldDefinition> _fallbackFields() => const [
+  List<ConfigFieldDefinition> _fallbackFields() => [
         ConfigFieldDefinition(
           key: 'user',
-          label: 'E-Mail / Benutzername',
+          label: strings.emailOrUserLabel,
           hint: 'name@beispiel.de',
         ),
         ConfigFieldDefinition(
           key: 'pass',
-          label: 'Passwort',
+          label: strings.passwordFieldLabel,
           isSecret: true,
         ),
       ];
-
-  Widget _hiddenDomainField() {
-    // Unsichtbares URL-Feld: iOS ordnet den Autofill-Kontext der Domain zu
-    // (mega.nz, drive.google.com, …) — zusammen mit Associated Domains.
-    return ExcludeSemantics(
-      child: SizedBox(
-        height: 0,
-        width: 0,
-        child: Opacity(
-          opacity: 0,
-          child: cupertino.CupertinoTextField(
-            controller: _domainController,
-            autofillHints: const [AutofillHints.url],
-            enableSuggestions: false,
-            autocorrect: false,
-          ),
-        ),
-      ),
-    );
-  }
 
   List<Widget> _fieldBlock(
     BuildContext context,

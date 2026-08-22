@@ -340,10 +340,26 @@ class MirrorSyncEngine {
     try {
       await walk(remotePath);
     } catch (e) {
+      // Erster Lauf: Zielordner existiert remote noch nicht → leere
+      // Cloud-Seite, kein Fehler. Alles andere weiterhin laut scheitern.
+      if (_isDirNotFound(e)) {
+        AppLog.info('sync',
+            'Zielordner $remoteName:$remotePath existiert noch nicht → Cloud-Seite leer (wird beim Upload angelegt)');
+        return result;
+      }
       AppLog.error('sync', 'Cloud-Scan fehlgeschlagen ($remoteName:$remotePath): $e');
       rethrow;
     }
     return result;
+  }
+
+  /// rclone-Fehlertexte für „Verzeichnis existiert nicht“ (Erst-Sync).
+  static bool _isDirNotFound(Object e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('directory not found') ||
+        msg.contains('object not found') ||
+        msg.contains("doesn't exist") ||
+        msg.contains('does not exist');
   }
 
   // -------------------------------------------------------------------------

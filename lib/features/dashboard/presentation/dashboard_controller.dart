@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/network_status_service.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
@@ -128,8 +129,60 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
 
   /// Synchronisiert eine einzelne Aufgabe. Gibt true bei Erfolg, false bei
   /// Abbruch oder Fehler zurück. Setzt dabei den Job-State selbst.
+  ///
+  /// Bei mehreren Ziel-Laufwerken (Strategie „mirrorAll“) wird nacheinander
+  /// auf JEDES verbundene Ziel synchronisiert.
   Future<bool> _syncSingleTask(BackupTask task) async {
-    final parts = task.targetRemote.split(':');
+    final strings = _ref.read(stringsProvider);
+    final targets = task.targetRemotes.isNotEmpty
+        ? task.targetRemotes
+        : (task.targetRemote.isNotEmpty ? [task.targetRemote] : const <String>[]);
+
+    if (targets.isEmpty) {
+      final t = _timestamp();
+      state = state.copyWith(
+        status: RcloneJobStatus.failed,
+        currentFile: strings.remoteNotFoundHint,
+        logs: [...state.logs, '$t Task "${task.name}": ${strings.remoteNotFoundHint}'],
+      );
+      return false;
+    }
+
+    // Vorprüfung: Existiert das Ziel noch? (Registry = Quelle der Wahrheit.)
+    // So scheitert der Lauf mit einer klaren Meldung statt eines rclone-
+    // Fehlers „didn't find section in config file“.
+    final entries = _ref.read(remoteEntriesProvider).valueOrNull;
+    if (entries != null) {
+      for (final target in targets) {
+        final id = target.split(':').first;
+        final known = entries.any((e) => e.id == id || e.name == id);
+        if (!known) {
+          final t = _timestamp();
+          final msg = strings.remoteMissingInTask(id);
+          state = state.copyWith(
+            status: RcloneJobStatus.failed,
+            currentFile: strings.remoteNotFoundHint,
+            logs: [...state.logs, '$t Task "${task.name}": $msg'],
+          );
+          return false;
+        }
+      }
+    }
+
+    for (final target in targets) {
+      final ok = await _syncTaskToRemote(task, target, strings);
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  /// Führt den eigentlichen Sync einer Aufgabe auf EIN Ziel-Remote aus.
+  Future<bool> _syncTaskToRemote(
+    BackupTask task,
+    String target,
+    AppStrings strings,
+  ) async {
+    final parts = target.split(':');
     final remoteName = parts[0];
     final targetFolder = task.targetFolderMode == TargetFolderMode.root
         ? ''
@@ -155,8 +208,6 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.3gp',
       ]);
     }
-
-    final strings = _ref.read(stringsProvider);
 
     // Globale Netzwerkregeln direkt vor dem Task-Start prüfen (die
     // Verbindung kann mitten in der Queue abreißen).
@@ -195,7 +246,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         jobId: jobId,
         status: RcloneJobStatus.pending,
         percentage: 0.0,
-        currentFile: 'Starting: ${task.name}...',
+        currentFile: strings.startingTask(task.name),
       );
 
       // Subscribe to this job's progress
@@ -268,7 +319,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
           .reportTaskRun(task.id, task.name, error: friendly);
       state = state.copyWith(
         status: isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
-        currentFile: isCancelled ? 'Backup stopped.' : friendly,
+        currentFile: isCancelled ? strings.backupStopped : friendly,
         logs: [...state.logs, failMsg],
       );
       return false;
@@ -302,7 +353,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (activeTasks.isEmpty) {
       state = ActiveJobState(
         status: RcloneJobStatus.failed,
-        currentFile: 'No active backup tasks found. Enable tasks in the Tasks tab.',
+        currentFile: strings.noActiveTasksError,
         logs: ['$timestamp Queue started.', '$timestamp Error: No active backup tasks found.'],
       );
       return;
@@ -310,7 +361,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
 
     state = ActiveJobState(
       status: RcloneJobStatus.pending,
-      currentFile: 'Preparing active backup jobs...',
+      currentFile: strings.queuePreparingJobs,
       logs: ['$timestamp Queue started. Analyzing active tasks...'],
     );
 
@@ -332,9 +383,9 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (!_isCancelled) {
       if (!mounted) return;
       final doneMsg = '${_timestamp()} Queue finished successfully. All active tasks synchronized.';
-      state = const ActiveJobState(
+      state = ActiveJobState(
         status: RcloneJobStatus.completed,
-        currentFile: 'All active backup tasks completed successfully!',
+        currentFile: AppStrings.current.allTasksCompleted,
       ).copyWith(
         logs: [...state.logs, doneMsg],
       );
@@ -349,6 +400,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     }
 
     _isCancelled = false;
+    final strings = _ref.read(stringsProvider);
     BackupTask? task;
     for (final t in _ref.read(tasksListProvider)) {
       if (t.id == taskId) {
@@ -359,14 +411,13 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (task == null) {
       state = ActiveJobState(
         status: RcloneJobStatus.failed,
-        currentFile: 'Task not found.',
-        logs: [...state.logs, '${_timestamp()} Error: Task not found.'],
+        currentFile: strings.taskNotFoundError,
+        logs: [...state.logs, '${_timestamp()} Error: ${strings.taskNotFoundError}'],
       );
       return;
     }
 
     final timestamp = _timestamp();
-    final strings = _ref.read(stringsProvider);
     final blockReason = _networkBlockReason(strings);
     if (blockReason != null) {
       state = ActiveJobState(
@@ -379,7 +430,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
 
     state = ActiveJobState(
       status: RcloneJobStatus.pending,
-      currentFile: 'Preparing ${task.name}...',
+      currentFile: strings.preparingTask(task.name),
       logs: ['$timestamp Task sync started. Preparing "${task.name}"...'],
     );
 
@@ -389,9 +440,9 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (!mounted) return;
     if (ok) {
       final doneMsg = '${_timestamp()} Task "${task.name}" synchronized successfully.';
-      state = const ActiveJobState(
+      state = ActiveJobState(
         status: RcloneJobStatus.completed,
-        currentFile: 'Task synchronized successfully!',
+        currentFile: AppStrings.current.taskSyncedSuccess,
       ).copyWith(
         logs: [...state.logs, doneMsg],
       );
@@ -418,7 +469,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     final cancelMsg = '${_timestamp()} Sync cancelled by user.';
     state = ActiveJobState(
       status: RcloneJobStatus.cancelled,
-      currentFile: 'Sync cancelled by user.',
+      currentFile: AppStrings.current.syncCancelledByUser,
       logs: [...state.logs, cancelMsg],
     );
   }

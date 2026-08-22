@@ -700,7 +700,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   children: [
                     _buildWindowsInfoRow(
                       strings.scheduleLabel,
-                      task.scheduleDescription,
+                      strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime),
                       theme,
                     ),
                     const SizedBox(height: 8),
@@ -1068,7 +1068,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     leading: Icon(cupertino.CupertinoIcons.clock, color: theme.accent, size: 22),
                     title: Text(strings.scheduleLabel, style: const TextStyle(fontSize: 16)),
                     trailing: Text(
-                      task.scheduleDescription,
+                      strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime),
                       style: TextStyle(color: theme.textSecondary, fontSize: 15),
                     ),
                   ),
@@ -1266,7 +1266,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   material.ListTile(
                     leading: Icon(material.Icons.schedule, color: theme.accent),
                     title: Text(strings.scheduleLabel),
-                    trailing: Text(task.scheduleDescription),
+                    trailing: Text(strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime)),
                   ),
                   const material.Divider(height: 1),
                   material.ListTile(

@@ -2,6 +2,55 @@
 
 ---
 
+## 2026-08-22 — Upload-Fixes, dynamisches Backup-Ziel, Schlüsselbund-Login, „Anmelden“, Zweisprachigkeit
+
+### Upload-Ablauf Punkt für Punkt geprüft & gefixt
+- **Erst-Sync gegen leeres Remote:** `_listRemoteRecursive` (FS- und
+  Virtual-Mirror-Engine) hat den kompletten Job abgebrochen, wenn der
+  Zielordner (z. B. `fibu-backup/Photos`) remote noch nicht existierte
+  („directory not found“). Jetzt: gezielt als **leere Cloud-Seite** behandelt
+  — der Ordner entsteht beim ersten Upload. Alle anderen Fehler bleiben laut.
+- **Include-Filter case-insensitiv:** iOS-Dateien heißen `IMG_0001.HEIC`/`.JPG`
+  (Großschreibung); die kleingeschriebenen Regeln (`*.jpg`, `*.heic`, …)
+  matchten beim inkrementellen `sync/copy` **nichts** → 0 Dateien übertragen.
+  Fix: `'IgnoreCase': true` im `_filter`.
+- **Multi-Remote (mirrorAll):** `_syncSingleTask` synchronisiert jetzt
+  nacheinander auf **alle** verknüpften Ziele, nicht nur das erste.
+- **Vorprüfung mit Klartext:** Fehlt das Ziel in der Registry, scheitert der
+  Lauf sofort mit lokalisiertem Hinweis statt rclone-Jargon
+  („didn't find section in config file“).
+
+### Backup-Ziel dynamisch (Task-Übernahme „nicht gefunden“ behoben)
+- `.fibu/config.json` referenzierte Remote-IDs des **anderen** Geräts —
+  nach Import zeigte die Aufgabe auf ein „nicht gefundenes“ Ziel.
+- Auflösung jetzt dynamisch in `SyncConfigService.resolveLinkedRemotes`:
+  **ID → Anzeigename → Provider-Typ → Fallback auf das Remote, auf dem die
+  Config gefunden wurde.** Die Benennung ist damit egal; es zählt der Anbieter.
+- Config-Format erweitert: `linkedProviders` (rclone-Backend-Typ je Remote)
+  wird beim Schreiben mitgegeben — andere Geräte matchen über den Provider.
+- `importTasks` ersetzt Aufgaben mit gleicher ID statt sie zu duplizieren
+  (erneuter Import nach Neu-Verbinden erzeugt keine Doubletten mehr).
+
+### Apple-Schlüsselbund / Autofill repariert
+- Regression: `AutofillHints.newPassword` ließ iOS die Maske als
+  **Registrierung** einstufen → keine E-Mail-/Passwort-Vorschläge mehr.
+  Zurück auf `AutofillHints.password` (Login-Formular, Schlüsselbund-Zugänge).
+- Verstecktes 0×0-URL-Feld aus der `AutofillGroup` entfernt — es störte die
+  Feld-Klassifizierung; die Domain-Zuordnung macht das Associated-Domains-
+  Entitlement.
+
+### Wording & Zweisprachigkeit
+- „Verbindung testen“ → **„Anmelden“ / „Sign In“** (inkl. Fehler-/Hinweistexte).
+- Dashboard-Job-Status (Starting/Preparing/Completed/Cancelled …) und alle
+  Sync-Fortschrittstexte der Engine (Vorbereitung, Lade hoch, Löschprotokoll,
+  Mirror abgeschlossen, Alles aktuell …) sind jetzt DE/EN — Engine-Schichten
+  ohne Ref lesen `AppStrings.current` (vom `stringsProvider` aktuell gehalten).
+- Zeitplan-Beschreibung lokalisiert (`scheduleDescriptionFor`), Speicherdetails-
+  Dialog, Aktivitätsprotokoll-Titel, Datei-/Bild-Vorschau-Fehler, Fallback-
+  Anmeldefelder — alles zweisprachig.
+
+---
+
 ## 2026-08-22 — Detail-Pass (Typografie, Kontrast, Navigation, Wortwahl)
 
 ### Typografie & Kontrast („Steve-Jobs-Auge")

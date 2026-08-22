@@ -176,9 +176,11 @@ class ProviderAuth {
         // API-Schlüssel/Token: kein „neues Passwort“-Angebot, nur ausfüllen.
         return const [AutofillHints.password];
       }
-      // Echtes Passwort (pass/password/passphrase): iOS damit einlädt, den
-      // Zugang im Schlüsselbund zu SICHERN (finishAutofillContext).
-      return const [AutofillHints.newPassword];
+      // Echtes Passwort (pass/password/passphrase): AutofillHints.password →
+      // iOS klassifiziert das Formular als LOGIN und bietet gespeicherte
+      // Schlüsselbund-Zugänge an. (newPassword würde die Maske als
+      // Registrierung behandeln — dann zeigt iOS gar keine Zugänge mehr an.)
+      return const [AutofillHints.password];
     }
     if (key == 'user' ||
         key == 'username' ||

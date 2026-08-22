@@ -8,6 +8,11 @@ class AppStrings {
 
   const AppStrings(this.locale);
 
+  /// Aktive Strings für Schichten ohne BuildContext/Ref (z. B. Sync-Engine,
+  /// die Fortschrittstexte produziert). Wird vom [stringsProvider] aktuell
+  /// gehalten; Fallback ist Deutsch.
+  static AppStrings current = const AppStrings(AppLocale.de);
+
   bool get isGerman => locale == AppLocale.de;
 
   // --- Navigation ---
@@ -78,12 +83,12 @@ class AppStrings {
   String get passwordLabel => isGerman ? 'Passwort / API-Key' : 'Password / API Key';
   String get hostLabel => isGerman ? 'Host / Server-Adresse' : 'Host / Server Address';
   String get portLabel => isGerman ? 'Port' : 'Port';
-  String get testConnection => isGerman ? 'Verbindung testen' : 'Test Connection';
-  String get connectionSuccess => isGerman ? 'Verbindung steht.' : 'Connection works.';
+  String get testConnection => isGerman ? 'Anmelden' : 'Sign In';
+  String get connectionSuccess => isGerman ? 'Angemeldet – Verbindung steht.' : 'Signed in – connection works.';
   String get oauthMissingClientHint => isGerman
       ? 'Dieser Anbieter braucht eine eigene Anmeldung im Browser. Die ist hier noch nicht eingerichtet.'
       : 'This provider needs a browser sign-in that is not set up yet.';
-  String get connectionFailed => isGerman ? 'Verbindungstest fehlgeschlagen' : 'Connection test failed';
+  String get connectionFailed => isGerman ? 'Anmeldung fehlgeschlagen' : 'Sign-in failed';
   String get nameRequiredError => isGerman ? 'Bitte gib einen Verbindungsnamen ein.' : 'Please enter a connection name.';
   String get providerRequiredError => isGerman ? 'Bitte wähle einen Anbieter aus der Liste aus.' : 'Please select a provider from the list.';
   String get credentialsRequiredError => isGerman ? 'Bitte fülle alle Pflichtfelder aus.' : 'Please fill in all required credentials.';
@@ -572,8 +577,8 @@ class AppStrings {
       ? 'Bitte zuerst über \u201eIn Browser autorisieren\u201c anmelden.'
       : 'Please authorize via “Authorize in browser” first.';
   String get testRequiredBeforeAddHint => isGerman
-      ? 'Bitte zuerst „Verbindung testen“ erfolgreich ausführen – erst dann kann das Laufwerk hinzugefügt werden.'
-      : 'Please run “Test connection” successfully first – the drive can only be added afterwards.';
+      ? 'Bitte zuerst erfolgreich über „Anmelden“ verbinden – erst dann kann das Laufwerk hinzugefügt werden.'
+      : 'Please sign in successfully first – the drive can only be added afterwards.';
   String debugLogFileLocation(String path) => isGerman
       ? 'Logdatei: $path (im Dokumente-Ordner, neben rclone.conf)'
       : 'Log file: $path (in the documents folder, next to rclone.conf)';
@@ -642,12 +647,132 @@ class AppStrings {
   String get remoteFolderDeleted => isGerman ? 'Cloud-Ordner wurde gelöscht.' : 'Cloud folder deleted.';
   String get remoteFolderDeleteError => isGerman ? 'Cloud-Ordner konnte nicht gelöscht werden.' : 'Could not delete the cloud folder.';
   String get dangerZone => isGerman ? 'Aktionen' : 'Actions';
+
+  // --- Sync-Warteschlange & Job-Status (Dashboard) ---
+  String get storageDetailsTitle => isGerman ? 'Speicherdetails' : 'Storage Details';
+  String get syncActivityLogsTitle => isGerman ? 'Sync-Aktivitätsprotokoll' : 'Sync Activity Logs';
+  String get queuePreparingJobs => isGerman
+      ? 'Aktive Backup-Aufgaben werden vorbereitet …'
+      : 'Preparing active backup jobs…';
+  String preparingTask(String name) =>
+      isGerman ? '„$name“ wird vorbereitet …' : 'Preparing “$name”…';
+  String startingTask(String name) =>
+      isGerman ? 'Start: $name …' : 'Starting: $name…';
+  String get noActiveTasksError => isGerman
+      ? 'Keine aktiven Backup-Aufgaben gefunden. Aktiviere Aufgaben im Reiter „Aufgaben“.'
+      : 'No active backup tasks found. Enable tasks in the Tasks tab.';
+  String get taskNotFoundError =>
+      isGerman ? 'Aufgabe nicht gefunden.' : 'Task not found.';
+  String get backupStopped => isGerman ? 'Backup gestoppt.' : 'Backup stopped.';
+  String get syncCancelledByUser =>
+      isGerman ? 'Sync vom Nutzer abgebrochen.' : 'Sync cancelled by user.';
+  String get allTasksCompleted => isGerman
+      ? 'Alle aktiven Backup-Aufgaben erfolgreich abgeschlossen.'
+      : 'All active backup tasks completed successfully.';
+  String get taskSyncedSuccess => isGerman
+      ? 'Aufgabe erfolgreich synchronisiert.'
+      : 'Task synchronized successfully.';
+
+  // --- Sync-Fortschritt (Engine-Labels, via AppStrings.current) ---
+  String get syncOfflineNoNetwork => isGerman
+      ? 'Offline: Keine aktive Netzwerkverbindung'
+      : 'Offline: no active network connection';
+  String syncStagePreparing(String label) =>
+      isGerman ? 'Vorbereitung: $label' : 'Preparing: $label';
+  String get syncMirrorRunning => isGerman
+      ? 'Mirror-Sync (Löschprotokoll) wird ausgeführt …'
+      : 'Running mirror sync (deletion log)…';
+  String get syncDeletionScan =>
+      isGerman ? 'Lösch-Erkennung' : 'Deletion scan';
+  String get syncPhaseScan => isGerman
+      ? 'Analysiere lokale & Cloud-Dateien'
+      : 'Analyzing local & cloud files';
+  String get syncPhaseUpload => isGerman ? 'Lade hoch' : 'Uploading';
+  String get syncPhaseTombstones =>
+      isGerman ? 'Wende Löschprotokoll an' : 'Applying deletion log';
+  String get syncPhaseDownload =>
+      isGerman ? 'Lade aus der Cloud' : 'Downloading from cloud';
+  String get syncAllUpToDate => isGerman
+      ? 'Alles aktuell — nichts zu übertragen.'
+      : 'Everything up to date — nothing to transfer.';
+  String syncMirrorDoneSummary(String summary) =>
+      isGerman ? 'Mirror abgeschlossen ($summary)' : 'Mirror completed ($summary)';
+  String get syncCompletedLabel => isGerman ? 'Abgeschlossen' : 'Completed';
+  String get syncMirrorReady => isGerman ? 'Spiegel bereit' : 'Mirror ready';
+  String syncReadAlbum(String album) =>
+      isGerman ? 'Album „$album“ lesen' : 'Reading album “$album”';
+  String get syncStartAnalysis => isGerman ? 'Starte Analyse …' : 'Starting analysis…';
+
+  // --- Zeitplan-Beschreibung (lokalisiert, ersetzt Modell-Hardcodes) ---
+  String scheduleDescriptionFor(String scheduleDay, String scheduleTime) {
+    if (scheduleDay == 'iOS System' || scheduleDay == 'System') {
+      return isGerman ? 'Automatisch (iOS-System)' : 'Automatic (iOS system)';
+    }
+    if (scheduleDay == 'Daily') {
+      return isGerman ? 'Täglich um $scheduleTime' : 'Daily at $scheduleTime';
+    }
+    if (scheduleDay == 'Manual') {
+      return isGerman ? 'Manuell' : 'Manual';
+    }
+    final day = _weekdayLabel(scheduleDay);
+    return isGerman
+        ? 'Wöchentlich am $day um $scheduleTime'
+        : 'Weekly on ${day}s at $scheduleTime';
+  }
+
+  String _weekdayLabel(String key) {
+    switch (key) {
+      case 'Monday':
+        return dayMonday;
+      case 'Tuesday':
+        return dayTuesday;
+      case 'Wednesday':
+        return dayWednesday;
+      case 'Thursday':
+        return dayThursday;
+      case 'Friday':
+        return dayFriday;
+      case 'Saturday':
+        return daySaturday;
+      case 'Sunday':
+        return daySunday;
+      default:
+        return key;
+    }
+  }
+
+  // --- Datei-Vorschau ---
+  String get previewLoadFailed => isGerman
+      ? 'Vorschau konnte nicht geladen werden.'
+      : 'Preview could not be loaded.';
+  String get fileLoadFailed => isGerman
+      ? 'Datei konnte nicht geladen werden.'
+      : 'File could not be loaded.';
+  String get imageDisplayFailed => isGerman
+      ? 'Bild konnte nicht angezeigt werden.'
+      : 'Image could not be displayed.';
+
+  // --- Anmeldefelder (Fallback ohne Provider-Metadaten) ---
+  String get passwordFieldLabel => isGerman ? 'Passwort' : 'Password';
+
+  // --- Speicherdetails-Dialog ---
+  String get storageDetailedUtilization => isGerman
+      ? 'Detaillierte Speicherbelegung:'
+      : 'Detailed storage space utilization:';
+  String get legendPhotos => isGerman ? 'Fotos & Bilder' : 'Photos & Images';
+  String get legendVideos => isGerman ? 'Videos' : 'Videos';
+  String get legendOtherDocs => isGerman ? 'Andere Dokumente' : 'Other Documents';
+  String get legendFreeSpace => isGerman ? 'Freier Speicher' : 'Free Space';
+  String get legendTotalCapacity => isGerman ? 'Gesamtkapazität' : 'Total Capacity';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.
 final stringsProvider = Provider<AppStrings>((ref) {
   final locale = ref.watch(localeProvider);
-  return AppStrings(locale);
+  final strings = AppStrings(locale);
+  // Service-Schichten ohne Ref (Sync-Fortschritt etc.) lesen AppStrings.current.
+  AppStrings.current = strings;
+  return strings;
 });
 
 /// Context extension for fast, clean strings lookup in widgets.

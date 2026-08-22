@@ -11,6 +11,7 @@ import 'librclone_channel.dart';
 import 'mirror_sync_engine.dart';
 import 'photo_kit_bridge.dart';
 import 'virtual_mirror_sync.dart';
+import '../localization/app_strings.dart';
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
 import 'rclone_provider_registry.dart';
@@ -439,7 +440,7 @@ class IosRcloneService implements RcloneService {
       // Pre-flight: network guard.
       final conn = await Connectivity().checkConnectivity();
       if (conn.contains(ConnectivityResult.none) || conn.isEmpty) {
-        _fail(jobId, 'Offline: Keine aktive Netzwerkverbindung');
+        _fail(jobId, AppStrings.current.syncOfflineNoNetwork);
         return;
       }
 
@@ -464,7 +465,7 @@ class IosRcloneService implements RcloneService {
           bytesTransferred: 0,
           totalBytes: 0,
           percentage: total > 0 ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
-          currentFile: 'Vorbereitung: $label',
+          currentFile: AppStrings.current.syncStagePreparing(label),
           eta: '',
           speedBytesPerSecond: 0,
           itemsDone: done,
@@ -481,7 +482,7 @@ class IosRcloneService implements RcloneService {
             bytesTransferred: 0,
             totalBytes: 0,
             percentage: 0,
-            currentFile: 'Mirror-Sync (Löschprotokoll) wird ausgeführt…',
+            currentFile: AppStrings.current.syncMirrorRunning,
             eta: '',
             speedBytesPerSecond: 0,
           ));
@@ -502,7 +503,7 @@ class IosRcloneService implements RcloneService {
                   bytesTransferred: 0,
                   totalBytes: 0,
                   percentage: 0,
-                  currentFile: 'Lösch-Erkennung: $label',
+                  currentFile: '${AppStrings.current.syncDeletionScan}: $label',
                   eta: '',
                   speedBytesPerSecond: 0,
                 ));
@@ -527,11 +528,12 @@ class IosRcloneService implements RcloneService {
           trash: trash,
           onProgress: (phase, item, done, total) {
             if (progress.isClosed) return;
-            const phaseLabels = {
-              'scan': 'Analysiere lokale & Cloud-Dateien',
-              'upload': 'Lade hoch',
-              'tombstones': 'Wende Löschprotokoll an',
-              'download': 'Lade aus der Cloud',
+            final s = AppStrings.current;
+            final phaseLabels = {
+              'scan': s.syncPhaseScan,
+              'upload': s.syncPhaseUpload,
+              'tombstones': s.syncPhaseTombstones,
+              'download': s.syncPhaseDownload,
             };
             final label = phaseLabels[phase] ?? phase;
             final fileName =
@@ -566,10 +568,11 @@ class IosRcloneService implements RcloneService {
             totalBytes: 0,
             percentage: 100,
             currentFile: result.hasChanges
-                ? 'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+                ? AppStrings.current.syncMirrorDoneSummary(
+                    '↑${result.uploaded} ↓${result.downloaded} '
                     '🗑${result.trashedLocal}/${result.trashedRemote} + '
-                    '${result.deletedLocal}/${result.deletedRemote})'
-                : 'Alles aktuell — nichts zu übertragen.',
+                    '${result.deletedLocal}/${result.deletedRemote}')
+                : AppStrings.current.syncAllUpToDate,
             eta: '0s',
             speedBytesPerSecond: 0,
           ));
@@ -592,6 +595,11 @@ class IosRcloneService implements RcloneService {
           '_filter': {
             if (options.includeFilters.isNotEmpty) 'IncludeRule': options.includeFilters,
             if (options.excludeFilters.isNotEmpty) 'ExcludeRule': options.excludeFilters,
+            // WICHTIG: iOS-Mediendateien heißen IMG_0001.HEIC / .JPG / .MOV
+            // (Großbuchstaben). Ohne IgnoreCase matchen die kleingeschriebenen
+            // Include-Regeln (*.jpg, *.heic …) NICHTS → rclone überträgt
+            // 0 Dateien und der Upload wirkt „kaputt“.
+            'IgnoreCase': true,
           },
         if (options.maxSpeedKbps > 0)
           '_config': {'BwLimit': '${options.maxSpeedKbps}k'},
@@ -674,7 +682,7 @@ class IosRcloneService implements RcloneService {
             bytesTransferred: total,
             totalBytes: total,
             percentage: 100.0,
-            currentFile: 'Abgeschlossen',
+            currentFile: AppStrings.current.syncCompletedLabel,
             eta: '0s',
             speedBytesPerSecond: 0,
           ));
@@ -1014,7 +1022,7 @@ class IosRcloneService implements RcloneService {
 
     AppLog.info('media',
         '${options.isEchoMode ? 'Spiegel' : 'Staging'} fertig: $processedCount/$scannedTotal Assets geprüft, $copiedNew neu kopiert, $removedAlbumDirs entfernt → lokal: ${mirror.path}');
-    onStage?.call('Spiegel bereit', scannedTotal, scannedTotal);
+    onStage?.call(AppStrings.current.syncMirrorReady, scannedTotal, scannedTotal);
     return mirror.path;
   }
 
@@ -1202,7 +1210,7 @@ class IosRcloneService implements RcloneService {
       final count = await album.assetCountAsync;
       if (count == 0) continue;
       total += count;
-      onStage('Album „$albumName“ lesen', done, total);
+      onStage(AppStrings.current.syncReadAlbum(albumName), done, total);
       AppLog.info('media', 'Album „$albumName“: $count Assets (Metadaten)');
       const batch = 100;
       final taken = <String>{};
@@ -1212,7 +1220,7 @@ class IosRcloneService implements RcloneService {
         for (final asset in assets) {
           done++;
           if (done % 25 == 0 || done == total) {
-            onStage('Album „$albumName“ lesen', done, total);
+            onStage(AppStrings.current.syncReadAlbum(albumName), done, total);
           }
           // Titel → deterministisch-eindeutiger Zielname (ohne jeglichen Export).
           var base = (asset.title ?? '').trim();
@@ -1356,11 +1364,12 @@ class IosRcloneService implements RcloneService {
       trash: TrashService(this),
       onProgress: (phase, item, done, total) {
         if (progress.isClosed) return;
-        const phaseLabels = {
-          'scan': 'Analysiere lokale Mediathek & Cloud',
-          'upload': 'Lade hoch',
-          'tombstones': 'Wende Löschprotokoll an',
-          'download': 'Lade aus der Cloud',
+        final s = AppStrings.current;
+        final phaseLabels = {
+          'scan': s.syncPhaseScan,
+          'upload': s.syncPhaseUpload,
+          'tombstones': s.syncPhaseTombstones,
+          'download': s.syncPhaseDownload,
         };
         final label = phaseLabels[phase] ?? phase;
         final fileName =
@@ -1390,10 +1399,11 @@ class IosRcloneService implements RcloneService {
         totalBytes: 0,
         percentage: 100,
         currentFile: result.hasChanges
-            ? 'Mirror abgeschlossen (↑${result.uploaded} ↓${result.downloaded} '
+            ? AppStrings.current.syncMirrorDoneSummary(
+                '↑${result.uploaded} ↓${result.downloaded} '
                 '🗑${result.trashedLocal}/${result.trashedRemote} + '
-                '${result.deletedLocal}/${result.deletedRemote})'
-            : 'Alles aktuell — nichts zu übertragen.',
+                '${result.deletedLocal}/${result.deletedRemote}')
+            : AppStrings.current.syncAllUpToDate,
         eta: '0s',
         speedBytesPerSecond: 0,
         itemsDone: result.uploaded + result.downloaded,

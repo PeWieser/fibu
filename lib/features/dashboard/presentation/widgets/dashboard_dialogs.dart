@@ -14,6 +14,7 @@ import '../../../../core/services/rclone_service.dart';
 void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
   final platform = defaultTargetPlatform;
   final theme = context.theme;
+  final strings = context.strings;
 
   final photoColor = theme.accent;
   final videoColor = theme.warning;
@@ -41,9 +42,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Detailed storage space utilization:',
-          style: TextStyle(fontSize: 14),
+        Text(
+          strings.storageDetailedUtilization,
+          style: const TextStyle(fontSize: 14),
         ),
         const SizedBox(height: 16),
         // Visual Stacked Bar representing portions
@@ -74,17 +75,17 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
           ),
         ),
         const SizedBox(height: 16),
-        _buildLegendItem('Photos', '${photosGb.toStringAsFixed(1)} GB (${photosPercent.toStringAsFixed(1)}%)', photoColor),
+        _buildLegendItem(strings.legendPhotos, '${photosGb.toStringAsFixed(1)} GB (${photosPercent.toStringAsFixed(1)}%)', photoColor),
         const SizedBox(height: 8),
-        _buildLegendItem('Videos', '${videosGb.toStringAsFixed(1)} GB (${videosPercent.toStringAsFixed(1)}%)', videoColor),
+        _buildLegendItem(strings.legendVideos, '${videosGb.toStringAsFixed(1)} GB (${videosPercent.toStringAsFixed(1)}%)', videoColor),
         const SizedBox(height: 8),
-        _buildLegendItem('Other Documents', '${otherGb.toStringAsFixed(1)} GB (${otherPercent.toStringAsFixed(1)}%)', otherColor),
+        _buildLegendItem(strings.legendOtherDocs, '${otherGb.toStringAsFixed(1)} GB (${otherPercent.toStringAsFixed(1)}%)', otherColor),
         const SizedBox(height: 8),
-        _buildLegendItem('Free Space', '${freeGb.toStringAsFixed(1)} GB (${freePercent.toStringAsFixed(1)}%)', freeColor),
+        _buildLegendItem(strings.legendFreeSpace, '${freeGb.toStringAsFixed(1)} GB (${freePercent.toStringAsFixed(1)}%)', freeColor),
         const SizedBox(height: 8),
         if (platform != TargetPlatform.iOS) const fluent.Divider(),
         const SizedBox(height: 8),
-        _buildLegendItem('Total Capacity', '${totalGb.toStringAsFixed(1)} GB', theme.textSecondary.withValues(alpha: 0.6)),
+        _buildLegendItem(strings.legendTotalCapacity, '${totalGb.toStringAsFixed(1)} GB', theme.textSecondary.withValues(alpha: 0.6)),
       ],
     );
   }
@@ -93,7 +94,7 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
     fluent.showDialog(
       context: context,
       builder: (context) => fluent.ContentDialog(
-        title: const fluent.Text('Storage Details'),
+        title: fluent.Text(strings.storageDetailsTitle),
         content: buildContent(),
         actions: [
           fluent.FilledButton(
@@ -110,7 +111,7 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
     cupertino.showCupertinoDialog(
       context: context,
       builder: (context) => cupertino.CupertinoAlertDialog(
-        title: const Text('Storage Details'),
+        title: Text(strings.storageDetailsTitle),
         content: Padding(
           padding: const EdgeInsets.only(top: 12.0),
           child: buildContent(),
@@ -128,7 +129,7 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
     material.showDialog(
       context: context,
       builder: (context) => material.AlertDialog(
-        title: const Text('Storage Details'),
+        title: Text(strings.storageDetailsTitle),
         content: buildContent(),
         actions: [
           material.FilledButton(
@@ -147,6 +148,7 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
 /// Shows an adaptive detailed sync logs dialog based on active/previous job status.
 void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus status) {
   final platform = defaultTargetPlatform;
+  final dialogStrings = context.strings;
 
   Widget buildContent() {
     // Zweigeteilter, professioneller Sync-Nachweis:
@@ -212,7 +214,7 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
     fluent.showDialog(
       context: context,
       builder: (context) => fluent.ContentDialog(
-        title: const fluent.Text('Sync Activity Logs'),
+        title: fluent.Text(dialogStrings.syncActivityLogsTitle),
         content: buildContent(),
         actions: [
           fluent.FilledButton(
@@ -229,7 +231,7 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
     cupertino.showCupertinoDialog(
       context: context,
       builder: (context) => cupertino.CupertinoAlertDialog(
-        title: const Text('Sync Activity Logs'),
+        title: Text(dialogStrings.syncActivityLogsTitle),
         content: Padding(
           padding: const EdgeInsets.only(top: 12.0),
           child: SizedBox(
@@ -250,7 +252,7 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
     material.showDialog(
       context: context,
       builder: (context) => material.AlertDialog(
-        title: const Text('Sync Activity Logs'),
+        title: Text(dialogStrings.syncActivityLogsTitle),
         content: SizedBox(
           height: 300,
           child: buildContent(),

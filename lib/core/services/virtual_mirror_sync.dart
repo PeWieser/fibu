@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../localization/app_strings.dart';
 import 'app_log_service.dart';
 import 'mirror_sync_engine.dart';
 import 'rclone_service.dart';
@@ -77,7 +78,7 @@ class VirtualMirrorSyncEngine {
     TrashService? trash,
     MirrorProgressCallback? onProgress,
   }) async {
-    onProgress?.call('scan', 'Starte Analyse …', 0, 0);
+    onProgress?.call('scan', AppStrings.current.syncStartAnalysis, 0, 0);
     // Die Mengen werden direkt mutiert (blockedRels.add / adoptedRels.add …) und
     // vom Aufrufer über die persist-Callback zurückgeschrieben — sie MÜSSEN also
     // growable sein. `_loadVirtualState` liefert daher bewusst keine const-Sets.
@@ -297,10 +298,26 @@ class VirtualMirrorSyncEngine {
     try {
       await walk(remotePath);
     } catch (e) {
+      // Erster Lauf: Der Zielordner existiert remote noch nicht → das ist
+      // KEIN Fehler, sondern eine leere Cloud-Seite. Alles andere bleibt laut.
+      if (_isDirNotFound(e)) {
+        AppLog.info('sync',
+            'Zielordner $remoteName:$remotePath existiert noch nicht → Cloud-Seite leer (wird beim Upload angelegt)');
+        return result;
+      }
       AppLog.error('sync', 'Cloud-Scan fehlgeschlagen ($remoteName:$remotePath): $e');
       rethrow;
     }
     return result;
+  }
+
+  /// rclone-Fehlertexte für „Verzeichnis existiert nicht“ (Erst-Sync).
+  static bool _isDirNotFound(Object e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('directory not found') ||
+        msg.contains('object not found') ||
+        msg.contains("doesn't exist") ||
+        msg.contains('does not exist');
   }
 
   /// Remote-Tombstones lesen (fehlende Datei = keine Tombstones).

@@ -93,7 +93,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
     }
   }
 
-  String _errorLoadingFile() => 'Datei konnte nicht geladen werden.';
+  String _errorLoadingFile() => AppStrings.current.fileLoadFailed;
 
   void _zoomIn() {
     setState(() {
@@ -272,7 +272,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                                 _localFile!,
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) =>
-                                    _buildIOSImageMessage(theme, strings, 'Bild konnte nicht angezeigt werden.'),
+                                    _buildIOSImageMessage(theme, strings, strings.imageDisplayFailed),
                               ),
                             ),
                           ),
@@ -661,7 +661,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                           _localFile!,
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) =>
-                              _buildImageMessage(theme, strings, 'Bild konnte nicht angezeigt werden.'),
+                              _buildImageMessage(theme, strings, strings.imageDisplayFailed),
                         ),
                       ),
                     ),

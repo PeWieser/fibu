@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'rclone_service.dart';
 import 'rclone_provider.dart';
+import 'remote_registry_service.dart';
 import '../../features/tasks/presentation/tasks_controller.dart';
 
 /// Configuration representation stored inside `.fibu/config.json` on cloud remotes.
@@ -49,6 +50,12 @@ class FibuRemoteTaskConfig {
   final String syncMode;
   final String distributionStrategy;
   final List<String> linkedRemotes;
+
+  /// Provider-Typen (rclone-Backend, z. B. `mega`, `drive`) parallel zu
+  /// [linkedRemotes]. Remote-IDs sind geräte-spezifisch — beim Import auf
+  /// einem anderen Gerät wird deshalb über den Provider gematcht, nicht über
+  /// den Namen.
+  final List<String> linkedProviders;
   final String targetFolder;
 
   const FibuRemoteTaskConfig({
@@ -58,6 +65,7 @@ class FibuRemoteTaskConfig {
     required this.syncMode,
     required this.distributionStrategy,
     required this.linkedRemotes,
+    this.linkedProviders = const [],
     required this.targetFolder,
   });
 
@@ -68,6 +76,7 @@ class FibuRemoteTaskConfig {
     'syncMode': syncMode,
     'distributionStrategy': distributionStrategy,
     'linkedRemotes': linkedRemotes,
+    'linkedProviders': linkedProviders,
     'targetFolder': targetFolder,
   };
 
@@ -79,6 +88,10 @@ class FibuRemoteTaskConfig {
       syncMode: json['syncMode'] as String? ?? 'mirror',
       distributionStrategy: json['distributionStrategy'] as String? ?? 'mirrorAll',
       linkedRemotes: (json['linkedRemotes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      linkedProviders: (json['linkedProviders'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],
@@ -190,7 +203,21 @@ class SyncConfigService {
   /// aufgelöst: Medien-Auswahlen (`all`/`photos:`/`videos:`) bleiben, lokale
   /// Ordner-Pfade (`files:`) werden auf einen leeren lokalen Platzhalter
   /// gesetzt, den der Nutzer im Wizard auswählt.
-  List<BackupTask> convertConfigToTasks(FibuRemoteConfig config, String remoteName, [String? localDestinationPath]) {
+  ///
+  /// WICHTIG (Backup-Ziel dynamisch): Auch die `linkedRemotes` der Config
+  /// sind geräte-spezifisch (interne Registry-IDs bzw. frei gewählte Namen
+  /// des ANDEREN Geräts). Sie werden hier gegen die lokal verbundenen
+  /// Remotes ([localRemotes]) aufgelöst — erst über die ID, dann über den
+  /// Anzeigenamen, dann über den PROVIDER-Typ (`linkedProviders`), und als
+  /// letzter Fallback auf [remoteName]: das Remote, auf dem die Config
+  /// gefunden wurde. So zeigt eine übernommene Aufgabe nie mehr auf ein
+  /// „nicht gefundenes“ Backup-Ziel, egal wie die Remotes benannt sind.
+  List<BackupTask> convertConfigToTasks(
+    FibuRemoteConfig config,
+    String remoteName, [
+    String? localDestinationPath,
+    List<RemoteEntry> localRemotes = const [],
+  ]) {
     return config.tasks.map((t) {
       final syncMode = t.syncMode == 'mirror' ? SyncMode.mirror : SyncMode.incremental;
       final dist = t.distributionStrategy == 'balance'
@@ -205,11 +232,18 @@ class SyncConfigService {
         sourcePath = 'folders:';
       }
 
+      final resolvedRemotes = resolveLinkedRemotes(
+        linkedRemotes: t.linkedRemotes,
+        linkedProviders: t.linkedProviders,
+        localRemotes: localRemotes,
+        fallbackRemote: remoteName,
+      );
+
       return BackupTask(
         id: t.taskId.isNotEmpty ? t.taskId : 'imported_${DateTime.now().millisecondsSinceEpoch}',
         name: t.name,
         sourcePath: sourcePath.isNotEmpty ? sourcePath : 'folders:',
-        targetRemotes: t.linkedRemotes.isNotEmpty ? t.linkedRemotes : [remoteName],
+        targetRemotes: resolvedRemotes,
         schedule: 'Daily at 02:00',
         scheduleDay: 'Daily',
         scheduleTime: '02:00',
@@ -223,8 +257,73 @@ class SyncConfigService {
     }).toList();
   }
 
+  /// Löst geräte-fremde Remote-Referenzen dynamisch auf lokale Remotes auf.
+  ///
+  /// Reihenfolge je Eintrag: exakte ID → Anzeigename → Provider-Typ →
+  /// Fallback [fallbackRemote] (das Remote, auf dem die Config lag).
+  static List<String> resolveLinkedRemotes({
+    required List<String> linkedRemotes,
+    required List<String> linkedProviders,
+    required List<RemoteEntry> localRemotes,
+    required String fallbackRemote,
+  }) {
+    final resolved = <String>[];
+
+    void addUnique(String id) {
+      if (id.isNotEmpty && !resolved.contains(id)) resolved.add(id);
+    }
+
+    for (var i = 0; i < linkedRemotes.length; i++) {
+      final ref = linkedRemotes[i].trim();
+      // 1) Exakte lokale ID.
+      RemoteEntry? match;
+      for (final e in localRemotes) {
+        if (e.id == ref) {
+          match = e;
+          break;
+        }
+      }
+      // 2) Anzeigename (Nutzer benennt Laufwerke frei um).
+      if (match == null && ref.isNotEmpty) {
+        for (final e in localRemotes) {
+          if (e.name.toLowerCase() == ref.toLowerCase()) {
+            match = e;
+            break;
+          }
+        }
+      }
+      // 3) Provider-Typ: die Benennung ist egal, nur der Anbieter zählt.
+      if (match == null && i < linkedProviders.length) {
+        final provider = linkedProviders[i].trim().toLowerCase();
+        if (provider.isNotEmpty) {
+          for (final e in localRemotes) {
+            if (e.type.trim().toLowerCase() == provider &&
+                !resolved.contains(e.id)) {
+              match = e;
+              break;
+            }
+          }
+        }
+      }
+      if (match != null) addUnique(match.id);
+    }
+
+    // 4) Fallback: das Remote, auf dem die Config gefunden wurde — dort
+    //    liegen die Daten nachweislich, also ist es immer ein gültiges Ziel.
+    if (resolved.isEmpty) addUnique(fallbackRemote);
+    return resolved;
+  }
+
   /// Writes/syncs task configuration to the remote storage.
-  Future<void> writeConfigToRemote(String remoteName, List<BackupTask> tasks, [String targetFolder = defaultRemoteFolder]) async {
+  ///
+  /// [providerTypes] (Remote-ID → rclone-Backend-Typ) macht die Config
+  /// geräte-portabel: Andere Installationen matchen über den Provider.
+  Future<void> writeConfigToRemote(
+    String remoteName,
+    List<BackupTask> tasks, [
+    String targetFolder = defaultRemoteFolder,
+    Map<String, String> providerTypes = const {},
+  ]) async {
     try {
       final config = FibuRemoteConfig(
         version: 1,
@@ -237,6 +336,9 @@ class SyncConfigService {
           syncMode: t.syncMode == SyncMode.mirror ? 'mirror' : 'incremental',
           distributionStrategy: t.distributionStrategy == DistributionStrategy.balance ? 'balance' : 'mirrorAll',
           linkedRemotes: t.targetRemotes,
+          linkedProviders: t.targetRemotes
+              .map((id) => providerTypes[id] ?? '')
+              .toList(),
           targetFolder: t.targetFolderName,
         )).toList(),
       );

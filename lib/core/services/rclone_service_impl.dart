@@ -189,6 +189,10 @@ class WindowsRcloneService implements RcloneService {
     for (var filter in options.excludeFilters) {
       args.addAll(['--exclude', filter]);
     }
+    if (options.includeFilters.isNotEmpty || options.excludeFilters.isNotEmpty) {
+      // Groß-/Kleinschreibung der Endungen ignorieren (IMG_0001.JPG ↔ *.jpg).
+      args.add('--ignore-case');
+    }
     if (options.maxSpeedKbps > 0) {
       args.add('--bwlimit=${options.maxSpeedKbps}k');
     }

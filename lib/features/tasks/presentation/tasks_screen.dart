@@ -1283,9 +1283,14 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     final remote = task.targetRemotes.first;
     final allTasks = ref.read(tasksListProvider);
     try {
+      // Provider-Typen mitschreiben: Andere Geräte lösen die Aufgabe dann
+      // über den Anbieter auf, nicht über gerätespezifische IDs/Namen.
+      final entries =
+          ref.read(remoteEntriesProvider).valueOrNull ?? const <RemoteEntry>[];
+      final providerTypes = {for (final e in entries) e.id: e.type};
       await ref
           .read(syncConfigServiceProvider)
-          .writeConfigToRemote(remote, allTasks, task.targetFolderName);
+          .writeConfigToRemote(remote, allTasks, task.targetFolderName, providerTypes);
     } catch (_) {
       // Nicht-blockierend: schlägt das Schreiben fehl, stört es die Task-Erstellung nicht.
     }

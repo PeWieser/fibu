@@ -334,9 +334,15 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
     _saveTasks();
   }
 
-  /// Imports multiple tasks and appends them to state.
+  /// Imports multiple tasks. Bereits vorhandene Aufgaben mit derselben ID
+  /// werden ERSETZT statt dupliziert (wichtig beim erneuten Import einer
+  /// Remote-Config nach dem Neu-Verbinden eines Laufwerks).
   void importTasks(List<BackupTask> newTasks) {
-    state = [...state, ...newTasks];
+    final incomingIds = newTasks.map((t) => t.id).toSet();
+    state = [
+      ...state.where((t) => !incomingIds.contains(t.id)),
+      ...newTasks,
+    ];
     _saveTasks();
   }
 

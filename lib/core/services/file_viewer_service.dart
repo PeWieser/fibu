@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 
+import '../localization/app_strings.dart';
 import 'ios_rclone_service.dart';
 import 'rclone_provider.dart';
 import 'rclone_service.dart';
@@ -81,15 +82,19 @@ class FileViewerService {
     try {
       final content = await _rclone.catFile(remoteName, remotePath);
       if (content == null || content.isEmpty) {
-        return 'Keine Textvorschau verfügbar.';
+        return AppStrings.current.isGerman
+            ? 'Keine Textvorschau verfügbar.'
+            : 'No text preview available.';
       }
       // Guard against huge files in the preview pane.
       if (content.length > 200000) {
-        return '${content.substring(0, 200000)}\n\n… (gekürzt)';
+        return AppStrings.current.isGerman
+            ? '${content.substring(0, 200000)}\n\n… (gekürzt)'
+            : '${content.substring(0, 200000)}\n\n… (truncated)';
       }
       return content;
     } catch (_) {
-      return 'Vorschau konnte nicht geladen werden.';
+      return AppStrings.current.previewLoadFailed;
     }
   }
 }

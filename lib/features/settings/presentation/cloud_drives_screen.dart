@@ -1042,7 +1042,18 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     Future<void> handleImport() async {
       final config = await ref.read(syncConfigServiceProvider).readRemoteConfig(remoteName);
       if (config != null) {
-        final tasks = ref.read(syncConfigServiceProvider).convertConfigToTasks(config, remoteName);
+        // Lokale Remotes laden: Die Config stammt von einem anderen Gerät —
+        // ihre Remote-Namen/IDs werden dynamisch aufgelöst (ID → Name →
+        // Provider → dieses Remote), damit das Backup-Ziel nie „nicht
+        // gefunden“ ist.
+        final localRemotes =
+            await ref.read(remoteRegistryServiceProvider).entries();
+        final tasks = ref.read(syncConfigServiceProvider).convertConfigToTasks(
+              config,
+              remoteName,
+              null,
+              localRemotes,
+            );
         ref.read(tasksListProvider.notifier).importTasks(tasks);
         
         // Download existing cloud files to local task directory

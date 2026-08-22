@@ -1,3 +1,4 @@
+import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
@@ -157,35 +158,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
         _setupActionRow(context, theme, strings.addTask, _goToTasks),
     ];
 
-    final headerIcon = platform == TargetPlatform.windows
-        ? fluent.FluentIcons.cloud_add
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoIcons.cloud
-            : material.Icons.cloud_outlined);
     final divider = Container(
         height: 0.5, color: theme.textSecondary.withValues(alpha: 0.2));
 
     final inner = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md, theme.xs),
-          child: Row(
-            children: [
-              Icon(headerIcon, size: 16, color: theme.textSecondary),
-              SizedBox(width: theme.sm),
-              Text(
-                strings.setupHeader,
-                style: TextStyle(
-                  color: theme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
-        ),
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0) divider,
           rows[i],
@@ -228,6 +206,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
   }
 
   void _openCloudDrives(BuildContext context) {
+    // Ein Navigationsmodell: wie „Aufgabe erstellen“ in den Aufgaben-Tab
+    // wechselt, führt „Laufwerk hinzufügen“ in den Einstellungen-Tab — und
+    // öffnet dort direkt die Cloud-Laufwerke.
+    ref.read(shellIndexProvider.notifier).state = 2;
     final platform = defaultTargetPlatform;
     final route = platform == TargetPlatform.windows
         ? fluent.FluentPageRoute(builder: (_) => const CloudDrivesScreen())
@@ -414,7 +396,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (job.eta.isNotEmpty) fluent.Text('ETA: ${job.eta}') else fluent.Text(''),
-              fluent.Text('${job.percentage.toStringAsFixed(1)}%'),
+              fluent.Text('${job.percentage.toStringAsFixed(1)}%',
+                  style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
             ],
           ),
         ],
@@ -730,7 +713,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary))
               else
                 const SizedBox.shrink(),
-              Text('${job.percentage.toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+              Text('${job.percentage.toStringAsFixed(1)}%',
+                  style: TextStyle(fontSize: 12, color: theme.textSecondary, fontFeatures: const [FontFeature.tabularFigures()])),
             ],
           )
         ],
@@ -914,7 +898,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 if (job.eta.isNotEmpty) Text('ETA: ${job.eta}', style: material.Theme.of(context).textTheme.bodySmall) else const SizedBox.shrink(),
-                Text('${job.percentage.toStringAsFixed(1)}%', style: material.Theme.of(context).textTheme.bodySmall),
+                Text('${job.percentage.toStringAsFixed(1)}%',
+                    style: material.Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
               ],
             )
           ],

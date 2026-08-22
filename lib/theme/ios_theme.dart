@@ -70,6 +70,23 @@ class IosTheme {
     );
   }
 
+  /// Gruppierter Section-Header (Apple-HIG): klein, sekundär, mit leichtem
+  /// Tracking — bewusst NICHT in Versalien (Steve-Jobs-Regel: kein Schrei-Text).
+  static Widget sectionHeader(String title, AppThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 6),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: theme.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
   /// A native large-title style header used inside a scroll view.
   ///
   /// iOS apps commonly present a 34 pt title above the grouped list content.

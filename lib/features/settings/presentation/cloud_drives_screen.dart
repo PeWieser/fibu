@@ -13,6 +13,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
+import '../../../theme/ios_theme.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 import 'add_remote_wizard.dart';
 
@@ -375,7 +376,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     }
 
     return cupertino.CupertinoListSection.insetGrouped(
-      header: Text(strings.connectedDrives.toUpperCase()),
+      header: IosTheme.sectionHeader(strings.connectedDrives, theme),
       children: [
         for (final remote in remotes)
           () {

@@ -59,17 +59,16 @@ class AppStrings {
   String get tooltipStorageCard => isGerman ? 'Klicke hier für die detaillierte Speicherbelegung nach Dateitypen.' : 'Click here for detailed storage breakdown by file type.';
   String get tooltipSyncBanner => isGerman ? 'Klicke hier, um das vollständige Aktivitätsprotokoll anzuzeigen.' : 'Click here to view activity logs.';
 
-  // --- Setup-Hinweis (kein Onboarding — erst bei Bedarf) ---
-  String get setupHeader => isGerman ? 'Erste Schritte' : 'Getting started';
+
 
   // --- Cloud Drives & Wizard ---
   String get cloudDrivesTitle => isGerman ? 'Cloud-Laufwerke verwalten' : 'Manage Cloud Drives';
   String get addCloudDrive => isGerman ? 'Laufwerk hinzufügen' : 'Add Cloud Drive';
   String get connectedDrives => isGerman ? 'Verbundene Laufwerke' : 'Connected Drives';
-  String get noDrivesConnected => isGerman ? 'Keine Cloud-Laufwerke verbunden' : 'No Cloud Drives Connected';
+  String get noDrivesConnected => isGerman ? 'Noch keine Cloud verbunden' : 'No cloud connected yet';
   String get noDrivesDescription => isGerman
-      ? 'Verbinde dein erstes Cloud-Laufwerk, um Backups zu sichern.'
-      : 'Connect your first cloud account to start backing up files securely.';
+      ? 'Deine Fotos und Dateien sind dann sicher — auch wenn du dein Gerät verlierst.'
+      : 'Your photos and files will be safe — even if you lose your device.';
   String get wizardStep1Title => isGerman ? 'Schritt 1: Anbieter auswählen' : 'Step 1: Choose Provider';
   String get wizardStep2Title => isGerman ? 'Schritt 2: Zugangsdaten' : 'Step 2: Credentials & Config';
   String get connectionNameLabel => isGerman ? 'Verbindungsname' : 'Connection Name';
@@ -93,8 +92,8 @@ class AppStrings {
       ? 'Bereits hochgeladene Dateien bleiben in der Cloud erhalten.'
       : 'Already uploaded files will remain stored in the cloud.';
   String deleteDrivePrompt(String name) => isGerman
-      ? 'Möchtest du die Verbindung zu "$name" wirklich trennen?'
-      : 'Do you really want to disconnect from "$name"?';
+      ? 'Möchtest du die Verbindung zu „$name“ wirklich trennen?'
+      : 'Do you really want to disconnect from “$name”?';
   // --- Remote-Registry: Umbenennen & Identität ---
   String get renameDrive => isGerman ? 'Umbenennen' : 'Rename';
   String get renameDriveTitle => isGerman ? 'Laufwerk umbenennen' : 'Rename Remote';
@@ -103,7 +102,7 @@ class AppStrings {
       : 'The name is only displayed locally in the app. Connection, credentials and tasks stay unchanged.';
   String driveRenamedSuccess(String name) => isGerman
       ? 'Laufwerk heißt jetzt „$name“.'
-      : 'Remote is now named "$name".';
+      : 'Remote is now named “$name”.';
   String deleteDriveTasksWarning(int count) => isGerman
       ? (count == 1
           ? 'Achtung: 1 Aufgabe nutzt dieses Laufwerk und schlägt danach fehl, bis du ihr ein neues Ziel gibst.'
@@ -144,11 +143,11 @@ class AppStrings {
   String get addingRemote => isGerman ? 'Laufwerk wird eingerichtet...' : 'Configuring remote...';
   String get deletingRemote => isGerman ? 'Laufwerk wird getrennt...' : 'Disconnecting remote...';
   String driveAddedSuccess(String name) => isGerman
-      ? 'Cloud-Laufwerk "$name" wurde erfolgreich hinzugefügt.'
-      : 'Cloud drive "$name" added successfully.';
+      ? 'Cloud-Laufwerk „$name“ wurde erfolgreich hinzugefügt.'
+      : 'Cloud drive “$name” added successfully.';
   String driveDeletedSuccess(String name) => isGerman
-      ? 'Cloud-Laufwerk "$name" wurde getrennt.'
-      : 'Cloud drive "$name" disconnected.';
+      ? 'Cloud-Laufwerk „$name“ wurde getrennt.'
+      : 'Cloud drive “$name” disconnected.';
   String get noMatchingProviders => isGerman ? 'Keine passenden Anbieter gefunden.' : 'No matching providers found.';
   String get showPassword => isGerman ? 'Passwort anzeigen' : 'Show password';
   String get hidePassword => isGerman ? 'Passwort verbergen' : 'Hide password';
@@ -258,14 +257,14 @@ class AppStrings {
       ? 'Die bereits hochgeladenen Dateien in der Cloud bleiben erhalten.'
       : 'Already uploaded files in the cloud will remain intact.';
   String deleteTaskPrompt(String name) => isGerman
-      ? 'Möchtest du die Aufgabe "$name" wirklich löschen?'
-      : 'Do you really want to delete the task "$name"?';
+      ? 'Möchtest du die Aufgabe „$name“ wirklich löschen?'
+      : 'Do you really want to delete the task “$name”?';
   String get taskNameRequiredError => isGerman ? 'Bitte gib einen Namen für die Aufgabe ein.' : 'Please enter a task name.';
   String get sourcePathRequiredError => isGerman ? 'Bitte wähle einen Quellpfad aus.' : 'Please select a source path.';
-  String get noTasksConfigured => isGerman ? 'Keine Backup-Aufgaben vorhanden' : 'No Backup Tasks Configured';
+  String get noTasksConfigured => isGerman ? 'Noch keine Aufgabe' : 'No task yet';
   String get noTasksDescription => isGerman
-      ? 'Erstelle deine erste Backup-Aufgabe, um Dateien automatisch zu sichern.'
-      : 'Create your first backup task to start automating your cloud backups.';
+      ? 'Deine Fotos sichern sich dann automatisch in deine Cloud — du musst nichts mehr tun.'
+      : 'Your photos will then back themselves up to your cloud — nothing left for you to do.';
   String get activeSyncJob => isGerman ? 'Aktiver Backup-Job' : 'Active Backup Job';
   String get sourcePrefix => isGerman ? 'Quelle:' : 'Source:';
   String get destinationPrefix => isGerman ? 'Ziel:' : 'Destination:';
@@ -373,8 +372,8 @@ class AppStrings {
       ? 'Dateien, die du in der Cloud löschst, werden nicht wiederhergestellt. Zudem wird eine Ausschlussregel erstellt, damit die lokale Datei beim nächsten Sync nicht erneut hochgeladen wird.'
       : 'Files deleted in the cloud cannot be restored. An exclusion rule will be created so local files will not be re-uploaded on the next sync.';
   String deleteFilePrompt(String name) => isGerman
-      ? 'Möchtest du "$name" wirklich aus dem Cloud-Speicher löschen?'
-      : 'Do you really want to delete "$name" from cloud storage?';
+      ? 'Möchtest du „$name“ wirklich aus dem Cloud-Speicher löschen?'
+      : 'Do you really want to delete “$name” from cloud storage?';
   String get excludeRuleCreated => isGerman ? 'Ausschlussregel erfolgreich erstellt.' : 'Exclusion rule created successfully.';
   String get previewFile => isGerman ? 'Vorschau' : 'Preview';
   String get quickLook => isGerman ? 'Schnellübersicht' : 'Quick Look';
@@ -458,8 +457,8 @@ class AppStrings {
   // --- Config Detection & Sync Logs ---
   String get existingConfigDetectedTitle => isGerman ? 'Bestehende Fibu-Konfiguration gefunden' : 'Existing Fibu Configuration Found';
   String existingConfigDetectedMessage(String remoteName) => isGerman
-      ? 'Auf dem Cloud-Laufwerk "$remoteName" wurde eine bestehende Fibu-Konfiguration (.fibu/config.json) gefunden.\n\nMöchtest du diese Konfiguration importieren und eine lokale Kopie samt Spiegel-Task anlegen?'
-      : 'An existing Fibu configuration (.fibu/config.json) was found on cloud remote "$remoteName".\n\nWould you like to import this configuration and create a local mirror sync task?';
+      ? 'Auf dem Cloud-Laufwerk „$remoteName“ wurde eine bestehende Fibu-Konfiguration (.fibu/config.json) gefunden.\n\nMöchtest du diese Konfiguration importieren und eine lokale Kopie samt Spiegel-Task anlegen?'
+      : 'An existing Fibu configuration (.fibu/config.json) was found on cloud remote “$remoteName”.\n\nWould you like to import this configuration and create a local mirror sync task?';
   String get importConfigAndSync => isGerman ? 'Importieren & Spiegeln' : 'Import & Mirror';
   String get skipConfigImport => isGerman ? 'Überspringen' : 'Skip';
   String get configImportSuccess => isGerman ? 'Konfiguration übernommen.' : 'Configuration imported.';
@@ -571,10 +570,10 @@ class AppStrings {
       : 'Invalid credentials – please check username/password (and host).';
   String get oauthAuthorizeFirstHint => isGerman
       ? 'Bitte zuerst über \u201eIn Browser autorisieren\u201c anmelden.'
-      : 'Please authorize via "Authorize in browser" first.';
+      : 'Please authorize via “Authorize in browser” first.';
   String get testRequiredBeforeAddHint => isGerman
       ? 'Bitte zuerst „Verbindung testen“ erfolgreich ausführen – erst dann kann das Laufwerk hinzugefügt werden.'
-      : 'Please run "Test connection" successfully first – the drive can only be added afterwards.';
+      : 'Please run “Test connection” successfully first – the drive can only be added afterwards.';
   String debugLogFileLocation(String path) => isGerman
       ? 'Logdatei: $path (im Dokumente-Ordner, neben rclone.conf)'
       : 'Log file: $path (in the documents folder, next to rclone.conf)';
@@ -637,7 +636,7 @@ class AppStrings {
   String get deleteRemoteFolderLabel => isGerman ? 'Zielordner in der Cloud löschen' : 'Delete Target Folder in Cloud';
   String deleteRemoteFolderPrompt(String path) => isGerman
       ? 'Löscht den kompletten Ordner „$path“ samt Inhalt unwiderruflich aus der Cloud. Gib zur Bestätigung exakt den Ordnerpfad ein:'
-      : 'This permanently deletes the entire cloud folder "$path" including all contents. Type the exact folder path to confirm:';
+      : 'This permanently deletes the entire cloud folder “$path” including all contents. Type the exact folder path to confirm:';
   String get deleteRemoteFolderTypeHint => isGerman ? 'Ordnerpfad eingeben' : 'Enter folder path';
   String get confirmationMismatch => isGerman ? 'Der eingegebene Name stimmt nicht überein.' : 'The typed name does not match.';
   String get remoteFolderDeleted => isGerman ? 'Cloud-Ordner wurde gelöscht.' : 'Cloud folder deleted.';

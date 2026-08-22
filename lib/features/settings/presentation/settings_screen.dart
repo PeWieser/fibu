@@ -407,7 +407,7 @@ class SettingsScreen extends ConsumerWidget {
               IosTheme.largeTitle(strings.settingsTitle, theme),
               // 1. Cloud Drives Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.cloudStorage.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.cloudStorage, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(
@@ -432,7 +432,7 @@ class SettingsScreen extends ConsumerWidget {
 
               // 2. Network & Cellular Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.networkSectionTitle.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.networkSectionTitle, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     title: Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 16)),
@@ -451,7 +451,7 @@ class SettingsScreen extends ConsumerWidget {
               Semantics(
                 label: strings.tooltipThemeMode,
                 child: cupertino.CupertinoListSection.insetGrouped(
-                  header: Text(strings.themeMode.toUpperCase()),
+                  header: IosTheme.sectionHeader(strings.themeMode, theme),
                   children: [
                     cupertino.CupertinoListTile(
                       title: Text(strings.syncWithSystem, style: const TextStyle(fontSize: 16)),
@@ -487,11 +487,12 @@ class SettingsScreen extends ConsumerWidget {
                     Semantics(
                       label: strings.tooltipWadaPalette,
                       child: Text(
-                        strings.lightModeSection.toUpperCase(),
+                        strings.lightModeSection,
                         style: TextStyle(
                           fontSize: 13,
                           color: theme.textSecondary,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
@@ -501,11 +502,12 @@ class SettingsScreen extends ConsumerWidget {
                     Semantics(
                       label: strings.tooltipWadaPalette,
                       child: Text(
-                        strings.darkModeSection.toUpperCase(),
+                        strings.darkModeSection,
                         style: TextStyle(
                           fontSize: 13,
                           color: theme.textSecondary,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
@@ -519,7 +521,7 @@ class SettingsScreen extends ConsumerWidget {
               Semantics(
                 label: strings.tooltipLanguage,
                 child: cupertino.CupertinoListSection.insetGrouped(
-                  header: Text(strings.preferences.toUpperCase()),
+                  header: IosTheme.sectionHeader(strings.preferences, theme),
                   children: [
                     cupertino.CupertinoListTile(
                       title: Text(strings.languageSection, style: const TextStyle(fontSize: 16)),
@@ -543,7 +545,7 @@ class SettingsScreen extends ConsumerWidget {
 
               // 5. About / Über Fibu Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.aboutSectionTitle.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.aboutSectionTitle, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     title: Text(strings.appVersionLabel, style: const TextStyle(fontSize: 16)),

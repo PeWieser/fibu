@@ -159,11 +159,11 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
         final theme = context.theme;
 
         Text sectionHeader(String label) => Text(
-              label.toUpperCase(),
+              label,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
                 color: theme.textSecondary,
               ),
             );

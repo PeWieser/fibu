@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
+import '../../../theme/ios_theme.dart';
 import '../../../core/localization/app_strings.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -852,7 +853,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 1. Status Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.generalSection.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.generalSection, theme),
                 children: [
                   if (_isEditing)
                     cupertino.CupertinoListTile(
@@ -883,7 +884,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 2. Source & Target Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.sourceAndTargetSection.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.sourceAndTargetSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.folder, color: theme.accent, size: 22),
@@ -927,7 +928,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // leere Alben ausgeblendet, vorhandene Auswahl vorgehakt).
               if (_isEditing && _editIsMediaSource)
                 cupertino.CupertinoListSection.insetGrouped(
-                  header: Text(strings.albumsSectionTitle.toUpperCase()),
+                  header: IosTheme.sectionHeader(strings.albumsSectionTitle, theme),
                   footer: Padding(
                     padding: const EdgeInsets.only(top: 4.0),
                     child: Text(strings.albumsEditNote),
@@ -1002,7 +1003,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // (Inkrementell ↔ Spiegelung). Beim Wechsel AUF Spiegelung
               // werden bestehende Cloud-Dateien beim ersten Lauf adoptiert.
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.syncSettingsSection.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.syncSettingsSection, theme),
                 footer: Padding(
                   padding: const EdgeInsets.only(top: 4.0),
                   child: Text(
@@ -1061,7 +1062,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 4. Schedule & Network Section
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.scheduleAndNetworkSection.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.scheduleAndNetworkSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.clock, color: theme.accent, size: 22),
@@ -1084,7 +1085,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 5a. Sync Section (sync ist bewusst NICHT im Löschbereich)
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.syncSection.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.syncSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: _isSyncing
@@ -1102,7 +1103,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // 5b. Danger Zone (Lösch-Aktionen existieren nur im Bearbeiten-Modus)
               if (_isEditing)
               cupertino.CupertinoListSection.insetGrouped(
-                header: Text(strings.dangerZone.toUpperCase()),
+                header: IosTheme.sectionHeader(strings.dangerZone, theme),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.trash, color: theme.error, size: 22),

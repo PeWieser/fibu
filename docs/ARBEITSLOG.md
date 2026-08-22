@@ -2,6 +2,34 @@
 
 ---
 
+## 2026-08-22 — Detail-Pass (Typografie, Kontrast, Navigation, Wortwahl)
+
+### Typografie & Kontrast („Steve-Jobs-Auge")
+- **Versalien-Header entfernt:** Alle Cupertino-Section-Header (Einstellungen,
+  Cloud-Laufwerke, Task-Detail, Sync-Log-Dialog) sind jetzt Title Case, 13 pt,
+  sekundär, `letterSpacing 0.3` — statt schreiender `toUpperCase()`-17pt-Header.
+  Neuer Helfer `IosTheme.sectionHeader(...)`.
+- **Tabellenziffern** (`FontFeature.tabularFigures()`) für Fortschritts-%
+  (alle drei Plattform-Panels) und die Speicherkarten-Bytes — Zahlen tanzen
+  beim Sync nicht mehr.
+- **Kontrast verifiziert:** `textSecondary` liegt bei ~5,2:1 (hell) bzw. ~6,9:1
+  (dunkel) auf Surface/Canvas — über der 4,5:1-Schwelle.
+
+### Navigation (ein Modell)
+- „Laufwerk hinzufügen" im Setup-Hinweis wechselt jetzt — wie „Aufgabe
+  erstellen" — in den Ziel-Tab (Einstellungen) und öffnet dort die
+  Cloud-Laufwerke, statt einen Screen über die App zu legen.
+
+### Wortwahl (Nutzen statt Inventur)
+- Empty-States sagen, was man gewinnt: „Deine Fotos und Dateien sind dann
+  sicher — auch wenn du dein Gerät verlierst." / „Deine Fotos sichern sich
+  dann automatisch …".
+- „Erste Schritte"-Label entfernt (die Aktionen sind selbsterklärend).
+- **Echte typografische Anführungszeichen:** ASCII `"` → „…“ (deutsch) bzw.
+  „…" → “…” (englisch) in allen Dialogen.
+
+---
+
 ## 2026-08-22 — Setup-Hinweis tappbar, „+"-Hinweise raus, Dead Code bereinigt
 
 ### Dashboard-Setup-Hinweis ist jetzt tappbar

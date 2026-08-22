@@ -1,3 +1,4 @@
+import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
@@ -97,7 +98,10 @@ class MultiRemoteStorageCard extends ConsumerWidget {
                     ? strings.quotaSummaryUsedOf(
                         formatBytes(totalUsed), formatBytes(totalQuota))
                     : '${formatBytes(totalUsed)} · ${strings.quotaSummaryUnavailable}',
-                style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                style: TextStyle(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()]),
               ),
             ],
           ),

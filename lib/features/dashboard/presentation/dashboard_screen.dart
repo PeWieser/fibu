@@ -61,6 +61,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     ref.invalidate(remoteEntriesProvider);
     ref.invalidate(remotesProvider);
     ref.invalidate(primaryQuotaProvider);
+    // Auch die per-Remote-Quotas & den Fibu-Beleg frisch laden — sonst
+    // aktualisiert sich die Speicherkarte erst über Cloud-Laufwerke.
+    ref.invalidate(remoteQuotaProvider);
+    ref.invalidate(remoteFibuUsageProvider);
 
     // Handlungsbedarf prüfen: Mediathek gegen den letzten Sync-Stand halten
     // (billige Zählung, keine Exporte) — Ergebnis fließt in Banner + Widgets.

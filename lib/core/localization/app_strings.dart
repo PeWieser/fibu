@@ -692,6 +692,9 @@ class AppStrings {
       isGerman ? 'Wende Löschprotokoll an' : 'Applying deletion log';
   String get syncPhaseDownload =>
       isGerman ? 'Lade aus der Cloud' : 'Downloading from cloud';
+  String get syncPhaseDeleteLocal => isGerman
+      ? 'Übernehme Cloud-Löschungen'
+      : 'Applying cloud deletions';
   String get syncAllUpToDate => isGerman
       ? 'Alles aktuell — nichts zu übertragen.'
       : 'Everything up to date — nothing to transfer.';

@@ -326,6 +326,14 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     }
   }
 
+  /// Cloud-Speicheranzeigen invalidieren — nach jedem Sync-Lauf hat sich
+  /// die Belegung geändert; Dashboard-Karte & Quota laden dann frisch.
+  void _refreshQuotaProviders() {
+    _ref.invalidate(primaryQuotaProvider);
+    _ref.invalidate(remoteQuotaProvider);
+    _ref.invalidate(remoteFibuUsageProvider);
+  }
+
   /// Synchronisiert die gesamte aktive Warteschlange.
   Future<void> triggerSyncAll() async {
     // Prevent duplicate triggers
@@ -373,9 +381,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         // Ein Task ist fehlgeschlagen/abgebrochen → Queue beenden (wie bisher).
         _progressSub?.cancel();
         _progressSub = null;
+        _refreshQuotaProviders();
         return;
       }
     }
+    _refreshQuotaProviders();
 
     _progressSub?.cancel();
     _progressSub = null;
@@ -437,6 +447,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     final ok = await _syncSingleTask(task);
     _progressSub?.cancel();
     _progressSub = null;
+    _refreshQuotaProviders();
     if (!mounted) return;
     if (ok) {
       final doneMsg = '${_timestamp()} Task "${task.name}" synchronized successfully.';

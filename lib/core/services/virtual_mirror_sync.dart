@@ -63,6 +63,12 @@ class VirtualMirrorSyncEngine {
   /// beim Moduswechsel Inkrementell → Spiegelung).
   /// [adoptOrphans]: einmaliger Baseline-Lauf — alle Cloud-only-Dateien in
   /// [adoptedRels] aufnehmen statt sie herunterzuladen.
+  /// [previouslySyncedRels]: Pfade, die beim LETZTEN Lauf nachweislich in der
+  /// Cloud lagen. Fehlt so ein Pfad jetzt remote (ohne Tombstone), wurde er
+  /// dort gelöscht → [deleteLocalAssets] löscht ihn lokal (iOS-Systemdialog).
+  /// [deleteLocalAssets]: löscht die übergebenen Medien aus der Mediathek und
+  /// liefert die tatsächlich gelöschten rel-Pfade zurück (Nutzer kann im
+  /// Systemdialog ablehnen).
   /// Rückgabewert: MirrorSyncResult (gleiche Zähler wie bei FS-Mirror).
   Future<MirrorSyncResult> sync({
     required Map<String, VirtualMediaItem> localItems,
@@ -72,6 +78,9 @@ class VirtualMirrorSyncEngine {
     required Set<String> blockedRels,
     Set<String>? adoptedRels,
     bool adoptOrphans = false,
+    Set<String>? previouslySyncedRels,
+    Future<List<String>> Function(List<VirtualMediaItem> items)?
+        deleteLocalAssets,
     required Future<File?> Function(VirtualMediaItem item) exportForUpload,
     required Future<void> Function(List<File> files, List<String> rels) importDownloaded,
     required Future<void> Function(List<Map<String, dynamic>> state) persistLocalState,
@@ -93,10 +102,36 @@ class VirtualMirrorSyncEngine {
     var uploaded = 0, downloaded = 0, deletedLocal = 0, deletedRemote = 0, trashedLocal = 0, trashedRemote = 0;
     final downloadedPaths = <String>[];
     final merged = <String, Tombstone>{};
+    // Erfolgreich hochgeladene Pfade dieses Laufs (für den „gesynct“-Zustand).
+    final uploadedRels = <String>{};
+
+    // ---------- 0) Remote-Löschungen erkennen (Mirror: Cloud → lokal) -------
+    // Ein Pfad, der beim letzten Lauf in der Cloud lag, jetzt aber weder
+    // remote existiert noch ein Tombstone hat, wurde direkt in der Cloud
+    // gelöscht. Diese Kandidaten dürfen NICHT wieder hochgeladen werden —
+    // sie werden (nach Sicherheitsbremse) lokal gelöscht.
+    final tombPaths = <String>{
+      for (final t in localTombs) t.path,
+      for (final t in remoteTombs) t.path,
+    };
+    final remoteDeletedCandidates = <VirtualMediaItem>[];
+    if (previouslySyncedRels != null && deleteLocalAssets != null) {
+      for (final item in localItems.values) {
+        if (!previouslySyncedRels.contains(item.rel)) continue;
+        if (remoteFiles.containsKey(item.rel)) continue;
+        if (tombPaths.contains(item.rel)) continue;
+        if (blockedRels.contains(item.rel)) continue;
+        if (adoptedRels != null && adoptedRels.contains(item.rel)) continue;
+        remoteDeletedCandidates.add(item);
+      }
+    }
+    final remoteDeletedRels =
+        remoteDeletedCandidates.map((i) => i.rel).toSet();
 
     // ---------- 1) Upload: lokal neu/neuer & remote fehlt/älter ----------
     final toUpload = localItems.values
         .where((item) => !blockedRels.contains(item.rel))
+        .where((item) => !remoteDeletedRels.contains(item.rel))
         .where((item) {
           final remote = remoteFiles[item.rel];
           if (remote == null) return true;
@@ -119,6 +154,7 @@ class VirtualMirrorSyncEngine {
         if (tmp == null || !await tmp.exists()) continue;
         await _rclone.copyFileToRemote(tmp.path, remoteName, _joinRemote(remotePath, item.rel));
         uploaded++;
+        uploadedRels.add(item.rel);
       } catch (e) {
         AppLog.warn('sync', 'Upload fehlgeschlagen: ${item.rel} → $e');
       } finally {
@@ -169,6 +205,42 @@ class VirtualMirrorSyncEngine {
       blockedRels.add(item.rel);
       AppLog.warn('sync',
           'Remote-Löschung für ${item.rel} empfangen → wird blockiert (Fibu löscht nie Inhalte aus der Mediathek) und wird nicht mehr hochgeladen');
+    }
+
+    // ---------- 3b) Direkte Cloud-Löschungen lokal ausführen ----------------
+    // (Nutzer hat Dateien unmittelbar in der Cloud gelöscht — kein Tombstone.)
+    // iOS zeigt beim Löschen aus der Mediathek IMMER den Systemdialog mit
+    // Vorschau; lehnt der Nutzer ab, wird der Pfad blockiert (bleibt lokal,
+    // wird aber nicht wieder hochgeladen und nicht erneut nachgefragt).
+    if (remoteDeletedCandidates.isNotEmpty && deleteLocalAssets != null) {
+      final prevCount = previouslySyncedRels?.length ?? 0;
+      // Sicherheitsbremse: leere/implausible Cloud-Listen (Ordner nicht
+      // gefunden, Ausfall) dürfen niemals die halbe Mediathek löschen.
+      final anomaly = remoteFiles.isEmpty ||
+          (prevCount >= 10 &&
+              remoteDeletedCandidates.length * 2 > prevCount);
+      if (anomaly) {
+        AppLog.warn('sync',
+            'Remote-Löschungen (${remoteDeletedCandidates.length}/$prevCount) wirken wie ein Ausfall/Formatwechsel → lokale Löschung übersprungen (nächster Lauf prüft erneut)');
+      } else {
+        AppLog.info('sync',
+            '${remoteDeletedCandidates.length} in der Cloud gelöschte Dateien → lokale Löschung (Systemdialog)');
+        onProgress?.call('delete-local', '', 0, remoteDeletedCandidates.length);
+        final deletedRels = await deleteLocalAssets(remoteDeletedCandidates);
+        final deletedSet = deletedRels.toSet();
+        deletedLocal += deletedSet.length;
+        for (final rel in deletedSet) {
+          localItems.remove(rel);
+        }
+        // Vom Nutzer im Systemdialog abgelehnt → behalten, aber blockieren.
+        for (final item in remoteDeletedCandidates) {
+          if (!deletedSet.contains(item.rel)) {
+            blockedRels.add(item.rel);
+            AppLog.info('sync',
+                'Lokale Löschung abgelehnt: ${item.rel} bleibt lokal erhalten und wird nicht erneut hochgeladen');
+          }
+        }
+      }
     }
 
     // ---------- 4) Cloud-only-Dateien herunterladen --------------------------
@@ -247,8 +319,19 @@ class VirtualMirrorSyncEngine {
     // ---------- 5) Tombstones + Zustand persistieren -------------------------
     await _writeTombs(_tombstoneFile(stateRoot), merged.values.toList());
     await _writeRemoteTombs(remoteName, remotePath, merged.values.toList());
-    await persistLocalState(
-        localItems.values.map((i) => i.toJson()).toList());
+    // Nur NACHWEISLICH gesyncte Pfade persistieren (jetzt hochgeladen oder
+    // remote vorhanden). Fehlgeschlagene Uploads bleiben draußen und werden
+    // beim nächsten Lauf erneut hochgeladen — und ein nie hochgeladener Pfad
+    // kann so niemals fälschlich als „remote gelöscht“ gelten.
+    final syncedNow = <String>{
+      ...uploadedRels,
+      for (final rel in localItems.keys)
+        if (remoteFiles.containsKey(rel)) rel,
+    };
+    await persistLocalState(localItems.values
+        .where((i) => syncedNow.contains(i.rel))
+        .map((i) => i.toJson())
+        .toList());
 
     return MirrorSyncResult(
       uploaded: uploaded,

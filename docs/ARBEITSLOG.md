@@ -2,6 +2,42 @@
 
 ---
 
+## 2026-08-22 — Cloud-Löschungen lokal, Album-Zuordnung beim Download, Quota-Auto-Refresh
+
+### Mirror: Direkte Cloud-Löschungen kommen jetzt lokal an
+- Vorher wurden in der Cloud gelöschte Dateien beim nächsten Lauf sogar
+  **wieder hochgeladen** (lokal vorhanden + remote fehlt = „neu“).
+- Neu (Virtual-Mirror-Engine, Schritt 0/3b): Ein Pfad, der beim letzten Lauf
+  **nachweislich gesynct** war und jetzt ohne Tombstone remote fehlt, gilt
+  als Cloud-Löschung → wird vom Upload ausgenommen und lokal über PhotoKit
+  gelöscht (`deleteWithIds` — iOS zeigt immer den Systemdialog mit Vorschau).
+- Lehnt der Nutzer im Systemdialog ab: Datei bleibt lokal, Pfad wird
+  blockiert (kein erneuter Upload, kein erneutes Nachfragen).
+- **Sicherheitsbremsen:** Leere Cloud-Liste oder >50 % „verschwunden“
+  (≥10 Pfade) wird als Ausfall/Formatwechsel gewertet — nichts wird gelöscht.
+- Zustands-Semantik gehärtet: `mirror_state.json` enthält nur noch
+  **nachweislich gesyncte** Pfade (hochgeladen oder remote gesehen).
+  Fehlgeschlagene Uploads werden erneut versucht und können nie fälschlich
+  als „remote gelöscht“ gelten.
+- Neue Fortschrittsphase „Übernehme Cloud-Löschungen“ (DE/EN).
+
+### Downloads landen im richtigen Album
+- `PhotoKitBridge.importIntoLibrary` ordnet Importe jetzt dem Album aus dem
+  Cloud-Pfad (`Photos/<Album>/…`) zu: bestehendes Nutzer-Album per Name
+  finden, sonst anlegen (`darwin.createAlbum`), dann `copyAssetToPath`.
+  Vorher erschien alles nur unter „Zuletzt“.
+- Gilt für Virtual-Mirror UND FS-Mirror-Importe; Fehler bei Smart-Alben
+  werden geschluckt (Import selbst bleibt erfolgreich).
+
+### Cloud-Speicheranzeige aktualisiert sich selbst
+- Nach jedem Sync-Lauf (Queue, Einzel-Task, auch bei Abbruch mit Teil-Upload)
+  werden `primaryQuotaProvider`, `remoteQuotaProvider` und
+  `remoteFibuUsageProvider` invalidiert — die Dashboard-Speicherkarte lädt
+  frisch, ohne Umweg über Cloud-Laufwerke.
+- Der Dashboard-„Aktualisieren“-Button invalidiert dieselben Provider.
+
+---
+
 ## 2026-08-22 — Sync-Button-Gate, Sync-Bedarfs-Prüfung, Widget-Fixes, schlanke Provider-Liste, Rechtliches
 
 ### Dashboard

@@ -102,19 +102,63 @@ class PhotoKitBridge {
 
   /// Importiert eine heruntergeladene Datei in die Mediathek (Fotos-App).
   /// [file] ist die Datei im FibuMirror; [mimeHint] hilft Bild vs. Video.
-  Future<bool> importIntoLibrary(File file, {String mimeHint = 'image'}) async {
+  /// [albumName]: Album aus dem Cloud-Pfad (`Photos/<Album>/…`) — das Asset
+  /// wird dem gleichnamigen Album zugeordnet (bei Bedarf wird es angelegt),
+  /// statt nur unter „Zuletzt“ zu erscheinen.
+  Future<bool> importIntoLibrary(File file,
+      {String mimeHint = 'image', String? albumName}) async {
     try {
       final ps = await PhotoManager.requestPermissionExtend();
       if (!ps.isAuth && !ps.hasAccess) return false;
 
+      final title = file.path.split('/').last;
+      final AssetEntity? asset;
       if (mimeHint.startsWith('video')) {
-        await PhotoManager.editor.saveVideo(file);
-        return true;
+        asset = await PhotoManager.editor.saveVideo(file, title: title);
+      } else {
+        asset =
+            await PhotoManager.editor.saveImageWithPath(file.path, title: title);
       }
-      await PhotoManager.editor.saveImageWithPath(file.path, title: file.path.split('/').last);
+      if (asset == null) return false;
+
+      final album = albumName?.trim();
+      if (album != null && album.isNotEmpty && Platform.isIOS) {
+        await _assignToAlbum(asset, album);
+      }
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Ordnet ein frisch importiertes Asset dem Album [albumName] zu.
+  /// Existiert kein passendes Nutzer-Album, wird eines angelegt.
+  /// Smart-Alben (Zuletzt, Favoriten …) lassen sich nicht befüllen —
+  /// Fehler werden geschluckt, der Import selbst bleibt erfolgreich.
+  Future<void> _assignToAlbum(AssetEntity asset, String albumName) async {
+    try {
+      final paths = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        hasAll: false,
+      );
+      AssetPathEntity? album;
+      for (final p in paths) {
+        if (p.isAll) continue;
+        if (p.name.trim().toLowerCase() == albumName.toLowerCase()) {
+          album = p;
+          break;
+        }
+      }
+      album ??= await PhotoManager.editor.darwin.createAlbum(albumName);
+      if (album == null) return;
+      await PhotoManager.editor.copyAssetToPath(
+        asset: asset,
+        pathEntity: album,
+      );
+      AppLog.info('media', 'Import „${asset.title ?? asset.id}“ → Album „$albumName“');
+    } catch (e) {
+      AppLog.warn('media',
+          'Album-Zuordnung „$albumName“ fehlgeschlagen (Import bleibt in der Mediathek): $e');
     }
   }
 

@@ -534,6 +534,7 @@ class IosRcloneService implements RcloneService {
               'upload': s.syncPhaseUpload,
               'tombstones': s.syncPhaseTombstones,
               'download': s.syncPhaseDownload,
+              'delete-local': s.syncPhaseDeleteLocal,
             };
             final label = phaseLabels[phase] ?? phase;
             final fileName =
@@ -719,6 +720,18 @@ class IosRcloneService implements RcloneService {
         }.contains(lower);
   }
 
+  /// Album-Name aus einem Spiegel-Pfad (`Photos/<Album>/<Datei>`), damit
+  /// heruntergeladene Medien im richtigen Album landen statt nur unter
+  /// „Zuletzt“. null, wenn der Pfad kein Album enthält.
+  static String? _albumNameFromRel(String rel) {
+    final segments =
+        rel.split('/').where((s) => s.trim().isNotEmpty).toList();
+    if (segments.length < 2) return null;
+    final album = segments[segments.length - 2];
+    if (album == 'Photos' || album.startsWith('.')) return null;
+    return album;
+  }
+
   /// Importiert die im Mirror neu heruntergeladenen Dateien in die Mediathek,
   /// damit sie in der Fotos-App erscheinen.
   Future<void> _importNewRemoteIntoLibrary(
@@ -730,7 +743,9 @@ class IosRcloneService implements RcloneService {
     for (final rel in result.downloadedPaths) {
       final f = File('$localRoot${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
       if (!await f.exists()) continue;
-      await bridge.importIntoLibrary(f, mimeHint: PhotoKitBridge.mimeHintFor(rel));
+      await bridge.importIntoLibrary(f,
+          mimeHint: PhotoKitBridge.mimeHintFor(rel),
+          albumName: _albumNameFromRel(rel));
     }
   }
 
@@ -1341,12 +1356,40 @@ class IosRcloneService implements RcloneService {
       var okCount = 0;
       for (var i = 0; i < files.length; i++) {
         if (await bridge.importIntoLibrary(files[i],
-            mimeHint: PhotoKitBridge.mimeHintFor(rels[i]))) {
+            mimeHint: PhotoKitBridge.mimeHintFor(rels[i]),
+            albumName: _albumNameFromRel(rels[i]))) {
           okCount++;
         }
       }
       AppLog.info('media',
           '$okCount/${files.length} heruntergeladene Dateien in die Mediathek importiert');
+    }
+
+    /// Direkte Cloud-Löschungen lokal ausführen: löscht die Assets über
+    /// PhotoKit (iOS zeigt den Systemdialog mit Vorschau). Liefert die
+    /// tatsächlich gelöschten rel-Pfade zurück.
+    Future<List<String>> deleteLocalAssets(List<VirtualMediaItem> items) async {
+      final idByRel = <String, String>{};
+      for (final item in items) {
+        final asset = byRel[item.rel];
+        if (asset != null) idByRel[item.rel] = asset.id;
+      }
+      if (idByRel.isEmpty) return const [];
+      try {
+        final deletedIds =
+            (await PhotoManager.editor.deleteWithIds(idByRel.values.toList()))
+                .toSet();
+        final deletedRels = [
+          for (final entry in idByRel.entries)
+            if (deletedIds.contains(entry.value)) entry.key,
+        ];
+        AppLog.info('media',
+            '${deletedRels.length}/${idByRel.length} Cloud-Löschungen lokal ausgeführt (Mediathek)');
+        return deletedRels;
+      } catch (e) {
+        AppLog.warn('media', 'Lokale Löschung fehlgeschlagen/abgelehnt: $e');
+        return const [];
+      }
     }
 
     final result = await VirtualMirrorSyncEngine(this).sync(
@@ -1357,6 +1400,8 @@ class IosRcloneService implements RcloneService {
       blockedRels: blocked,
       adoptedRels: adopted,
       adoptOrphans: adoptOrphans,
+      previouslySyncedRels: previousRels,
+      deleteLocalAssets: deleteLocalAssets,
       exportForUpload: exportForUpload,
       importDownloaded: importDownloaded,
       persistLocalState: (entries) =>
@@ -1370,6 +1415,7 @@ class IosRcloneService implements RcloneService {
           'upload': s.syncPhaseUpload,
           'tombstones': s.syncPhaseTombstones,
           'download': s.syncPhaseDownload,
+          'delete-local': s.syncPhaseDeleteLocal,
         };
         final label = phaseLabels[phase] ?? phase;
         final fileName =

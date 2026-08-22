@@ -50,14 +50,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       return;
     }
 
-    // The photo permission is mandatory: media backups (created later via the
-    // task wizard) cannot work without it, so onboarding must not finish
-    // before it has been granted. Ask for it if the user tries to skip.
-    if (!_photosGranted) {
-      await _requestPhotos();
-    }
-    if (!_photosGranted || !mounted) return;
+    // Fotozugriff ist kein Login-Zwang: Datei-Backups gehen auch ohne.
+    // Die Berechtigung kommt, wenn eine Medien-Aufgabe sie wirklich braucht.
+    await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
+  }
 
+  Future<void> _skip() async {
     await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
   }
 
@@ -72,9 +70,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         : 'Foto/Mediathek-Berechtigung verweigert – Hinweisdialog gezeigt');
     if (!mounted) return;
     setState(() => _photosGranted = granted);
-    if (!granted) {
-      await _showPhotoAccessRequiredDialog();
-    }
   }
 
   /// Returns whether the photo permission is granted, requesting it from the
@@ -218,12 +213,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     ];
 
     final isLastStep = _index == _lastStep;
-    // Photo access is required to finish onboarding, so the final
-    // "Get Started" button stays blocked until the permission was granted.
-    final waitingForPhotos = isLastStep && !_photosGranted;
 
     final body = Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+            child: _ActionButton(
+              theme: theme,
+              label: strings.onboardingSkip,
+              onPressed: _skip,
+            ),
+          ),
+        ),
         Expanded(
           child: PageView(
             controller: _controller,
@@ -232,21 +235,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         ),
         _Dots(count: pages.length, index: _index, color: theme.accent),
-        if (waitingForPhotos) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              strings.onboardingPhotosRequiredHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: theme.textSecondary,
-                fontSize: 13,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
@@ -254,7 +242,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             theme: theme,
             label: isLastStep ? strings.onboardingGetStarted : strings.onboardingNext,
             filled: true,
-            onPressed: waitingForPhotos ? null : _next,
+            onPressed: _next,
           ),
         ),
       ],

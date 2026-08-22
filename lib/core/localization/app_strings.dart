@@ -77,7 +77,10 @@ class AppStrings {
   String get hostLabel => isGerman ? 'Host / Server-Adresse' : 'Host / Server Address';
   String get portLabel => isGerman ? 'Port' : 'Port';
   String get testConnection => isGerman ? 'Verbindung testen' : 'Test Connection';
-  String get connectionSuccess => isGerman ? 'Verbindung erfolgreich hergestellt!' : 'Connection established successfully!';
+  String get connectionSuccess => isGerman ? 'Verbindung steht.' : 'Connection works.';
+  String get oauthMissingClientHint => isGerman
+      ? 'Dieser Anbieter braucht eine eigene Anmeldung im Browser. Die ist hier noch nicht eingerichtet.'
+      : 'This provider needs a browser sign-in that is not set up yet.';
   String get connectionFailed => isGerman ? 'Verbindungstest fehlgeschlagen' : 'Connection test failed';
   String get nameRequiredError => isGerman ? 'Bitte gib einen Verbindungsnamen ein.' : 'Please enter a connection name.';
   String get providerRequiredError => isGerman ? 'Bitte wähle einen Anbieter aus der Liste aus.' : 'Please select a provider from the list.';
@@ -127,12 +130,12 @@ class AppStrings {
       : 'Mirror is two-way: files deleted locally are also removed from the cloud.';
 
   String get oauthInfoNotice => isGerman
-      ? 'Dieser Anbieter nutzt sichere Web-Authentifizierung (OAuth 2.0). Kein Passwort nötig — du wirst zur Anmeldung im Browser weitergeleitet.'
-      : 'This provider uses secure OAuth 2.0. No password needed — you will be redirected to your browser to authenticate.';
+      ? 'Kein Passwort hier. Du meldest dich direkt beim Anbieter im Browser an.'
+      : 'No password here. You sign in with the provider in the browser.';
   String get oauthGenericTooltip => isGerman
       ? 'OAuth 2.0 ermöglicht eine sichere Anmeldung direkt beim Anbieter ohne Speicherung deines Passworts.'
       : 'OAuth 2.0 enables secure login directly with the provider without storing your password.';
-  String get authorizeInBrowser => isGerman ? 'In Browser autorisieren' : 'Authorize in Browser';
+  String get authorizeInBrowser => isGerman ? 'Beim Anbieter anmelden' : 'Sign in with provider';
   String get authorizedSuccess => isGerman ? 'Autorisierung erfolgreich verifiziert' : 'Authorization verified successfully';
   String get testingConnection => isGerman ? 'Verbindung wird getestet...' : 'Testing connection...';
   String get addingRemote => isGerman ? 'Laufwerk wird eingerichtet...' : 'Configuring remote...';
@@ -459,7 +462,7 @@ class AppStrings {
   String get onboardingGrantAccessSubtitle => isGerman
       ? 'Fibu braucht Zugriff auf deine Fotos und Dateien, um sie zu sichern. Der Zugriff bleibt lokal auf deinem Gerät.'
       : 'Fibu needs access to your photos and files to back them up. Access stays on your device.';
-  String get onboardingPhotosGranted => isGerman ? 'Fotozugriff erteilt ✓' : 'Photo access granted ✓';
+  String get onboardingPhotosGranted => isGerman ? 'Fotozugriff erteilt' : 'Photo access granted';
   String get onboardingAllowPhotos => isGerman ? 'Fotos erlauben' : 'Allow Photos';
   String get onboardingNext => isGerman ? 'Weiter' : 'Next';
   String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
@@ -515,7 +518,7 @@ class AppStrings {
       : 'An existing Fibu configuration (.fibu/config.json) was found on cloud remote "$remoteName".\n\nWould you like to import this configuration and create a local mirror sync task?';
   String get importConfigAndSync => isGerman ? 'Importieren & Spiegeln' : 'Import & Mirror';
   String get skipConfigImport => isGerman ? 'Überspringen' : 'Skip';
-  String get configImportSuccess => isGerman ? 'Konfiguration erfolgreich importiert!' : 'Configuration imported successfully!';
+  String get configImportSuccess => isGerman ? 'Konfiguration übernommen.' : 'Configuration imported.';
   String get localLog => isGerman ? 'Lokales Protokoll' : 'Local Log';
   String get remoteLog => isGerman ? 'Remote-Protokoll' : 'Remote Log';
   String get defaultBackupFolder => isGerman ? 'fibu-backup' : 'fibu-backup';

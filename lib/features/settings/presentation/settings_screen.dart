@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -549,6 +550,12 @@ class SettingsScreen extends ConsumerWidget {
                   cupertino.CupertinoListTile(
                     title: Text(strings.appVersionLabel, style: const TextStyle(fontSize: 16)),
                     trailing: Text(strings.appVersionValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
+                    onTap: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: strings.appVersionValue),
+                      );
+                      IosHaptics.success();
+                    },
                   ),
                   cupertino.CupertinoListTile(
                     title: Text(strings.developerLabel, style: const TextStyle(fontSize: 16)),

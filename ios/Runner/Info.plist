@@ -60,9 +60,9 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um Fotos und Videos 1:1 in Ihrer Cloud zu sichern.</string>
+	<string>Damit deine Fotos und Videos 1:1 in deiner eigenen Cloud landen.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Fibu benötigt Zugriff auf Ihre Mediathek, um wiederhergestellte Medien zu speichern.</string>
+	<string>Damit wiederhergestellte Fotos und Videos zurück in deine Mediathek kommen.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

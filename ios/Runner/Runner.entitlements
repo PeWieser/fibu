@@ -17,24 +17,38 @@
 	<array>
 		<string>webcredentials:mega.nz</string>
 		<string>webcredentials:*.mega.nz</string>
+		<string>webcredentials:drive.google.com</string>
+		<string>webcredentials:accounts.google.com</string>
 		<string>webcredentials:google.com</string>
 		<string>webcredentials:*.google.com</string>
+		<string>webcredentials:www.dropbox.com</string>
 		<string>webcredentials:dropbox.com</string>
 		<string>webcredentials:*.dropbox.com</string>
-		<string>webcredentials:pcloud.com</string>
-		<string>webcredentials:*.pcloud.com</string>
+		<string>webcredentials:login.live.com</string>
 		<string>webcredentials:live.com</string>
 		<string>webcredentials:*.live.com</string>
+		<string>webcredentials:login.microsoftonline.com</string>
 		<string>webcredentials:microsoftonline.com</string>
 		<string>webcredentials:*.microsoftonline.com</string>
+		<string>webcredentials:my.pcloud.com</string>
+		<string>webcredentials:pcloud.com</string>
+		<string>webcredentials:*.pcloud.com</string>
+		<string>webcredentials:account.box.com</string>
 		<string>webcredentials:box.com</string>
 		<string>webcredentials:*.box.com</string>
+		<string>webcredentials:passport.yandex.com</string>
 		<string>webcredentials:yandex.com</string>
 		<string>webcredentials:*.yandex.com</string>
 		<string>webcredentials:yandex.ru</string>
 		<string>webcredentials:*.yandex.ru</string>
+		<string>webcredentials:proton.me</string>
+		<string>webcredentials:*.proton.me</string>
+		<string>webcredentials:secure.backblaze.com</string>
 		<string>webcredentials:backblaze.com</string>
 		<string>webcredentials:*.backblaze.com</string>
+		<string>webcredentials:console.wasabisys.com</string>
+		<string>webcredentials:wasabisys.com</string>
+		<string>webcredentials:*.wasabisys.com</string>
 	</array>
 </dict>
 </plist>

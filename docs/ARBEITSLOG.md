@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-08-22 — Nur Apple-Schlüsselbund, passende Anmeldemaske je Provider
+
+### Login
+- Eigene „gespeicherte Zugänge“-Chips/Buttons und `CredentialVaultService` sind weg.
+  Die Anmeldemaske ist nur noch das Formular. Speichern/Vorschlagen macht der
+  **Apple-Schlüsselbund** (AutofillGroup + `finishAutofillContext` + Associated
+  Domains).
+- Associated Domains jetzt inkl. der konkreten Hosts: `mega.nz`,
+  `drive.google.com`, `accounts.google.com`, `www.dropbox.com`, `login.live.com`,
+  `proton.me`, Wasabi, Backblaze, …
+- Unsichtbares URL-Feld trägt die Provider-Domain in den Autofill-Kontext.
+
+### Jeder rclone-Anbieter hat seine Maske
+- Wizard liest `RcloneProviderRegistry` (AuthType + Felder), nicht mehr
+  Namens-Heuristik. **Proton Drive** wurde fälschlich als OAuth erkannt
+  (`contains('drive')`) — jetzt Benutzer/Passwort/2FA.
+- MEGA: E-Mail + Passwort. S3-Varianten: Access Key / Secret / Endpoint +
+  korrekter `provider=`-Wert. WebDAV/SFTP/SMB: Host + User + Pass. Wrapper
+  (Crypt, Union, …): ihre eigenen Felder. OAuth: ein Anmelde-Button, kein
+  Passwortfeld.
+
+### Jobs-Standards, die Code wirklich halten kann
+- Onboarding: sichtbares „Später einrichten“, Foto-Berechtigung blockiert
+  den Start nicht mehr (kommt, wenn eine Medien-Aufgabe sie braucht).
+- Nutzungsbeschreibungen erklären den Nutzen, nicht „App benötigt Zugriff“.
+- Keine Ausrufezeichen in Erfolgsmeldungen. Version in Einstellungen
+  kopierbar. Anzeigename wird beim Anbieter-Tipp vorausgefüllt.
+
+### Was diese Liste *nicht* ehrlich abhaken kann
+App-Store-Screenshots, ICE-Test, Crash-free 99,9 %, VoiceOver auf Gerät,
+Mutter-Test. Das wäre lügen. CI bleibt der Compile-Check.
+
+---
+
 ## 2026-08-21 — Remote-Identität, Schlüsselbund nativ, Task-Bearbeitung
 
 ### Remote-Registry (Identität ≠ Anzeigename)

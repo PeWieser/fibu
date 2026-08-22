@@ -35,7 +35,7 @@ enum AppLocale {
 
 /// State notifier managing the language selection mode (system, de, en).
 class LocaleModeNotifier extends StateNotifier<AppLocaleMode> {
-  LocaleModeNotifier() : super(AppLocaleMode.de) {
+  LocaleModeNotifier() : super(AppLocaleMode.system) {
     _loadLocaleMode();
   }
 
@@ -53,7 +53,7 @@ class LocaleModeNotifier extends StateNotifier<AppLocaleMode> {
         if (data['localeMode'] != null) {
           final mode = AppLocaleMode.values.firstWhere(
             (m) => m.name == data['localeMode'],
-            orElse: () => AppLocaleMode.de,
+            orElse: () => AppLocaleMode.system,
           );
           state = mode;
         } else if (data['locale'] != null) {

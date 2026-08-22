@@ -848,12 +848,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     return ids;
   }
 
-  /// Zeilen-Label: „Name · Provider“ — verwaiste Kennungen mit Hinweis.
+  /// Zeilen-Label: nur der Anzeigename — verwaiste Kennungen mit Hinweis.
   String _remoteLabel(String id) {
     final entries =
         ref.read(remoteEntriesProvider).valueOrNull ?? const [];
     for (final e in entries) {
-      if (e.id == id) return '${e.name} · ${RemoteEntry.prettyType(e.type)}';
+      if (e.id == id) return e.name;
     }
     return '$id (${context.strings.remoteMissingBadge})';
   }

@@ -50,7 +50,6 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => cupertino.CupertinoActionSheet(
         title: Text(strings.languageSection),
-        message: Text(strings.systemLanguageSubtitle),
         actions: AppLocaleMode.values.map((mode) {
           final isSelected = mode == currentMode;
           return cupertino.CupertinoActionSheetAction(
@@ -524,7 +523,6 @@ class SettingsScreen extends ConsumerWidget {
                   children: [
                     cupertino.CupertinoListTile(
                       title: Text(strings.languageSection, style: const TextStyle(fontSize: 16)),
-                      subtitle: Text(strings.systemLanguageSubtitle, style: const TextStyle(fontSize: 12)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -719,7 +717,6 @@ class SettingsScreen extends ConsumerWidget {
               child: material.ListTile(
                 minTileHeight: 48,
                 title: Text(strings.languageSection),
-                subtitle: Text(strings.systemLanguageSubtitle, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
                 trailing: material.DropdownButton<AppLocaleMode>(
                   value: currentLocaleMode,
                   underline: const SizedBox.shrink(),

@@ -377,7 +377,12 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
     try {
       final config = await _buildProviderConfig();
-      await ref.read(remoteRegistryServiceProvider).createRemote(
+      // createRemote liefert den Eintrag mit der stabilen internen Kennung.
+      // Zurückgegeben wird diese Kennung (nicht der Anzeigename!), sonst
+      // fänden rclone-Aufrufe wie „catFile(name)“ die Sektion nicht
+      // („didn't find section in config file“) und die Erkennung vorhandener
+      // Tasks schlüge fehl.
+      final entry = await ref.read(remoteRegistryServiceProvider).createRemote(
             displayName: name,
             type: _selectedRcloneType,
             config: config,
@@ -388,7 +393,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
-      if (mounted) Navigator.pop(context, name);
+      if (mounted) Navigator.pop(context, entry.id);
     } catch (e) {
       AppLog.warn('remote', 'Remote-Anlage fehlgeschlagen: $e');
       if (mounted) {

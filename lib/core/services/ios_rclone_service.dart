@@ -1073,7 +1073,10 @@ class IosRcloneService implements RcloneService {
         Set<String> blocked,
         Set<String> adopted,
       })> _loadVirtualState(Directory root) async {
-    const empty = (
+    // WICHTIG: KEINE `const`-Mengen — die Engine mutiert diese Sets
+    // (blockedRels.add / adoptedRels.add / removeWhere). Ein `const {}` ist
+    // unveränderbar und würde mit „Cannot change an unmodifiable set" crashen.
+    final empty = (
       items: <VirtualMediaItem>[],
       blocked: <String>{},
       adopted: <String>{},

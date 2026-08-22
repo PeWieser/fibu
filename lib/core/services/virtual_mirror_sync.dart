@@ -78,6 +78,9 @@ class VirtualMirrorSyncEngine {
     MirrorProgressCallback? onProgress,
   }) async {
     onProgress?.call('scan', 'Starte Analyse …', 0, 0);
+    // Die Mengen werden direkt mutiert (blockedRels.add / adoptedRels.add …) und
+    // vom Aufrufer über die persist-Callback zurückgeschrieben — sie MÜSSEN also
+    // growable sein. `_loadVirtualState` liefert daher bewusst keine const-Sets.
     final remoteFiles = await _listRemoteRecursive(remoteName, remotePath, onProgress: onProgress);
     AppLog.info('sync',
         'Virtual-Mirror-Analyse fertig: ${localItems.length} lokale Medien / ${remoteFiles.length} Cloud-Dateien');

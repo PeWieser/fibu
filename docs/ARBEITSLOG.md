@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-08-22 — Systemsprache, Task-Erkennung, Sync-Crash, Zweittexte
+
+### Systemsprache
+- `LocaleModeNotifier` startet jetzt mit `system` statt hart `de` — die App
+  folgt der Gerätesprache, bis der Nutzer explizit umstellt.
+
+### Erkennung vorhandener Tasks (Remote)
+- **Ursache gefunden:** Der Add-Wizard gab nach dem Anlegen den **Anzeigenamen**
+  („Megaaa“) zurück, obwohl rclone nur die interne Kennung (`fibu-f1df9551`)
+  kennt. `checkRemoteForConfig`/`catFile` liefen dadurch gegen eine
+  nicht existente Sektion → „didn't find section in config file“ (Status 500).
+- Der Wizard gibt jetzt die Registry-ID zurück; die Erfolgsmeldung und der
+  Import-Dialog lösen daraus den Anzeigenamen auf.
+
+### Sync-Crash „Cannot change an unmodifiable set“
+- `_loadVirtualState` lieferte beim ersten Lauf `const`-Sets — die Virtual-Mirror-
+  Engine mutiert diese (`blockedRels.add`, `adoptedRels.removeWhere`). Jetzt
+  growable (kein `const`).
+
+### Zweittexte entfernt
+- Cloud-Laufwerksliste: Provider-Typ unter dem Namen entfernt (nur Name +
+  Speicherinfo). Sprach-Zeile und Sprach-Picker ohne Erklär-Untertitel.
+  Wizard-Remote-Chips zeigen nur noch den Namen.
+
+### Apple-Schlüsselbund
+- Passwortfelder nutzen `AutofillHints.newPassword` → iOS bietet an, den Zugang
+  zu **speichern** (statt nur auszufüllen). Hinweis: Das **Erkennen** fremder
+  Domains (mega.nz, drive.google.com) verlangt aktives Associated-Domains-
+  Entitlement im Provisioning-Profil UND einen im iCloud-Schlüsselbund des
+  Nutzers gespeicherten Zugang — das kann die App nicht erzwingen.
+
+---
+
 ## 2026-08-22 — Nur Apple-Schlüsselbund, passende Anmeldemaske je Provider
 
 ### Login

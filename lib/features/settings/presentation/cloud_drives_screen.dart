@@ -223,7 +223,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final remote = remotes[index];
         final entry = ref.watch(remoteEntryProvider(remote));
         final displayName = entry?.name ?? remote;
-        final type = RemoteEntry.prettyType(entry?.type ?? '');
         final isDeleting = _deletingRemote == remote;
 
         return GestureDetector(
@@ -243,7 +242,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                     children: [
                       Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       SizedBox(height: theme.xs),
-                      Text(type, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                       _remoteStorageInfo(theme, strings, remote),
                     ],
                   ),
@@ -423,17 +421,10 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           () {
             final entry = ref.watch(remoteEntryProvider(remote));
             final displayName = entry?.name ?? remote;
-            final type = RemoteEntry.prettyType(entry?.type ?? '');
             final isDeleting = _deletingRemote == remote;
             return cupertino.CupertinoListTile.notched(
               title: Text(displayName),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(type),
-                  _remoteStorageInfo(theme, strings, remote),
-                ],
-              ),
+              subtitle: _remoteStorageInfo(theme, strings, remote),
               leading: Icon(cupertino.CupertinoIcons.cloud,
                   color: theme.accent, semanticLabel: 'Cloud Remote'),
               trailing: isDeleting
@@ -576,7 +567,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final remote = remotes[index];
         final entry = ref.watch(remoteEntryProvider(remote));
         final displayName = entry?.name ?? remote;
-        final type = RemoteEntry.prettyType(entry?.type ?? '');
         final isDeleting = _deletingRemote == remote;
 
         return material.Card(
@@ -591,13 +581,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             leading: Icon(material.Icons.cloud_queue,
                 color: theme.accent, semanticLabel: 'Cloud Remote'),
             title: Text(displayName),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(type),
-                _remoteStorageInfo(theme, strings, remote),
-              ],
-            ),
+            subtitle: _remoteStorageInfo(theme, strings, remote),
             trailing: isDeleting
                 ? const SizedBox(
                     width: 20,
@@ -1082,7 +1066,11 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     }
 
     if (addedRemoteName != null && mounted) {
-      _showNotification(strings.driveAddedSuccess(addedRemoteName), isError: false);
+      // Der Wizard liefert jetzt die interne Kennung (Registry-ID) zurück.
+      // Für die Erfolgsmeldung den Anzeigenamen auflösen, für die
+      // Config-Erkennung aber die Kennung verwenden (die rclone kennt).
+      final displayName = ref.read(remoteDisplayNameProvider(addedRemoteName));
+      _showNotification(strings.driveAddedSuccess(displayName), isError: false);
       await _checkAndPromptRemoteConfig(addedRemoteName, platform);
     }
   }
@@ -1095,7 +1083,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
 
     final strings = context.strings;
     final title = strings.existingConfigDetectedTitle;
-    final message = strings.existingConfigDetectedMessage(remoteName);
+    // remoteName ist die interne Kennung — im Dialog den Anzeigenamen zeigen.
+    final displayName = ref.read(remoteDisplayNameProvider(remoteName));
+    final message = strings.existingConfigDetectedMessage(displayName);
 
     Future<void> handleImport() async {
       final config = await ref.read(syncConfigServiceProvider).readRemoteConfig(remoteName);

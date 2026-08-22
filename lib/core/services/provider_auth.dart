@@ -173,9 +173,12 @@ class ProviderAuth {
         return const [AutofillHints.oneTimeCode];
       }
       if (key.contains('key') || key.contains('token') || key.contains('secret')) {
+        // API-Schlüssel/Token: kein „neues Passwort“-Angebot, nur ausfüllen.
         return const [AutofillHints.password];
       }
-      return const [AutofillHints.password];
+      // Echtes Passwort (pass/password/passphrase): iOS damit einlädt, den
+      // Zugang im Schlüsselbund zu SICHERN (finishAutofillContext).
+      return const [AutofillHints.newPassword];
     }
     if (key == 'user' ||
         key == 'username' ||

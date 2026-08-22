@@ -2,6 +2,19 @@
 
 ---
 
+## 2026-08-22 — Onboarding: eine Seite, ein Button
+
+- Onboarding radikal vereinfacht: eine Seite, ein Hinweis, ein Button
+  „Zugriff erlauben“. Kein Karussell, kein Welcome, kein Cloud-Connect,
+  kein Skip.
+- Nach Erteilen: Häkchen + Haptik → kurze Bestätigung → sanft ausblenden →
+  direkt in die App.
+- Nach Ablehnen: Button wird zu „In den Einstellungen erlauben“ (iOS zeigt
+  den nativen Prompt nicht erneut) — kein Dead-End, keine weitere Seite.
+- Desktop (ohne System-Mediathek): Button schließt das Onboarding direkt ab.
+
+---
+
 ## 2026-08-22 — Systemsprache, Task-Erkennung, Sync-Crash, Zweittexte
 
 ### Systemsprache

@@ -444,6 +444,15 @@ class AppStrings {
       : 'Choose a traditional Japanese Sanzo Wada color palette for balanced styling.';
 
   // --- Onboarding ---
+  // Eine Seite, ein Hinweis, ein Button: nur noch der Fotozugriff.
+  String get onboardingAccessTitle => isGerman ? 'Fotos sichern' : 'Back up your photos';
+  String get onboardingAccessHint => isGerman
+      ? 'Fibu sichert deine Fotos in deine eigene Cloud. Dafür braucht es einmal Zugriff auf deine Mediathek.'
+      : 'Fibu backs up your photos to your own cloud. It needs one-time access to your photo library.';
+  String get onboardingAllowAccess => isGerman ? 'Zugriff erlauben' : 'Allow Access';
+  String get onboardingAccessGranted => isGerman ? 'Fertig.' : 'Done.';
+  String get onboardingOpenSettings => isGerman ? 'In den Einstellungen erlauben' : 'Enable in Settings';
+
   String get onboardingWelcomeTitle => isGerman ? 'Willkommen bei Fibu' : 'Welcome to Fibu';
   String get onboardingWelcomeSubtitle => isGerman ? 'Deine persönliche Multi-Cloud Backup-Zentrale' : 'Your Personal Multi-Cloud Backup Hub';
   String get onboardingWelcomeIntro => isGerman

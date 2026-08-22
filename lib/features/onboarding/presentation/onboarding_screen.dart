@@ -7,14 +7,15 @@ import 'package:photo_manager/photo_manager.dart';
 import '../../../theme/theme.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/app_log_service.dart';
-import '../../../core/services/rclone_provider.dart';
-import '../../../core/services/remote_registry_service.dart';
-import '../../settings/presentation/cloud_drives_screen.dart';
+import '../../../core/utils/ios_haptics.dart';
 import 'onboarding_controller.dart';
 
-/// A deliberately minimal, Apple-style first-run flow with exactly three focused
-/// steps: Welcome → Connect a cloud → Grant permissions. Everything else lives in
-/// Settings so the first launch stays calm and uncluttered.
+/// Ein einziges, ruhiges Onboarding: ein Hinweis, ein Button.
+///
+/// Fragt die Foto-/Mediathek-Berechtigung ab. Sobald erteilt → kurze
+/// Bestätigung (Häkchen + Haptik) → ausblenden → direkt in die App.
+/// Wird die Berechtigung abgelehnt, wird der Button zum Pfad in die
+/// Systemeinstellungen (kein Dead-End, keine weiteren Seiten).
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -23,229 +24,117 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final PageController _controller = PageController();
-  int _index = 0;
-  bool _photosGranted = false;
+  bool _requesting = false;
+  bool _granted = false;
+  bool _denied = false;
+  bool _fadingOut = false;
 
-  static const _lastStep = 2;
+  bool get _isMobile =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _complete() async {
+    await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
   }
 
-  void _goTo(int page) {
-    setState(() => _index = page);
-    _controller.animateToPage(
-      page,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeInOut,
-    );
-  }
+  /// Fordert den Fotozugriff an; bei Erfolg kurze Bestätigung → ausblenden.
+  Future<void> _requestAccess() async {
+    if (_requesting) return;
+    setState(() => _requesting = true);
 
-  Future<void> _next() async {
-    if (_index < _lastStep) {
-      _goTo(_index + 1);
+    // Auf Desktop gibt es keine System-Mediathek — kein Grund zu blockieren.
+    if (!_isMobile) {
+      await _complete();
       return;
-    }
-
-    // Fotozugriff ist kein Login-Zwang: Datei-Backups gehen auch ohne.
-    // Die Berechtigung kommt, wenn eine Medien-Aufgabe sie wirklich braucht.
-    await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
-  }
-
-  Future<void> _skip() async {
-    await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
-  }
-
-  /// Requests the photo/media permission and updates [_photosGranted].
-  /// When the permission was declined, an explanation dialog is shown that
-  /// also offers opening the system settings (recovery path for a previously
-  /// denied permission).
-  Future<void> _requestPhotos() async {
-    final granted = await _requestPhotoPermission();
-    AppLog.info('media', granted
-        ? 'Foto/Mediathek-Berechtigung erteilt'
-        : 'Foto/Mediathek-Berechtigung verweigert – Hinweisdialog gezeigt');
-    if (!mounted) return;
-    setState(() => _photosGranted = granted);
-  }
-
-  /// Returns whether the photo permission is granted, requesting it from the
-  /// operating system when necessary.
-  Future<bool> _requestPhotoPermission() async {
-    if (_photosGranted) return true;
-
-    // photo_manager only exists on mobile platforms (Android, iOS, macOS).
-    // On desktop there is no system photo library, so the permission cannot
-    // be required there.
-    if (!kIsWeb &&
-        defaultTargetPlatform != TargetPlatform.android &&
-        defaultTargetPlatform != TargetPlatform.iOS &&
-        defaultTargetPlatform != TargetPlatform.macOS) {
-      return true;
     }
 
     try {
       final ps = await PhotoManager.requestPermissionExtend();
-      return ps.isAuth || ps.hasAccess;
+      final granted = ps.isAuth || ps.hasAccess;
+      AppLog.info('media', granted
+          ? 'Foto/Mediathek-Berechtigung erteilt'
+          : 'Foto/Mediathek-Berechtigung verweigert');
+      if (!mounted) return;
+
+      if (granted) {
+        IosHaptics.success();
+        setState(() {
+          _requesting = false;
+          _granted = true;
+        });
+        // Kurz die Bestätigung zeigen, dann sanft ausblenden und fertig.
+        await Future.delayed(const Duration(milliseconds: 850));
+        if (!mounted) return;
+        setState(() => _fadingOut = true);
+        await Future.delayed(const Duration(milliseconds: 220));
+        if (!mounted) return;
+        await _complete();
+      } else {
+        // Abgelehnt → iOS zeigt den nativen Prompt nicht mehr automatisch.
+        setState(() {
+          _requesting = false;
+          _denied = true;
+        });
+      }
     } catch (_) {
-      // Plugin unavailable (e.g. desktop builds or widget tests running on a
-      // bare Dart VM) – do not hard-block onboarding in that case.
-      return true;
+      if (mounted) setState(() => _requesting = false);
     }
   }
 
-  /// Tells the user that photo access is mandatory and offers a shortcut to
-  /// the system settings – the way to recover when iOS/Android no longer shows
-  /// the permission prompt after a denial.
-  Future<void> _showPhotoAccessRequiredDialog() async {
-    final strings = ref.read(stringsProvider);
-
-    final openSettings = defaultTargetPlatform == TargetPlatform.iOS
-        ? await showCupertinoDialog<bool>(
-            context: context,
-            builder: (dialogCtx) => CupertinoAlertDialog(
-              title: Text(strings.onboardingPhotoAccessRequiredTitle),
-              content: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(strings.onboardingPhotoAccessRequiredMessage),
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  onPressed: () => Navigator.pop(dialogCtx, false),
-                  child: Text(strings.cancel),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () => Navigator.pop(dialogCtx, true),
-                  child: Text(strings.openSystemSettings),
-                ),
-              ],
-            ),
-          )
-        : await material.showDialog<bool>(
-            context: context,
-            builder: (dialogCtx) => material.AlertDialog(
-              title: Text(strings.onboardingPhotoAccessRequiredTitle),
-              content: Text(strings.onboardingPhotoAccessRequiredMessage),
-              actions: [
-                material.TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx, false),
-                  child: Text(strings.cancel),
-                ),
-                material.FilledButton(
-                  onPressed: () => Navigator.pop(dialogCtx, true),
-                  child: Text(strings.openSystemSettings),
-                ),
-              ],
-            ),
-          );
-
-    if (openSettings == true) {
+  /// Nach einer Ablehnung: direkt in die Systemeinstellungen, danach neu prüfen.
+  Future<void> _openSettings() async {
+    if (_requesting) return;
+    setState(() => _requesting = true);
+    try {
       try {
         await PhotoManager.openSetting();
-      } catch (_) {
-        // Settings cannot be opened on unsupported platforms – ignore.
+      } catch (_) {}
+      final ps = await PhotoManager.requestPermissionExtend();
+      final granted = ps.isAuth || ps.hasAccess;
+      if (!mounted) return;
+      if (granted) {
+        IosHaptics.success();
+        setState(() {
+          _requesting = false;
+          _granted = true;
+          _denied = false;
+        });
+        await Future.delayed(const Duration(milliseconds: 850));
+        if (!mounted) return;
+        setState(() => _fadingOut = true);
+        await Future.delayed(const Duration(milliseconds: 220));
+        if (!mounted) return;
+        await _complete();
+      } else {
+        setState(() => _requesting = false);
       }
-      // Re-check the permission after returning from the system settings.
-      if (mounted) {
-        final granted = await _requestPhotoPermission();
-        if (mounted) setState(() => _photosGranted = granted);
-      }
+    } catch (_) {
+      if (mounted) setState(() => _requesting = false);
     }
-  }
-
-  Future<void> _connectCloud() async {
-    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
-    await Navigator.of(context).push(
-      isIOS
-          ? CupertinoPageRoute<void>(builder: (_) => const CloudDrivesScreen())
-          : material.MaterialPageRoute<void>(builder: (_) => const CloudDrivesScreen()),
-    );
-    // Refresh the connected-remote count when returning.
-    ref.invalidate(remoteEntriesProvider);
-    ref.invalidate(remotesProvider);
-    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(appThemeProvider);
     final strings = ref.watch(stringsProvider);
-    final remotes = ref.watch(remotesProvider);
-    final connectedCount = remotes.maybeWhen(data: (r) => r.length, orElse: () => 0);
 
-    final pages = <Widget>[
-      _OnboardingPage(
-        theme: theme,
-        icon: CupertinoIcons.cloud_upload_fill,
-        title: strings.onboardingWelcomeTitle,
-        subtitle: strings.onboardingWelcomeIntro,
-      ),
-      _OnboardingPage(
-        theme: theme,
-        icon: CupertinoIcons.link,
-        title: strings.onboardingConnectCloudTitle,
-        subtitle: connectedCount > 0
-            ? strings.onboardingConnectedCount(connectedCount)
-            : strings.onboardingConnectCloudSubtitle,
-        action: _ActionButton(
-          theme: theme,
-          label: connectedCount > 0
-              ? strings.onboardingConnectMoreCloud
-              : strings.onboardingConnectCloud,
-          onPressed: _connectCloud,
-        ),
-      ),
-      _OnboardingPage(
-        theme: theme,
-        icon: CupertinoIcons.photo_on_rectangle,
-        title: strings.onboardingGrantAccessTitle,
-        subtitle: strings.onboardingGrantAccessSubtitle,
-        action: _ActionButton(
-          theme: theme,
-          label: _photosGranted ? strings.onboardingPhotosGranted : strings.onboardingAllowPhotos,
-          onPressed: _photosGranted ? null : _requestPhotos,
-        ),
-      ),
-    ];
-
-    final isLastStep = _index == _lastStep;
-
-    final body = Column(
-      children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
-            child: _ActionButton(
-              theme: theme,
-              label: strings.onboardingSkip,
-              onPressed: _skip,
-            ),
+    final body = AnimatedOpacity(
+      opacity: _fadingOut ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _granted
+                ? _buildDone(theme, strings)
+                : _buildAsk(theme, strings),
           ),
         ),
-        Expanded(
-          child: PageView(
-            controller: _controller,
-            onPageChanged: (i) => setState(() => _index = i),
-            children: pages,
-          ),
-        ),
-        _Dots(count: pages.length, index: _index, color: theme.accent),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-          child: _ActionButton(
-            theme: theme,
-            label: isLastStep ? strings.onboardingGetStarted : strings.onboardingNext,
-            filled: true,
-            onPressed: _next,
-          ),
-        ),
-      ],
+      ),
     );
 
     if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -259,171 +148,122 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: SafeArea(child: body),
     );
   }
-}
 
-class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({
-    required this.theme,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.action,
-  });
-
-  final AppThemeData theme;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: theme.accent.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 44, color: theme.accent),
+  Widget _buildAsk(AppThemeData theme, AppStrings strings) {
+    return Column(
+      key: const ValueKey('ask'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: theme.accent.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 32),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: theme.textPrimary,
-              letterSpacing: -0.5,
-            ),
+          child: Icon(CupertinoIcons.photo_on_rectangle, size: 44, color: theme.accent),
+        ),
+        const SizedBox(height: 28),
+        Text(
+          strings.onboardingAccessTitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: theme.textPrimary,
+            letterSpacing: -0.4,
           ),
-          const SizedBox(height: 12),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              height: 1.4,
-              color: theme.textSecondary,
-            ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          strings.onboardingAccessHint,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1.4,
+            color: theme.textSecondary,
           ),
-          if (action != null) ...[
-            const SizedBox(height: 28),
-            action!,
-          ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 32),
+        _primaryButton(
+          theme,
+          label: _denied ? strings.onboardingOpenSettings : strings.onboardingAllowAccess,
+          onPressed: _requesting ? null : (_denied ? _openSettings : _requestAccess),
+        ),
+      ],
     );
   }
-}
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.theme,
-    required this.label,
-    required this.onPressed,
-    this.filled = false,
-  });
+  Widget _buildDone(AppThemeData theme, AppStrings strings) {
+    return Column(
+      key: const ValueKey('done'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: theme.success.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            CupertinoIcons.checkmark_alt_circle_fill,
+            size: 52,
+            color: theme.success,
+          ),
+        ),
+        const SizedBox(height: 28),
+        Text(
+          strings.onboardingAccessGranted,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            color: theme.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
 
-  final AppThemeData theme;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _primaryButton(
+    AppThemeData theme, {
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      if (filled) {
-        final enabled = onPressed != null;
-        return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              color: theme.accent,
-              // Deaktiviert: deutlich sichtbarer, gedimmter Hintergrund +
-              // explizit weißer Text (sonst wirkt der Button „leer“).
-              disabledColor: theme.accent.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(14),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              onPressed: onPressed,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: enabled
-                      ? const Color(0xFFFFFFFF)
-                      : const Color(0xFFFFFFFF).withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w600,
-                ),
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: SizedBox(
+          width: double.infinity,
+          child: CupertinoButton(
+            color: theme.accent,
+            disabledColor: theme.accent.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(14),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            onPressed: onPressed,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFFFFFFF),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        );
-      }
-      return ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-        child: CupertinoButton(
-          onPressed: onPressed,
-          child: Text(label, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600)),
         ),
       );
     }
-
-    if (filled) {
-      return SizedBox(
-        width: double.infinity,
-        child: material.FilledButton(
-          style: material.FilledButton.styleFrom(
-            backgroundColor: theme.accent,
-            foregroundColor: material.Colors.white,
-            disabledBackgroundColor:
-                theme.accent.withValues(alpha: 0.25),
-            disabledForegroundColor:
-                material.Colors.white.withValues(alpha: 0.85),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          onPressed: onPressed,
-          child: Text(label),
+    return SizedBox(
+      width: double.infinity,
+      child: material.FilledButton(
+        style: material.FilledButton.styleFrom(
+          backgroundColor: theme.accent,
+          foregroundColor: material.Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
         ),
-      );
-    }
-    return material.OutlinedButton(
-      onPressed: onPressed,
-      child: Text(label, style: TextStyle(color: theme.accent)),
-    );
-  }
-}
-
-class _Dots extends StatelessWidget {
-  const _Dots({required this.count, required this.index, required this.color});
-
-  final int count;
-  final int index;
-  final material.Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(count, (i) {
-        final active = i == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 22 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: active ? color : color.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-      }),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
     );
   }
 }

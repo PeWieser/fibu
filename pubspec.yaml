@@ -42,3 +42,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # flutter_web_auth_2, open_filex und workmanager unterstützen noch kein
+  # Swift Package Manager — Flutter fällt für sie ohnehin auf CocoaPods
+  # zurück. SPM projektweit deaktivieren = reines CocoaPods (bisheriges,
+  # grün gebautes Verhalten) und keine Build-Warnung mehr. Entfernen, sobald
+  # alle drei Plugins SPM können.
+  config:
+    enable-swift-package-manager: false

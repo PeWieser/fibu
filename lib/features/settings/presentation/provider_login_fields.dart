@@ -214,7 +214,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         color: theme.surface,
         onPressed: () async {
-          final picked = await _pickCupertino(context, options, value);
+          final picked = await _pickCupertino(options, value);
           if (picked != null) {
             controllers[field.key]?.text = picked;
             onChanged();
@@ -259,10 +259,37 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
   }
 
   Future<String?> _pickCupertino(List<String> options, String current) {
-    // Callers pass context via the button; we use a root-less picker through
-    // the nearest navigator. Implemented by the parent via overlay would be
-    // heavier — CupertinoPicker in a modal is enough.
-    return Future<String?>.value(null);
+    var index = options.indexOf(current);
+    if (index < 0) index = 0;
+    return cupertino.showCupertinoModalPopup<String>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 240,
+        color: theme.surface,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: cupertino.CupertinoButton(
+                onPressed: () => Navigator.pop(ctx, options[index]),
+                child: Text(strings.save),
+              ),
+            ),
+            Expanded(
+              child: cupertino.CupertinoPicker(
+                itemExtent: 36,
+                scrollController:
+                    cupertino.FixedExtentScrollController(initialItem: index),
+                onSelectedItemChanged: (i) => index = i,
+                children: [
+                  for (final o in options) Center(child: Text(o)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _textField(ConfigFieldDefinition field, {required bool isLast}) {

@@ -353,16 +353,6 @@ class TasksScreen extends ConsumerWidget {
               style: TextStyle(color: theme.textSecondary),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: theme.lg),
-            Text(
-              strings.tasksAddHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: theme.textSecondary,
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
           ],
         ),
       ),

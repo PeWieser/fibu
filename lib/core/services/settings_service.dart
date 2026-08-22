@@ -11,13 +11,11 @@ import '../localization/locale_provider.dart';
 class AppSettingsData {
   final ThemeConfig themeConfig;
   final AppLocale locale;
-  final bool onboardingCompleted;
   final bool wifiOnlySync;
 
   const AppSettingsData({
     required this.themeConfig,
     required this.locale,
-    this.onboardingCompleted = false,
     this.wifiOnlySync = true,
   });
 
@@ -27,7 +25,6 @@ class AppSettingsData {
     'selectedLightPalette': themeConfig.selectedLightPalette?.name,
     'selectedDarkPalette': themeConfig.selectedDarkPalette?.name,
     'locale': locale.name,
-    'onboardingCompleted': onboardingCompleted,
     'wifiOnlySync': wifiOnlySync,
   };
 
@@ -66,13 +63,12 @@ class AppSettingsData {
         selectedDarkPalette: darkPal,
       ),
       locale: loc,
-      onboardingCompleted: json['onboardingCompleted'] as bool? ?? false,
       wifiOnlySync: json['wifiOnlySync'] as bool? ?? true,
     );
   }
 }
 
-/// Service to persist and load application settings (Theme, Wada Palettes, Locale, Onboarding).
+/// Service to persist and load application settings (Theme, Wada Palettes, Locale).
 class SettingsService {
   static Future<File> _getFile() async {
     // Privat (App-Support): Nutzer sehen settings.json nicht in der Dateien-App.
@@ -96,20 +92,15 @@ class SettingsService {
   static Future<void> saveSettings(
     ThemeConfig themeConfig,
     AppLocale locale, {
-    bool? onboardingCompleted,
     bool? wifiOnlySync,
   }) async {
     try {
       final file = await _getFile();
-      bool completed = onboardingCompleted ?? false;
       bool wifiOnly = wifiOnlySync ?? true;
       if (await file.exists()) {
         try {
           final content = await file.readAsString();
           final Map<String, dynamic> map = json.decode(content);
-          if (onboardingCompleted == null) {
-            completed = map['onboardingCompleted'] as bool? ?? false;
-          }
           if (wifiOnlySync == null && map['wifiOnlySync'] != null) {
             wifiOnly = map['wifiOnlySync'] as bool? ?? true;
           }
@@ -119,34 +110,12 @@ class SettingsService {
       final data = AppSettingsData(
         themeConfig: themeConfig,
         locale: locale,
-        onboardingCompleted: onboardingCompleted ?? completed,
         wifiOnlySync: wifiOnlySync ?? wifiOnly,
       );
       await file.writeAsString(json.encode(data.toJson()));
     } catch (_) {
       // Ignore write errors in test environments
     }
-  }
-
-  static Future<void> setOnboardingCompleted(bool completed) async {
-    try {
-      final current = await loadSettings();
-      if (current != null) {
-        await saveSettings(
-          current.themeConfig,
-          current.locale,
-          onboardingCompleted: completed,
-          wifiOnlySync: current.wifiOnlySync,
-        );
-      } else {
-        await saveSettings(
-          const ThemeConfig(),
-          AppLocale.de,
-          onboardingCompleted: completed,
-          wifiOnlySync: true,
-        );
-      }
-    } catch (_) {}
   }
 
   static Future<void> setWifiOnlySync(bool wifiOnly) async {
@@ -156,7 +125,6 @@ class SettingsService {
         await saveSettings(
           current.themeConfig,
           current.locale,
-          onboardingCompleted: current.onboardingCompleted,
           wifiOnlySync: wifiOnly,
         );
       } else {

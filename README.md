@@ -81,14 +81,13 @@ fibu win/
 │   ├── core/
 │   │   ├── localization/         # Bilingual (German & English) via AppStrings
 │   │   ├── services/             # RcloneService (timeouts/logging), RcloneProviderRegistry,
-│   │   │                         # SyncManifestService, AppLog, CredentialVault (Keychain),
+│   │   │                         # SyncManifestService, AppLog, SecureStore (Apple Keychain),
 │   │   │                         # NetworkStatus, QuickActions, MirrorSyncEngine
 │   │   └── utils/                # File handlers, byte formatting
 │   ├── features/
 │   │   ├── dashboard/            # Overview, hero status, storage cards, explorer
 │   │   ├── tasks/                # Task manager, one-tap presets, wizard
 │   │   ├── settings/             # 70+ cloud drive wizard, Wi-Fi-only, palettes, debug log
-│   │   ├── onboarding/           # First-run assistant (media & files quick start)
 │   │   └── shell/                # Platform-adaptive navigation frame
 │   └── theme/                    # 4pt design tokens, palettes, typography
 ├── test/

@@ -163,18 +163,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 severity: fluent.InfoBarSeverity.error,
               ),
             ),
-            SizedBox(height: theme.xl),
-            Center(
-              child: Text(
-                strings.drivesAddHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: theme.textSecondary,
-                  fontSize: 13,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -381,16 +369,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: theme.textSecondary),
             ),
-            SizedBox(height: theme.lg),
-            Text(
-              strings.drivesAddHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: theme.textSecondary,
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
           ],
         ),
       );
@@ -498,18 +476,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                     child: Text(strings.retry),
                   ),
                 ],
-              ),
-            ),
-            SizedBox(height: theme.xl),
-            Center(
-              child: Text(
-                strings.drivesAddHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: theme.textSecondary,
-                  fontSize: 13,
-                  fontStyle: FontStyle.italic,
-                ),
               ),
             ),
           ],

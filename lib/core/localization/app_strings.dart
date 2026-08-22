@@ -59,25 +59,8 @@ class AppStrings {
   String get tooltipStorageCard => isGerman ? 'Klicke hier für die detaillierte Speicherbelegung nach Dateitypen.' : 'Click here for detailed storage breakdown by file type.';
   String get tooltipSyncBanner => isGerman ? 'Klicke hier, um das vollständige Aktivitätsprotokoll anzuzeigen.' : 'Click here to view activity logs.';
 
-  // --- Setup-Hinweise (kein Onboarding — erst bei Bedarf) ---
-  String get setupDriveAndTask => isGerman
-      ? 'Richte dein erstes Cloud-Laufwerk und deine erste Aufgabe ein.'
-      : 'Set up your first cloud drive and your first task.';
-  String get setupFirstDrive => isGerman
-      ? 'Richte dein erstes Cloud-Laufwerk ein.'
-      : 'Set up your first cloud drive.';
-  String get setupFirstTask => isGerman
-      ? 'Richte deine erste Aufgabe ein.'
-      : 'Set up your first task.';
-  String get setupHintSubtitle => isGerman
-      ? 'Laufwerk: Einstellungen → Cloud-Laufwerke · Aufgabe: Tab „Aufgaben“.'
-      : 'Drive: Settings → Cloud Drives · Task: Tasks tab.';
-  String get tasksAddHint => isGerman
-      ? 'Tippe oben rechts auf +, um eine Aufgabe anzulegen.'
-      : 'Tap + in the top right to add a task.';
-  String get drivesAddHint => isGerman
-      ? 'Tippe oben rechts auf +, um ein Laufwerk hinzuzufügen.'
-      : 'Tap + in the top right to add a drive.';
+  // --- Setup-Hinweis (kein Onboarding — erst bei Bedarf) ---
+  String get setupHeader => isGerman ? 'Erste Schritte' : 'Getting started';
 
   // --- Cloud Drives & Wizard ---
   String get cloudDrivesTitle => isGerman ? 'Cloud-Laufwerke verwalten' : 'Manage Cloud Drives';
@@ -463,74 +446,6 @@ class AppStrings {
       ? 'Wähle eine traditionelle japanische Sanzo Wada Farbpalette für ein harmonisches Design.'
       : 'Choose a traditional Japanese Sanzo Wada color palette for balanced styling.';
 
-  // --- Onboarding ---
-  // Eine Seite, ein Hinweis, ein Button: nur noch der Fotozugriff.
-  String get onboardingAccessTitle => isGerman ? 'Fotos sichern' : 'Back up your photos';
-  String get onboardingAccessHint => isGerman
-      ? 'Fibu sichert deine Fotos in deine eigene Cloud. Dafür braucht es einmal Zugriff auf deine Mediathek.'
-      : 'Fibu backs up your photos to your own cloud. It needs one-time access to your photo library.';
-  String get onboardingAllowAccess => isGerman ? 'Zugriff erlauben' : 'Allow Access';
-  String get onboardingAccessGranted => isGerman ? 'Fertig.' : 'Done.';
-  String get onboardingOpenSettings => isGerman ? 'In den Einstellungen erlauben' : 'Enable in Settings';
-
-  String get onboardingWelcomeTitle => isGerman ? 'Willkommen bei Fibu' : 'Welcome to Fibu';
-  String get onboardingWelcomeSubtitle => isGerman ? 'Deine persönliche Multi-Cloud Backup-Zentrale' : 'Your Personal Multi-Cloud Backup Hub';
-  String get onboardingWelcomeIntro => isGerman
-      ? 'Deine Fotos und Dateien – sicher in deiner eigenen Cloud gespiegelt. In drei kurzen Schritten bist du startklar.'
-      : 'Your photos and files – safely mirrored to your own cloud. You will be set up in three quick steps.';
-  String get onboardingConnectCloudTitle => isGerman ? 'Cloud verbinden' : 'Connect a Cloud';
-  String get onboardingConnectCloudSubtitle => isGerman
-      ? 'Verbinde einen Cloud-Speicher (z. B. Google Drive, OneDrive, Dropbox), damit Fibu deine Daten dorthin sichern kann.'
-      : 'Connect a cloud storage (e.g. Google Drive, OneDrive, Dropbox) so Fibu can back up your data there.';
-  String onboardingConnectedCount(int count) => isGerman
-      ? '$count Cloud${count == 1 ? '' : 's'} verbunden. Du kannst weitere später in den Einstellungen hinzufügen.'
-      : '$count cloud${count == 1 ? '' : 's'} connected. You can add more later in Settings.';
-  String get onboardingConnectMoreCloud => isGerman ? 'Weitere Cloud verbinden' : 'Connect Another Cloud';
-  String get onboardingConnectCloud => isGerman ? 'Cloud verbinden' : 'Connect a Cloud';
-  String get onboardingGrantAccessTitle => isGerman ? 'Zugriff erlauben' : 'Grant Access';
-  String get onboardingGrantAccessSubtitle => isGerman
-      ? 'Fibu braucht Zugriff auf deine Fotos und Dateien, um sie zu sichern. Der Zugriff bleibt lokal auf deinem Gerät.'
-      : 'Fibu needs access to your photos and files to back them up. Access stays on your device.';
-  String get onboardingPhotosGranted => isGerman ? 'Fotozugriff erteilt' : 'Photo access granted';
-  String get onboardingAllowPhotos => isGerman ? 'Fotos erlauben' : 'Allow Photos';
-  String get onboardingNext => isGerman ? 'Weiter' : 'Next';
-  String get onboardingGetStarted => isGerman ? 'Jetzt loslegen' : 'Get Started';
-  String get onboardingPhotosRequiredHint => isGerman
-      ? 'Der Fotozugriff ist erforderlich, um fortzufahren. Tippe auf „Fotos erlauben“, um ihn zu erteilen – ohne ihn kann kein Medien-Backup erstellt werden.'
-      : 'Photo access is required to continue. Tap “Allow Photos” to grant it – media backups cannot be created without it.';
-  String get onboardingPhotoAccessRequiredTitle => isGerman ? 'Fotozugriff erforderlich' : 'Photo Access Required';
-  String get onboardingPhotoAccessRequiredMessage => isGerman
-      ? 'Fibu benötigt Zugriff auf deine Fotos, damit Medien-Backups erstellt werden können. Das Onboarding kann erst abgeschlossen werden, wenn der Zugriff erteilt ist. Du kannst ihn jederzeit in den Systemeinstellungen erteilen.'
-      : 'Fibu needs access to your photos so media backups can be created. Onboarding can only be completed after access has been granted. You can grant it at any time in the system settings.';
-  String get openSystemSettings => isGerman ? 'Systemeinstellungen öffnen' : 'Open System Settings';
-  String get onboardingFeature1Title => isGerman ? 'Multi-Cloud Backup' : 'Multi-Cloud Backup';
-  String get onboardingFeature1Desc => isGerman
-      ? 'Verbinde beliebige Cloud-Speicher (Google Drive, OneDrive, S3, Mega, WebDAV etc.) und sichere deine Dateien flexibel.'
-      : 'Connect any cloud storage (Google Drive, OneDrive, S3, Mega, WebDAV etc.) and backup files with full flexibility.';
-  String get onboardingFeature2Title => isGerman ? 'Automatische Synchronisation' : 'Automated Synchronization';
-  String get onboardingFeature2Desc => isGerman
-      ? 'Automatische Zeitpläne, intelligentes Splitting und 2-Wege-Spiegelung.'
-      : 'Automated schedules, smart storage balancing, and 2-way mirror synchronization.';
-  String get onboardingFeature3Title => isGerman ? 'Volle Kontrolle & Datenschutz' : 'Full Control & Privacy';
-  String get onboardingFeature3Desc => isGerman
-      ? 'Keine Cloud-Abhängigkeit. Alle Daten und Konfigurationen gehören dir.'
-      : 'No vendor lock-in. Your files and configs stay entirely in your control.';
-  String get onboardingStep1ConnectTitle => isGerman ? 'Schritt 1: Cloud-Speicher verbinden' : 'Step 1: Connect Cloud Storage';
-  String get onboardingStep1ConnectDesc => isGerman
-      ? 'Verbinde dein erstes Cloud-Laufwerk, um deine Backups sicher in der Cloud zu speichern.'
-      : 'Connect your first cloud account to start storing backups securely in the cloud.';
-  String get onboardingConnectDriveButton => isGerman ? 'Cloud-Laufwerk hinzufügen' : 'Add Cloud Drive';
-  String get onboardingStep2TaskTitle => isGerman ? 'Schritt 2: Erste Backup-Aufgabe' : 'Step 2: First Backup Task';
-  String get onboardingStep2TaskDesc => isGerman
-      ? 'Wähle einen lokalen Ordner auf deinem Computer und starte dein erstes Backup.'
-      : 'Choose a local folder on your computer to automate your first backup.';
-  String get onboardingCreateTaskButton => isGerman ? 'Erste Aufgabe erstellen' : 'Create First Task';
-  String get onboardingSkip => isGerman ? 'Später einrichten' : 'Set Up Later';
-  String get onboardingDoneTitle => isGerman ? 'Du bist startklar!' : 'You are all set!';
-  String get onboardingDoneSubtitle => isGerman
-      ? 'Fibu ist eingerichtet und bereit für deine Backups.'
-      : 'Fibu is configured and ready for your backups.';
-
   // --- Task 3-Step Wizard ---
   String get taskWizardStep1Title => isGerman ? 'Schritt 1: Grundlagen' : 'Step 1: Basics';
   String get taskWizardStep1Subtitle => isGerman ? 'Aufgabenname & Quellverzeichnis' : 'Task name & source directory';
@@ -551,20 +466,6 @@ class AppStrings {
   String get localLog => isGerman ? 'Lokales Protokoll' : 'Local Log';
   String get remoteLog => isGerman ? 'Remote-Protokoll' : 'Remote Log';
   String get defaultBackupFolder => isGerman ? 'fibu-backup' : 'fibu-backup';
-
-  // --- Mobile Onboarding & Tasks ---
-  String get onboardingMediaBackupTitle => isGerman ? 'Medien-Backup (Fotos & Videos)' : 'Media Backup (Photos & Videos)';
-  String get onboardingMediaBackupDesc => isGerman
-      ? 'Sichert automatisch alle Fotos und Videos aus deiner Galerie / Fotos-App in die Cloud.'
-      : 'Automatically backs up all photos and videos from your gallery / Photos app to the cloud.';
-  String get onboardingDocsBackupTitle => isGerman ? 'Dokumente & lokale Dateien' : 'Documents & Local Files';
-  String get onboardingDocsBackupDesc => isGerman
-      ? 'Sichert zusätzlich alle Dokumente und lokalen Dateien aus deiner Dateien-App.'
-      : 'Optionally backs up all local documents and files from your Files app.';
-  String get onboardingSelectBackupsHeader => isGerman ? 'Vorgeschlagene Backup-Aufgaben' : 'Recommended Backup Tasks';
-  String get onboardingSelectBackupsSubtitle => isGerman
-      ? 'Wähle aus, was automatisch für dich gesichert werden soll:'
-      : 'Select what should be automatically backed up for you:';
 
   // --- iOS Background Sync Notice & WiFi-Only Sync ---
   String get iosBackgroundScheduleNotice => isGerman
@@ -664,13 +565,7 @@ class AppStrings {
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
   String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';
 
-  // --- Gespeicherte Zugänge (Schlüsselbund-Vorschläge pro Provider) ---
-  String get savedCredentialsLabel => isGerman
-      ? 'Gespeicherte Zugänge für diesen Anbieter'
-      : 'Saved accounts for this provider';
-  String get savedCredentialsHint => isGerman
-      ? 'Tippen übernimmt Benutzer/Passwort/Host aus dem Schlüsselbund.'
-      : 'Tap fills user/password/host from the keychain.';
+  // --- Fehlerhinweise beim Verbinden ---
   String get invalidCredentialsHint => isGerman
       ? 'Zugangsdaten ungültig – bitte Benutzername/Passwort (und Host) prüfen.'
       : 'Invalid credentials – please check username/password (and host).';
@@ -703,9 +598,6 @@ class AppStrings {
 
   // --- About / Über Section & System Language ---
   String get systemLanguage => isGerman ? 'System (Automatisch)' : 'System (Automatic)';
-  String get systemLanguageSubtitle => isGerman
-      ? 'Verwendet die Sprache der iOS-/Systemeinstellungen'
-      : 'Follows iOS/System language settings';
   String get aboutSectionTitle => isGerman ? 'Über Fibu' : 'About Fibu';
   String get aboutAppTitle => isGerman ? 'Über Fibu' : 'About Fibu';
   String get aboutAppSubtitle => isGerman

@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-08-22 — Setup-Hinweis tappbar, „+"-Hinweise raus, Dead Code bereinigt
+
+### Dashboard-Setup-Hinweis ist jetzt tappbar
+- Der Hinweis zeigt nur noch die **fehlenden** Aktionen als Zeilen (Verben):
+  - „Laufwerk hinzufügen" → öffnet direkt Cloud-Laufwerke (push).
+  - „Aufgabe erstellen" → wechselt in den Aufgaben-Tab (`shellIndexProvider`).
+- Überschrift „Erste Schritte" + Icon; Zeilen haben 44 pt Trefferfläche.
+
+### Leichte „+"-Hinweise entfernt
+- Tasks- und Cloud-Laufwerks-Leerzustand zeigen nur noch Icon + Titel +
+  Beschreibung — kein „Tippe oben rechts auf +" mehr (das „+" ist oben rechts
+  bereits sichtbar und selbsterklärend).
+
+### Dead Code bereinigt
+- Alle Onboarding-Strings (`app_strings.dart`) entfernt (Welcome, Cloud
+  verbinden, Features, Presets, „Zugriff erlauben" …) sowie `openSystemSettings`,
+  `systemLanguageSubtitle` und die toten `savedCredentials*`-Strings.
+- `AppSettingsData.onboardingCompleted` + `SettingsService.setOnboardingCompleted`
+  komplett entfernt (Feld war nach dem Onboarding-Aus verwaist).
+- README-Verzeichnisbaum aktualisiert (kein `onboarding/` mehr, `SecureStore`
+  statt `CredentialVault`).
+
+---
+
 ## 2026-08-22 — Kein Onboarding mehr, Berechtigung erst bei Bedarf, Setup-Hinweis
 
 > Richtungswechsel: Der „eine Seite“-Ansatz (voriger Eintrag) wurde verworfen.

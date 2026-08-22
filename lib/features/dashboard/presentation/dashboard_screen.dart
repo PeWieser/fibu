@@ -15,6 +15,8 @@ import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
+import '../../settings/presentation/cloud_drives_screen.dart';
+import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
 import 'cloud_explorer_screen.dart';
@@ -131,7 +133,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
   }
 
   /// Liefert den Setup-Hinweis, solange Cloud-Laufwerk und/oder Aufgabe fehlen.
-  /// null, wenn beides eingerichtet ist (dann erscheint die normale Übersicht).
+  /// Jede Zeile ist tappbar und führt direkt zur fehlenden Aktion:
+  /// Laufwerk → Cloud-Laufwerke, Aufgabe → Aufgaben-Tab. null, wenn alles da ist.
   Widget? _buildSetupHint(BuildContext context, AppStrings strings) {
     final remotesAsync = ref.watch(remotesProvider);
     // Erst anzeigen, wenn Remotes UND Task-Liste wirklich geladen sind —
@@ -143,42 +146,61 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     final hasTasks = tasks.isNotEmpty;
     if (hasRemotes && hasTasks) return null;
 
-    final String title;
-    if (!hasRemotes && !hasTasks) {
-      title = strings.setupDriveAndTask;
-    } else if (!hasRemotes) {
-      title = strings.setupFirstDrive;
-    } else {
-      title = strings.setupFirstTask;
-    }
     final theme = context.theme;
     final platform = defaultTargetPlatform;
 
+    final rows = <Widget>[
+      if (!hasRemotes)
+        _setupActionRow(
+            context, theme, strings.addCloudDrive, () => _openCloudDrives(context)),
+      if (!hasTasks)
+        _setupActionRow(context, theme, strings.addTask, _goToTasks),
+    ];
+
+    final headerIcon = platform == TargetPlatform.windows
+        ? fluent.FluentIcons.cloud_add
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoIcons.cloud
+            : material.Icons.cloud_outlined);
+    final divider = Container(
+        height: 0.5, color: theme.textSecondary.withValues(alpha: 0.2));
+
+    final inner = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md, theme.xs),
+          child: Row(
+            children: [
+              Icon(headerIcon, size: 16, color: theme.textSecondary),
+              SizedBox(width: theme.sm),
+              Text(
+                strings.setupHeader,
+                style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) divider,
+          rows[i],
+        ],
+      ],
+    );
+
     if (platform == TargetPlatform.windows) {
       return fluent.Card(
-        padding: EdgeInsets.all(theme.lg),
-        child: Row(
-          children: [
-            Icon(fluent.FluentIcons.cloud_add, color: theme.textSecondary, size: 24),
-            SizedBox(width: theme.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  SizedBox(height: theme.xs),
-                  Text(strings.setupHintSubtitle,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-          ],
-        ),
+        padding: EdgeInsets.only(bottom: theme.xs),
+        child: inner,
       );
     }
     if (platform == TargetPlatform.iOS) {
       return Container(
-        padding: EdgeInsets.all(theme.lg),
         decoration: BoxDecoration(
           color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
           borderRadius: BorderRadius.circular(theme.radiusLg),
@@ -187,58 +209,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             width: 0.5,
           ),
         ),
-        child: Row(
-          children: [
-            Icon(
-              cupertino.CupertinoIcons.cloud,
-              color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-              size: 24,
-              semanticLabel: title,
-            ),
-            SizedBox(width: theme.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                  SizedBox(height: theme.xs),
-                  Text(strings.setupHintSubtitle,
-                      style: TextStyle(
-                        color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
-                        fontSize: 12,
-                      )),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: inner,
       );
     }
     return material.Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(theme.radiusLg),
-        side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+        side: BorderSide(
+            color: material.Theme.of(context).colorScheme.outlineVariant),
       ),
-      child: Padding(
-        padding: EdgeInsets.all(theme.lg),
-        child: Row(
-          children: [
-            Icon(material.Icons.cloud_off_outlined, color: theme.textSecondary, size: 24),
-            SizedBox(width: theme.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  SizedBox(height: theme.xs),
-                  Text(strings.setupHintSubtitle,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                ],
+      child: inner,
+    );
+  }
+
+  void _goToTasks() {
+    ref.read(shellIndexProvider.notifier).state = 1;
+  }
+
+  void _openCloudDrives(BuildContext context) {
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => const CloudDrivesScreen())
+        : platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => const CloudDrivesScreen())
+            : material.MaterialPageRoute(builder: (_) => const CloudDrivesScreen());
+    Navigator.of(context).push(route);
+  }
+
+  Widget _setupActionRow(
+      BuildContext context, AppThemeData theme, String label, VoidCallback onTap) {
+    final platform = defaultTargetPlatform;
+    final chevron = platform == TargetPlatform.windows
+        ? Icon(fluent.FluentIcons.chevron_right, size: 14, color: theme.textSecondary)
+        : platform == TargetPlatform.iOS
+            ? const Icon(cupertino.CupertinoIcons.chevron_forward,
+                size: 16, color: cupertino.CupertinoColors.inactiveGray)
+            : Icon(material.Icons.chevron_right, color: theme.textSecondary);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: theme.accent,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
               ),
-            ),
-          ],
+              chevron,
+            ],
+          ),
         ),
       ),
     );
@@ -282,7 +311,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             _buildClickableStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             if (setupHint != null) ...[
-              setupHint,
+              setupHint!,
             ] else ...[
               quotaAsync.when(
                 data: (quota) {

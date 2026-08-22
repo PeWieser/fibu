@@ -764,6 +764,28 @@ class AppStrings {
   String get legendOtherDocs => isGerman ? 'Andere Dokumente' : 'Other Documents';
   String get legendFreeSpace => isGerman ? 'Freier Speicher' : 'Free Space';
   String get legendTotalCapacity => isGerman ? 'Gesamtkapazität' : 'Total Capacity';
+
+  // --- Sync-Bedarfs-Prüfung (Aktualisieren-Button & Status-Banner) ---
+  String get syncNeededBanner => isGerman
+      ? 'Änderungen gefunden — Sync fällig'
+      : 'Changes found — sync needed';
+  String get syncNeededMessage => isGerman
+      ? 'Es gibt neue oder geänderte Inhalte. Tippe auf „Alle synchronisieren“.'
+      : 'There is new or changed content. Tap “Sync All Files”.';
+  String get checkedUpToDate => isGerman
+      ? 'Geprüft: Alles aktuell — kein Sync nötig.'
+      : 'Checked: everything up to date — no sync needed.';
+  String get syncButtonWaitTasks => isGerman
+      ? 'Aufgaben werden geladen …'
+      : 'Loading tasks…';
+
+  // --- Rechtliches ---
+  String get legalSectionTitle => isGerman ? 'Rechtliches' : 'Legal';
+  String get openSourceLicenses =>
+      isGerman ? 'Open-Source-Lizenzen' : 'Open-Source Licenses';
+  String get openSourceLicensesSubtitle => isGerman
+      ? 'Verwendete Bibliotheken und ihre Lizenzen'
+      : 'Bundled libraries and their licenses';
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

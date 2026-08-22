@@ -8,6 +8,7 @@ import 'package:workmanager/workmanager.dart';
 import 'ios_rclone_service.dart';
 import 'rclone_service.dart';
 import 'settings_service.dart';
+import 'widget_status_service.dart';
 
 /// Identifier registered in iOS `BGTaskSchedulerPermittedIdentifiers`
 /// (see ios/Runner/Info.plist) and with Workmanager.
@@ -22,6 +23,11 @@ void fibuCallbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       await SchedulerService.runScheduledSync();
+      // Danach: Sync-Bedarf neu bewerten und in die Homescreen-Widgets
+      // pushen — so bleiben Widgets auch ohne App-Start aktuell.
+      try {
+        await WidgetStatusNotifier.refreshInBackground();
+      } catch (_) {}
       return true;
     } catch (_) {
       // A failed background run is reported as "did not finish cleanly".

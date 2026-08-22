@@ -440,9 +440,6 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         final provider = filtered[index];
         final selected = _selectedProviderId == provider.id;
         final title = provider.name;
-        final subtitle = provider.isPopular
-            ? strings.popularProvidersHeader
-            : provider.description;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _selectProvider(provider),
@@ -460,22 +457,15 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                   size: 22,
                 ),
                 SizedBox(width: theme.md),
+                // Nur der Anbietername — die Beschreibungszeile
+                // („bekannter Cloud-Speicherdienst“ etc.) ist Rauschen.
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: TextStyle(
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w600,
-                            fontSize: 15,
-                          )),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          style: TextStyle(
-                              color: theme.textSecondary, fontSize: 12)),
-                    ],
-                  ),
+                  child: Text(title,
+                      style: TextStyle(
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w600,
+                        fontSize: 15,
+                      )),
                 ),
               ],
             ),

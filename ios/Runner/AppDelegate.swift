@@ -34,8 +34,20 @@ import Rclone
   ) -> Bool {
     #if canImport(workmanager)
     // Erlaubt Workmanager, Plugins in den Hintergrund-Isolates zu registrieren.
+    // WICHTIG: Auch die Fibu-eigenen Channels (rclone-Engine, Widget-Status,
+    // Schlüsselbund) registrieren — sonst kann der Hintergrund-Sync weder
+    // rclone aufrufen noch den Widget-Status in die App-Group pushen.
     WorkmanagerPlugin.setPluginRegistrantCallback { registry in
       GeneratedPluginRegistrant.register(with: registry)
+      if let registrar = registry.registrar(forPlugin: "RcloneBridge") {
+        RcloneBridge.register(with: registrar.messenger())
+      }
+      if let registrar = registry.registrar(forPlugin: "WidgetStatusChannel") {
+        WidgetStatusChannel.register(with: registrar.messenger())
+      }
+      if let registrar = registry.registrar(forPlugin: "KeychainChannel") {
+        KeychainChannel.register(with: registrar.messenger())
+      }
     }
     // Hintergrund-Task für geplante Syncs (Identifier siehe Info.plist).
     // Hinweis: registerBGProcessingTask ist in workmanager >=0.5 nicht mehr nötig

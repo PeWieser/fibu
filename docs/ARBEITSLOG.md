@@ -2,6 +2,51 @@
 
 ---
 
+## 2026-08-22 — Sync-Button-Gate, Sync-Bedarfs-Prüfung, Widget-Fixes, schlanke Provider-Liste, Rechtliches
+
+### Dashboard
+- **Sync-Button ausgegraut**, bis `tasks.json` fertig gelesen ist
+  (`tasksLoadedProvider`) — ein zu früher Tipp meldete fälschlich
+  „keine aktiven Aufgaben“ (alle drei Plattformen).
+- **„Aktualisieren“ prüft jetzt Handlungsbedarf:** Mediathek-Zählung vs.
+  letzter Sync-Stand (`WidgetStatusNotifier.recomputeAndPush`). Feedback
+  sagt klar „Alles aktuell“ oder „Änderungen gefunden — Sync fällig“.
+- **Status-Banner dreistufig:** Grün (aktuell) → **Orange** (`theme.warning`,
+  „Änderungen gefunden — Sync fällig“) → Rot (Fehler). Der Ruhezustand lügt
+  nicht mehr, wenn seit dem letzten Sync fotografiert wurde.
+
+### Homescreen-Widgets
+- **Phantom-Route beim Widget-Tap behoben:** `FlutterDeepLinkingEnabled=false`
+  — Flutter pushte aus `fibu://open` eine Dashboard-Kopie mit Zurück-Button.
+  Jetzt öffnet der Tap die App einfach im aktuellen Zustand.
+- **Frische Daten:** Widget-Status wird zusätzlich bei App-Resume
+  (`didChangeAppLifecycleState`) und nach JEDER Task-Änderung (`_saveTasks`)
+  neu berechnet und gepusht — nicht mehr nur beim Kaltstart.
+- **Automatische Hintergrund-Prüfung:** Der 2-Stunden-Workmanager-Lauf ruft
+  jetzt `WidgetStatusNotifier.refreshInBackground()` auf. Dafür registriert
+  der AppDelegate die Fibu-Channels (`fibu/rclone`, `fibu/widget`,
+  `fibu/keychain`) auch im Workmanager-Registrant-Callback — vorher fehlten
+  sie in Hintergrund-Isolates komplett (auch der Hintergrund-Sync konnte so
+  nie rclone erreichen).
+- Hinweis: Bei seitgeladenen, selbstsignierten IPAs muss die App-Group
+  `group.com.example.fibu` beim Signieren erhalten bleiben, sonst sieht die
+  Widget-Extension die Daten nicht (Platzhalter-Inhalt).
+
+### Anbieter-Auswahl
+- Beschreibungszeilen („bekannter Cloud-Speicherdienst“ …) aus der Liste
+  entfernt — nur noch der Anbietername. Die Suche durchsucht die
+  Beschreibungen weiterhin.
+
+### Rechtliches
+- **Ja, Lizenz-Hinweise sind nötig** (MIT/BSD/Apache verlangen die Beilage
+  der Lizenztexte). Neu: Sektion „Rechtliches“ ganz unten in den
+  Einstellungen → „Open-Source-Lizenzen“ öffnet die vollständige,
+  automatisch generierte Liste (LicenseRegistry aller Dart-Pakete).
+- rclone/librclone (MIT) und gomobile (BSD-3) sind statisch gelinkt und
+  werden deshalb in `main()` manuell in die LicenseRegistry eingetragen.
+
+---
+
 ## 2026-08-22 — Upload-Fixes, dynamisches Backup-Ziel, Schlüsselbund-Login, „Anmelden“, Zweisprachigkeit
 
 ### Upload-Ablauf Punkt für Punkt geprüft & gefixt

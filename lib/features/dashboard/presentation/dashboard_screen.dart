@@ -14,6 +14,7 @@ import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
+import '../../../core/services/widget_status_service.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
@@ -61,6 +62,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     ref.invalidate(remotesProvider);
     ref.invalidate(primaryQuotaProvider);
 
+    // Handlungsbedarf prüfen: Mediathek gegen den letzten Sync-Stand halten
+    // (billige Zählung, keine Exporte) — Ergebnis fließt in Banner + Widgets.
+    await ref.read(widgetStatusProvider.notifier).recomputeAndPush();
+
     // Provide tactile feedback duration
     await Future.delayed(const Duration(milliseconds: 650));
 
@@ -69,18 +74,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     _spinController.reset();
     setState(() => _isRefreshing = false);
 
-    _showRefreshFeedback(this.context, strings);
+    final needsSync = ref.read(widgetStatusProvider).needsSync;
+    _showRefreshFeedback(
+      this.context,
+      strings,
+      message: needsSync ? strings.syncNeededMessage : strings.checkedUpToDate,
+      isWarning: needsSync,
+    );
   }
 
-  void _showRefreshFeedback(BuildContext context, AppStrings strings) {
+  void _showRefreshFeedback(
+    BuildContext context,
+    AppStrings strings, {
+    required String message,
+    required bool isWarning,
+  }) {
     final platform = defaultTargetPlatform;
     if (platform == TargetPlatform.windows) {
       fluent.displayInfoBar(
         context,
         builder: (context, close) => fluent.InfoBar(
-          title: fluent.Text(strings.refreshedSuccess),
-          content: fluent.Text(strings.drivesRefreshed),
-          severity: fluent.InfoBarSeverity.success,
+          title: fluent.Text(
+              isWarning ? strings.syncNeededBanner : strings.refreshedSuccess),
+          content: fluent.Text(message),
+          severity: isWarning
+              ? fluent.InfoBarSeverity.warning
+              : fluent.InfoBarSeverity.success,
           onClose: close,
         ),
       );
@@ -96,7 +115,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 child: Text(
-                  strings.drivesRefreshed,
+                  message,
                   style: cupertino.CupertinoTheme.of(context).textTheme.textStyle,
                   textAlign: TextAlign.center,
                 ),
@@ -112,7 +131,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     } else {
       material.ScaffoldMessenger.of(context).showSnackBar(
         material.SnackBar(
-          content: Text(strings.drivesRefreshed),
+          content: Text(message),
           duration: const Duration(seconds: 2),
           behavior: material.SnackBarBehavior.floating,
         ),
@@ -442,10 +461,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
       );
     }
 
+    // Sync erst erlauben, wenn tasks.json fertig gelesen ist — sonst meldet
+    // ein zu früher Tipp fälschlich „keine aktiven Aufgaben“.
+    final tasksLoaded = ref.watch(tasksLoadedProvider);
     return fluent.Tooltip(
-      message: strings.syncAll,
+      message: tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
       child: fluent.FilledButton(
-        onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+        onPressed: tasksLoaded
+            ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
+            : null,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
@@ -596,16 +620,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 )
               else
                 Semantics(
-                  label: strings.syncAll,
+                  label: ref.watch(tasksLoadedProvider)
+                      ? strings.syncAll
+                      : strings.syncButtonWaitTasks,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: cupertino.CupertinoButton.filled(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       borderRadius: BorderRadius.circular(theme.radiusSm),
-                      onPressed: () {
-                        IosHaptics.medium();
-                        ref.read(activeJobProvider.notifier).triggerSyncAll();
-                      },
+                      // Ausgegraut, bis tasks.json gelesen ist — sonst meldet
+                      // ein zu früher Tipp fälschlich „keine aktiven Aufgaben“.
+                      onPressed: !ref.watch(tasksLoadedProvider)
+                          ? null
+                          : () {
+                              IosHaptics.medium();
+                              ref.read(activeJobProvider.notifier).triggerSyncAll();
+                            },
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -831,9 +861,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               )
             else
               material.Tooltip(
-                message: strings.syncAll,
+                message: ref.watch(tasksLoadedProvider)
+                    ? strings.syncAll
+                    : strings.syncButtonWaitTasks,
                 child: material.ElevatedButton.icon(
-                  onPressed: () => ref.read(activeJobProvider.notifier).triggerSyncAll(),
+                  // Ausgegraut, bis tasks.json gelesen ist.
+                  onPressed: ref.watch(tasksLoadedProvider)
+                      ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
+                      : null,
                   icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
                   label: Text(strings.syncAll),
                   style: material.ElevatedButton.styleFrom(
@@ -1007,6 +1042,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     String statusText;
     IconData icon;
 
+    // Handlungsbedarf (Mediathek geändert seit letztem Sync / Task nie
+    // gelaufen): Im Ruhezustand wird das grüne Banner orange.
+    final needsSync = ref.watch(widgetStatusProvider).needsSync;
+
     switch (status) {
       case RcloneJobStatus.pending:
       case RcloneJobStatus.syncing:
@@ -1031,11 +1070,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.xmark_circle : material.Icons.cancel);
         break;
       case RcloneJobStatus.completed:
-        statusColor = theme.success;
-        statusText = strings.allFilesSynced;
-        icon = defaultTargetPlatform == TargetPlatform.windows
-            ? fluent.FluentIcons.completed
-            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.check_mark_circled : material.Icons.check_circle);
+        if (needsSync) {
+          statusColor = theme.warning;
+          statusText = strings.syncNeededBanner;
+          icon = defaultTargetPlatform == TargetPlatform.windows
+              ? fluent.FluentIcons.warning
+              : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.exclamationmark_circle : material.Icons.warning_amber);
+        } else {
+          statusColor = theme.success;
+          statusText = strings.allFilesSynced;
+          icon = defaultTargetPlatform == TargetPlatform.windows
+              ? fluent.FluentIcons.completed
+              : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.check_mark_circled : material.Icons.check_circle);
+        }
         break;
     }
 

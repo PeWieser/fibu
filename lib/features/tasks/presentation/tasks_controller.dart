@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../../../core/services/widget_status_service.dart';
 import '../../../core/utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -324,6 +326,11 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
         'selectedFolders': t.selectedFolders,
       }).toList();
       await file.writeAsString(json.encode(jsonList));
+      // Jede Task-Änderung (anlegen, bearbeiten, an/aus, löschen) sofort in
+      // den Widget-Status spiegeln — Homescreen-Widgets zeigen sonst bis zum
+      // nächsten App-Start veraltete/leere Daten.
+      unawaited(
+          _ref.read(widgetStatusProvider.notifier).recomputeAndPush());
     } catch (_) {
       // Ignore write errors in test settings
     }

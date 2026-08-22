@@ -102,7 +102,22 @@ class WidgetStatusData {
 /// App-Group Extension.
 class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
   WidgetStatusNotifier() : super(const WidgetStatusData()) {
-    _load();
+    ready = _load();
+  }
+
+  /// Abgeschlossen, sobald der persistierte Zustand gelesen UND die erste
+  /// Neubewertung gepusht wurde (wichtig für den Hintergrund-Lauf).
+  late final Future<void> ready;
+
+  /// Für den Workmanager-Hintergrund-Lauf (eigenes Isolate, kein Riverpod):
+  /// Zustand laden, Sync-Bedarf neu bewerten, in die Widgets pushen.
+  static Future<void> refreshInBackground() async {
+    final notifier = WidgetStatusNotifier();
+    try {
+      await notifier.ready;
+    } finally {
+      notifier.dispose();
+    }
   }
 
   static const _channel = MethodChannel('fibu/widget');

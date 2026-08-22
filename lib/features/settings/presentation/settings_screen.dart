@@ -45,6 +45,46 @@ class SettingsScreen extends ConsumerWidget {
     Navigator.of(context).push(route);
   }
 
+  /// Öffnet die vollständige Open-Source-Lizenzliste (LicenseRegistry:
+  /// alle Flutter-/Dart-Pakete plus manuell registrierte Komponenten wie
+  /// rclone/librclone und gomobile — siehe main.dart).
+  ///
+  /// Die Material-LicensePage braucht MaterialLocalizations und ein
+  /// Material-Theme; beides wird hier lokal bereitgestellt, damit die Seite
+  /// auch in der Cupertino- und Fluent-Shell funktioniert.
+  void _openLicenses(BuildContext context, AppStrings strings, AppThemeData theme) {
+    final platform = defaultTargetPlatform;
+    final isDark = theme.canvas.computeLuminance() < 0.5;
+
+    Widget buildPage(BuildContext _) {
+      return Localizations.override(
+        context: context,
+        delegates: const [
+          material.DefaultMaterialLocalizations.delegate,
+          cupertino.DefaultCupertinoLocalizations.delegate,
+          DefaultWidgetsLocalizations.delegate,
+        ],
+        child: material.Theme(
+          data: isDark
+              ? material.ThemeData(brightness: material.Brightness.dark, useMaterial3: true)
+              : material.ThemeData(brightness: material.Brightness.light, useMaterial3: true),
+          child: material.LicensePage(
+            applicationName: 'Fibu',
+            applicationVersion: strings.appVersionValue,
+            applicationLegalese: '© 2026 Fibu · rclone-powered multi-cloud backup',
+          ),
+        ),
+      );
+    }
+
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: buildPage)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: buildPage)
+            : material.MaterialPageRoute(builder: buildPage));
+    Navigator.of(context).push(route);
+  }
+
   void _showIOSLanguagePicker(BuildContext context, WidgetRef ref, AppLocaleMode currentMode, AppStrings strings) {
     cupertino.showCupertinoModalPopup<void>(
       context: context,
@@ -378,6 +418,19 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               SizedBox(height: theme.xl),
+
+              // 6. Rechtliches
+              fluent.Text(strings.legalSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
+              SizedBox(height: theme.md),
+              fluent.Card(
+                child: fluent.ListTile(
+                  title: fluent.Text(strings.openSourceLicenses),
+                  subtitle: fluent.Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open licenses'),
+                  onPressed: () => _openLicenses(context, strings, theme),
+                ),
+              ),
+              SizedBox(height: theme.xl),
             ],
           ),
         ),
@@ -594,6 +647,27 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+
+              // 6. Rechtliches — ganz unten, wie es sich gehört.
+              cupertino.CupertinoListSection.insetGrouped(
+                header: IosTheme.sectionHeader(strings.legalSectionTitle, theme),
+                children: [
+                  cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.doc_plaintext, color: theme.accent, size: 22),
+                    title: Text(strings.openSourceLicenses, style: const TextStyle(fontSize: 16)),
+                    subtitle: Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
+                    onTap: () {
+                      IosHaptics.selection();
+                      _openLicenses(context, strings, theme);
+                    },
+                  ),
+                ],
+              ),
               SizedBox(height: theme.xl),
             ],
           ),
@@ -784,6 +858,25 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => _showAboutDialog(context, strings, theme),
                   ),
                 ],
+              ),
+            ),
+            SizedBox(height: theme.xl),
+
+            // 6. Rechtliches
+            Text(strings.legalSectionTitle, style: material.Theme.of(context).textTheme.titleSmall),
+            SizedBox(height: theme.md),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.ListTile(
+                leading: Icon(material.Icons.gavel_outlined, color: theme.accent),
+                title: Text(strings.openSourceLicenses),
+                subtitle: Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                trailing: const Icon(material.Icons.chevron_right),
+                onTap: () => _openLicenses(context, strings, theme),
               ),
             ),
             SizedBox(height: theme.xl),

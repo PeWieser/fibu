@@ -74,6 +74,15 @@
 			</array>
 		</dict>
 	</array>
+	<!--
+		Flutter-Deep-Linking AUS: Der Widget-Tap liefert fibu://open — mit
+		aktiviertem Deep-Linking pusht Flutter daraus eine Phantom-Route
+		(Dashboard-Kopie mit Zurück-Button). Die App soll beim Widget-Tap
+		einfach im aktuellen Zustand öffnen. OAuth (flutter_web_auth_2)
+		nutzt ASWebAuthenticationSession und braucht dieses Flag nicht.
+	-->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>workmanager.background.task</string>

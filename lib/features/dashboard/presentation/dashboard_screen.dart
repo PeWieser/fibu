@@ -14,6 +14,7 @@ import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import 'dashboard_controller.dart';
+import '../../tasks/presentation/tasks_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
 import 'widgets/dashboard_dialogs.dart';
 import 'cloud_explorer_screen.dart';
@@ -129,12 +130,127 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     }
   }
 
+  /// Liefert den Setup-Hinweis, solange Cloud-Laufwerk und/oder Aufgabe fehlen.
+  /// null, wenn beides eingerichtet ist (dann erscheint die normale Übersicht).
+  Widget? _buildSetupHint(BuildContext context, AppStrings strings) {
+    final remotesAsync = ref.watch(remotesProvider);
+    // Erst anzeigen, wenn Remotes UND Task-Liste wirklich geladen sind —
+    // sonst blitzt der Hinweis beim Kaltstart kurz auf.
+    if (remotesAsync.isLoading || !ref.watch(tasksLoadedProvider)) return null;
+    final remotes = remotesAsync.valueOrNull ?? const <String>[];
+    final tasks = ref.watch(tasksListProvider);
+    final hasRemotes = remotes.isNotEmpty;
+    final hasTasks = tasks.isNotEmpty;
+    if (hasRemotes && hasTasks) return null;
+
+    final String title;
+    if (!hasRemotes && !hasTasks) {
+      title = strings.setupDriveAndTask;
+    } else if (!hasRemotes) {
+      title = strings.setupFirstDrive;
+    } else {
+      title = strings.setupFirstTask;
+    }
+    final theme = context.theme;
+    final platform = defaultTargetPlatform;
+
+    if (platform == TargetPlatform.windows) {
+      return fluent.Card(
+        padding: EdgeInsets.all(theme.lg),
+        child: Row(
+          children: [
+            Icon(fluent.FluentIcons.cloud_add, color: theme.textSecondary, size: 24),
+            SizedBox(width: theme.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  SizedBox(height: theme.xs),
+                  Text(strings.setupHintSubtitle,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (platform == TargetPlatform.iOS) {
+      return Container(
+        padding: EdgeInsets.all(theme.lg),
+        decoration: BoxDecoration(
+          color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+          borderRadius: BorderRadius.circular(theme.radiusLg),
+          border: Border.all(
+            color: cupertino.CupertinoColors.separator.resolveFrom(context),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              cupertino.CupertinoIcons.cloud,
+              color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+              size: 24,
+              semanticLabel: title,
+            ),
+            SizedBox(width: theme.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  SizedBox(height: theme.xs),
+                  Text(strings.setupHintSubtitle,
+                      style: TextStyle(
+                        color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                        fontSize: 12,
+                      )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return material.Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(theme.radiusLg),
+        side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(theme.lg),
+        child: Row(
+          children: [
+            Icon(material.Icons.cloud_off_outlined, color: theme.textSecondary, size: 24),
+            SizedBox(width: theme.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  SizedBox(height: theme.xs),
+                  Text(strings.setupHintSubtitle,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- Windows (Fluent Design) ---
   Widget _buildWindows(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final activeJob = ref.watch(activeJobProvider);
     final quotaAsync = ref.watch(primaryQuotaProvider);
+    final setupHint = _buildSetupHint(context, strings);
 
     return fluent.ScaffoldPage(
       header: fluent.PageHeader(
@@ -165,69 +281,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             _buildOfflineHint(context, strings),
             _buildClickableStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
-            quotaAsync.when(
-              data: (quota) {
-                if (quota == null) {
-                  return fluent.Tooltip(
-                    message: strings.tooltipStorageCard,
-                    child: fluent.Card(
-                      padding: EdgeInsets.all(theme.md),
-                      child: Row(
-                        children: [
-                          Icon(
-                            fluent.FluentIcons.cloud_add,
-                            color: theme.textSecondary,
-                            size: 20,
-                            semanticLabel: strings.noDrivesConfigured,
-                          ),
-                          SizedBox(width: theme.md),
-                          Expanded(
-                            child: Text(
-                              strings.noDrivesConfigured,
-                              style: TextStyle(color: theme.textSecondary),
+            if (setupHint != null) ...[
+              setupHint,
+            ] else ...[
+              quotaAsync.when(
+                data: (quota) {
+                  if (quota == null) {
+                    return fluent.Tooltip(
+                      message: strings.tooltipStorageCard,
+                      child: fluent.Card(
+                        padding: EdgeInsets.all(theme.md),
+                        child: Row(
+                          children: [
+                            Icon(
+                              fluent.FluentIcons.cloud_add,
+                              color: theme.textSecondary,
+                              size: 20,
+                              semanticLabel: strings.noDrivesConfigured,
                             ),
-                          ),
+                            SizedBox(width: theme.md),
+                            Expanded(
+                              child: Text(
+                                strings.noDrivesConfigured,
+                                style: TextStyle(color: theme.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const MultiRemoteStorageCard();
+                },
+                loading: () => const fluent.ProgressBar(),
+                error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+              ),
+              SizedBox(height: theme.xl),
+              _buildActiveJobPanelWindows(context, activeJob, strings),
+              SizedBox(height: theme.xl),
+              _buildSyncActionsWindows(context, activeJob, strings),
+              SizedBox(height: theme.xl),
+              fluent.Tooltip(
+                message: strings.exploreRemoteFiles,
+                child: fluent.Button(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
+                    );
+                  },
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
+                          const SizedBox(width: 8),
+                          Text(strings.exploreRemoteFiles),
                         ],
                       ),
-                    ),
-                  );
-                }
-                return const MultiRemoteStorageCard();
-              },
-              loading: () => const fluent.ProgressBar(),
-              error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
-            ),
-            SizedBox(height: theme.xl),
-            _buildActiveJobPanelWindows(context, activeJob, strings),
-            SizedBox(height: theme.xl),
-            _buildSyncActionsWindows(context, activeJob, strings),
-            SizedBox(height: theme.xl),
-            fluent.Tooltip(
-              message: strings.exploreRemoteFiles,
-              child: fluent.Button(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
-                  );
-                },
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
-                        const SizedBox(width: 8),
-                        Text(strings.exploreRemoteFiles),
-                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-            SizedBox(height: theme.xl),
+              SizedBox(height: theme.xl),
+            ],
           ],
         ),
       ),
@@ -339,6 +459,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     final activeJob = ref.watch(activeJobProvider);
     final quotaAsync = ref.watch(primaryQuotaProvider);
     final isSyncing = activeJob.status == RcloneJobStatus.syncing || activeJob.status == RcloneJobStatus.pending;
+    final setupHint = _buildSetupHint(context, strings);
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
@@ -375,6 +496,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               _buildOfflineHint(context, strings),
               _buildClickableStatusBanner(context, activeJob, strings),
               SizedBox(height: theme.lg),
+              if (setupHint != null) ...[
+                setupHint!,
+              ] else ...[
               quotaAsync.when(
                 data: (quota) {
                   if (quota == null) {
@@ -520,6 +644,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                   ),
                 ),
               ),
+              ],
                 ],
               ),
             ),
@@ -591,6 +716,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     final activeJob = ref.watch(activeJobProvider);
     final quotaAsync = ref.watch(primaryQuotaProvider);
     final isSyncing = activeJob.status == RcloneJobStatus.syncing || activeJob.status == RcloneJobStatus.pending;
+    final setupHint = _buildSetupHint(context, strings);
 
     return material.Scaffold(
       appBar: material.AppBar(
@@ -623,6 +749,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
             _buildOfflineHint(context, strings),
             _buildClickableStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
+            if (setupHint != null) ...[
+              setupHint!,
+            ] else ...[
             quotaAsync.when(
               data: (quota) {
                 if (quota == null) {
@@ -718,6 +847,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 },
               ),
             ),
+            ],
           ],
         ),
       ),

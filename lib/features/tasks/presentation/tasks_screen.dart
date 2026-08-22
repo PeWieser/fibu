@@ -316,7 +316,7 @@ class TasksScreen extends ConsumerWidget {
   }
 
   // =========================================================================
-  // COMMON EMPTY STATE (With CTA Button)
+  // COMMON EMPTY STATE (leichter Hinweis auf das „+" oben rechts)
   // =========================================================================
   Widget _buildEmptyState(
     BuildContext context,
@@ -328,58 +328,6 @@ class TasksScreen extends ConsumerWidget {
     final iconData = platform == TargetPlatform.windows
         ? fluent.FluentIcons.task_manager
         : (platform == TargetPlatform.iOS ? cupertino.CupertinoIcons.list_bullet : material.Icons.list_alt);
-
-    final Widget ctaButton;
-    if (platform == TargetPlatform.windows) {
-      ctaButton = SizedBox(
-        height: 44,
-        child: fluent.FilledButton(
-          onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.windows),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(fluent.FluentIcons.add, size: 16, color: Color(0xFFFFFFFF)),
-              SizedBox(width: theme.sm),
-              Text(
-                strings.addTask,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else if (platform == TargetPlatform.iOS) {
-      ctaButton = SizedBox(
-        height: 44,
-        child: cupertino.CupertinoButton.filled(
-          padding: EdgeInsets.symmetric(horizontal: theme.lg),
-          onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(cupertino.CupertinoIcons.add, size: 16, color: Color(0xFFFFFFFF)),
-              SizedBox(width: theme.sm),
-              Text(
-                strings.addTask,
-                style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      ctaButton = SizedBox(
-        height: 44,
-        child: material.FilledButton.icon(
-          onPressed: () => _showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
-          icon: const Icon(material.Icons.add, size: 18, color: Color(0xFFFFFFFF)),
-          label: Text(
-            strings.addTask,
-            style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-          ),
-        ),
-      );
-    }
 
     return Center(
       child: Padding(
@@ -406,7 +354,15 @@ class TasksScreen extends ConsumerWidget {
               textAlign: TextAlign.center,
             ),
             SizedBox(height: theme.lg),
-            ctaButton,
+            Text(
+              strings.tasksAddHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.textSecondary,
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ],
         ),
       ),

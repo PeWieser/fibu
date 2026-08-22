@@ -13,12 +13,9 @@ import 'core/localization/app_strings.dart';
 import 'core/services/app_log_service.dart';
 import 'core/services/quick_actions_service.dart';
 import 'core/services/scheduler_service.dart';
-import 'core/services/settings_service.dart';
 import 'core/services/widget_status_service.dart';
 import 'features/dashboard/presentation/dashboard_controller.dart';
 import 'features/shell/presentation/shell_screen.dart';
-import 'features/onboarding/presentation/onboarding_controller.dart';
-import 'features/onboarding/presentation/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -101,14 +98,6 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
     QuickActionsService.instance.setup(
       syncNowLabel: strings.quickActionSyncNow,
       onSyncNow: () async {
-        // Beim Kaltstart ist das Onboarding-Flag evtl. noch nicht geladen –
-        // deshalb direkt aus den persistierten Settings lesen.
-        final settings = await SettingsService.loadSettings();
-        final onboardingDone = settings?.onboardingCompleted ?? true;
-        if (!onboardingDone) {
-          AppLog.warn('quickaction', 'Sync ignoriert: Onboarding nicht abgeschlossen');
-          return;
-        }
         ref.read(activeJobProvider.notifier).triggerSyncAll();
       },
     );
@@ -134,8 +123,9 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
     final themeData = ref.watch(appThemeProvider);
-    final onboardingCompleted = ref.watch(onboardingControllerProvider);
-    final Widget homeWidget = onboardingCompleted ? const ShellScreen() : const OnboardingScreen();
+    // Kein Onboarding mehr: Die App startet direkt in der Shell. Berechtigungen
+    // (z. B. Fotozugriff) werden erst „bei Bedarf“ im Task-Wizard angefragt.
+    const Widget homeWidget = ShellScreen();
 
     // Compute active brightness based on resolved colors
     final isDark = themeData.canvas.computeLuminance() < 0.5;

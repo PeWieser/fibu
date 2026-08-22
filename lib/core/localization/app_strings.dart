@@ -59,6 +59,26 @@ class AppStrings {
   String get tooltipStorageCard => isGerman ? 'Klicke hier für die detaillierte Speicherbelegung nach Dateitypen.' : 'Click here for detailed storage breakdown by file type.';
   String get tooltipSyncBanner => isGerman ? 'Klicke hier, um das vollständige Aktivitätsprotokoll anzuzeigen.' : 'Click here to view activity logs.';
 
+  // --- Setup-Hinweise (kein Onboarding — erst bei Bedarf) ---
+  String get setupDriveAndTask => isGerman
+      ? 'Richte dein erstes Cloud-Laufwerk und deine erste Aufgabe ein.'
+      : 'Set up your first cloud drive and your first task.';
+  String get setupFirstDrive => isGerman
+      ? 'Richte dein erstes Cloud-Laufwerk ein.'
+      : 'Set up your first cloud drive.';
+  String get setupFirstTask => isGerman
+      ? 'Richte deine erste Aufgabe ein.'
+      : 'Set up your first task.';
+  String get setupHintSubtitle => isGerman
+      ? 'Laufwerk: Einstellungen → Cloud-Laufwerke · Aufgabe: Tab „Aufgaben“.'
+      : 'Drive: Settings → Cloud Drives · Task: Tasks tab.';
+  String get tasksAddHint => isGerman
+      ? 'Tippe oben rechts auf +, um eine Aufgabe anzulegen.'
+      : 'Tap + in the top right to add a task.';
+  String get drivesAddHint => isGerman
+      ? 'Tippe oben rechts auf +, um ein Laufwerk hinzuzufügen.'
+      : 'Tap + in the top right to add a drive.';
+
   // --- Cloud Drives & Wizard ---
   String get cloudDrivesTitle => isGerman ? 'Cloud-Laufwerke verwalten' : 'Manage Cloud Drives';
   String get addCloudDrive => isGerman ? 'Laufwerk hinzufügen' : 'Add Cloud Drive';

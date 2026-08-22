@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-08-22 — Kein Onboarding mehr, Berechtigung erst bei Bedarf, Setup-Hinweis
+
+> Richtungswechsel: Der „eine Seite“-Ansatz (voriger Eintrag) wurde verworfen.
+> Die App startet jetzt **ohne Onboarding** direkt in der Shell.
+
+### Onboarding entfernt
+- `main.dart` startet direkt in der Shell; `onboarding_screen.dart` +
+  `onboarding_controller.dart` gelöscht.
+- Fotozugriff wird **erst bei Bedarf** angefragt: im Task-Wizard beim Laden
+  der Alben (`PhotoManager.requestPermissionExtend()` in `_loadAlbums`).
+
+### Dashboard: Setup-Hinweis statt leerer Übersicht
+- Solange Cloud-Laufwerk und/oder Aufgabe fehlen, zeigt das Dashboard einen
+  ruhigen Hinweis: beides fehlt / nur Laufwerk / nur Aufgabe. Erst wenn beides
+  da ist, erscheint die normale Übersicht.
+
+### Große Buttons entfernt, leichte „+"-Hinweise
+- Tasks-Leerzustand: großer „Aufgabe erstellen“-Button → Hinweis „Tippe oben
+  rechts auf +“.
+- Cloud-Laufwerke: großer „Laufwerk hinzufügen“-Button → Hinweis; Windows/
+  Android haben jetzt ein „+“ in der CommandBar/AppBar (iOS hatte es schon).
+
+---
+
 ## 2026-08-22 — Onboarding: eine Seite, ein Button
 
 - Onboarding radikal vereinfacht: eine Seite, ein Hinweis, ein Button

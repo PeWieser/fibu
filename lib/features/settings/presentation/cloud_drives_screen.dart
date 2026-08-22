@@ -127,6 +127,11 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               label: Text(strings.refresh),
               onPressed: _isRefreshing ? null : _handleRefresh,
             ),
+            fluent.CommandBarButton(
+              icon: const Icon(fluent.FluentIcons.add, size: 16, semanticLabel: 'Add Drive'),
+              label: Text(strings.addCloudDrive),
+              onPressed: () => _openAddRemoteWizard(context, TargetPlatform.windows),
+            ),
           ],
         ),
       ),
@@ -160,24 +165,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             ),
             SizedBox(height: theme.xl),
             Center(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
-                  child: fluent.FilledButton(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(fluent.FluentIcons.add, size: 16, color: Color(0xFFFFFFFF), semanticLabel: 'Add Drive'),
-                        SizedBox(width: theme.sm),
-                        Text(
-                          strings.addCloudDrive,
-                          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                    onPressed: () => _openAddRemoteWizard(context, TargetPlatform.windows),
-                  ),
+              child: Text(
+                strings.drivesAddHint,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: 13,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ),
@@ -388,25 +382,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               style: TextStyle(color: theme.textSecondary),
             ),
             SizedBox(height: theme.lg),
-            Semantics(
-              label: strings.addCloudDrive,
-              button: true,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
-                child: cupertino.CupertinoButton(
-                  color: theme.accent,
-                  padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.sm),
-                  borderRadius: BorderRadius.circular(theme.radiusSm),
-                  onPressed: () => _openAddRemoteWizard(context, TargetPlatform.iOS),
-                  child: Text(
-                    strings.addCloudDrive,
-                    style: const TextStyle(
-                      color: cupertino.CupertinoColors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
+            Text(
+              strings.drivesAddHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.textSecondary,
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
               ),
             ),
           ],
@@ -467,6 +449,11 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               ),
             ),
           ),
+          material.IconButton(
+            icon: const Icon(material.Icons.add, semanticLabel: 'Add Drive'),
+            tooltip: strings.addCloudDrive,
+            onPressed: () => _openAddRemoteWizard(context, TargetPlatform.android),
+          ),
           SizedBox(width: theme.sm),
         ],
       ),
@@ -515,15 +502,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             ),
             SizedBox(height: theme.xl),
             Center(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
-                  child: material.FilledButton.icon(
-                    icon: const Icon(material.Icons.add, semanticLabel: 'Add Drive'),
-                    label: Text(strings.addCloudDrive),
-                    onPressed: () => _openAddRemoteWizard(context, TargetPlatform.android),
-                  ),
+              child: Text(
+                strings.drivesAddHint,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: 13,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ),

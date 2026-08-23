@@ -641,7 +641,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildOfflineHint(context, strings),
             _buildStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             if (setupHint != null) ...[

@@ -57,6 +57,45 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
   bool get showAdvanced => widget.showAdvanced;
   VoidCallback get onToggleAdvanced => widget.onToggleAdvanced;
 
+  /// Fokus-Knoten pro Feld — nötig, um Schlüsselbund-Autofill zu erkennen.
+  final Map<String, FocusNode> _focusNodes = {};
+
+  /// Felder, deren Controller bereits einen Autofill-Listener haben.
+  final Set<String> _autofillHooked = {};
+  bool _dismissScheduled = false;
+
+  FocusNode _nodeFor(String key) =>
+      _focusNodes.putIfAbsent(key, () => FocusNode());
+
+  /// Befüllt der Apple-Schlüsselbund das Passwortfeld, während der Fokus
+  /// woanders liegt (typisch: E-Mail-Feld), ist die Eingabe komplett —
+  /// Tastatur automatisch einklappen statt „Weiter/Fertig“-Getippe.
+  void _hookAutofillDismiss(String key, TextEditingController controller) {
+    if (!_autofillHooked.add(key)) return;
+    controller.addListener(() {
+      if (controller.text.isEmpty || _dismissScheduled) return;
+      final node = _focusNodes[key];
+      if (node != null && node.hasFocus) return; // Nutzer tippt selbst.
+      _dismissScheduled = true;
+      // Kleiner Aufschub, damit AutoFill beide Felder fertig schreiben kann.
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        _dismissScheduled = false;
+        if (!mounted) return;
+        final n = _focusNodes[key];
+        if (n != null && n.hasFocus) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final node in _focusNodes.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final fields = ProviderAuth.visibleFields(
@@ -253,10 +292,14 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     final hints = ProviderAuth.autofillHintsFor(field).toList();
     final keyboard = ProviderAuth.keyboardFor(field);
     final action = ProviderAuth.actionFor(field, isLast);
+    final focusNode = _nodeFor(field.key);
+    // Passwortfelder: Autofill-Erkennung → Tastatur automatisch einklappen.
+    if (secret) _hookAutofillDismiss(field.key, controller);
 
     if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoTextField(
         controller: controller,
+        focusNode: focusNode,
         placeholder: field.hint.isNotEmpty ? field.hint : null,
         padding: const EdgeInsets.all(12),
         obscureText: hidden,
@@ -286,6 +329,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     if (platform == TargetPlatform.windows) {
       return fluent.TextBox(
         controller: controller,
+        focusNode: focusNode,
         placeholder: field.hint.isNotEmpty ? field.hint : null,
         obscureText: hidden,
         keyboardType: keyboard,
@@ -304,6 +348,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     }
     return material.TextField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: hidden,
       autofillHints: hints,
       keyboardType: keyboard,

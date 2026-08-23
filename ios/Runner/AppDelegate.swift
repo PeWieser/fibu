@@ -94,8 +94,31 @@ final class SystemInfoChannel: NSObject {
 /// Channel `fibu/widget`: Die Flutter-App schiebt den Sync-Zustand in die
 /// App-Group; die Widget-Extension liest ihn beim nächsten Timeline-Reload.
 final class WidgetStatusChannel: NSObject {
-  static let appGroup = "group.com.example.fibu"
+  /// Fallback, falls kein Signierprofil lesbar ist (z. B. Simulator).
+  static let defaultAppGroup = "group.com.example.fibu"
   static let statusKey = "fibu_widget_status"
+
+  /// Tatsächlich provisionierte App-Group: Sideload-Tools (iLoader, AltStore,
+  /// Sideloadly …) benennen App-Groups beim Signieren häufig um. Deshalb wird
+  /// die ID zur Laufzeit aus dem embedded.mobileprovision gelesen statt hart
+  /// codiert — die Widget-Extension macht dasselbe.
+  static let appGroup: String = resolveAppGroupID(fallback: defaultAppGroup)
+
+  static func resolveAppGroupID(fallback: String) -> String {
+    guard let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
+          let data = FileManager.default.contents(atPath: path),
+          let content = String(data: data, encoding: .isoLatin1),
+          let start = content.range(of: "<?xml"),
+          let end = content.range(of: "</plist>") else { return fallback }
+    let plistString = String(content[start.lowerBound..<end.upperBound])
+    guard let plistData = plistString.data(using: .isoLatin1),
+          let plist = try? PropertyListSerialization.propertyList(
+            from: plistData, options: [], format: nil) as? [String: Any],
+          let entitlements = plist["Entitlements"] as? [String: Any],
+          let groups = entitlements["com.apple.security.application-groups"] as? [String],
+          let first = groups.first, !first.isEmpty else { return fallback }
+    return first
+  }
 
   static func register(with messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "fibu/widget", binaryMessenger: messenger)

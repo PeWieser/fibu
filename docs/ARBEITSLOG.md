@@ -2,6 +2,49 @@
 
 ---
 
+## 2026-08-23 — Widget-Fix für Sideloading, ehrliche Meldungen, Autofill-Komfort, Sofort-Prüfung
+
+### Widget: App-Group dynamisch (iLoader & Co.)
+- Sideload-Tools benennen App-Groups beim Signieren um → die hart codierte
+  `group.com.example.fibu` fand nie den geteilten Container.
+- Jetzt lesen **App und Widget-Extension** die tatsächlich provisionierte
+  Group-ID zur Laufzeit aus dem Signierprofil (`embedded.mobileprovision`,
+  Entitlements → `com.apple.security.application-groups`). Fallback bleibt
+  die Original-ID. Voraussetzung bleibt: Das Tool muss App **und** Extension
+  eine (gleiche) App-Group geben.
+
+### Ehrliche Meldungen (Pseudo-Erfolge entfernt)
+- Dashboard-Banner erscheint NICHT mehr, wenn keine Aufgaben konfiguriert
+  sind — kein „Alle Dateien synchronisiert“ ohne ein einziges Backup.
+- Widget (klein + groß): 0 aktive Aufgaben → „Noch keine Backup-Aufgaben“
+  in Grau statt grünem „Aktuell“.
+- Fortschritts-Panels waren bereits korrekt gegated (nur während Sync).
+
+### Sync-Button erklärt sich selbst
+- Solange `tasks.json` lädt: **Spinner + „Aufgaben werden geladen …“** im
+  Button (Spinner statt Balken — unbestimmte, kurze Wartezeit ohne
+  messbaren Fortschritt). Kein stummes Grau mehr.
+
+### Schlüsselbund-Autofill: Tastatur klappt automatisch ein
+- Befüllt AutoFill das Passwortfeld, während der Fokus im E-Mail-Feld
+  liegt, ist die Eingabe komplett → Fokus wird nach 250 ms gelöst, die
+  Tastatur verschwindet. Kein „Weiter → Fertig“-Getippe mehr.
+  (Tippt der Nutzer selbst im Passwortfeld, passiert nichts.)
+
+### Dashboard prüft sofort beim Öffnen
+- `initState` + Tab-Wechsel auf Dashboard (`shellIndexProvider`-Listener)
+  stoßen die Bedarfsprüfung (Mediathek-Zählung) und die Speicherstände
+  sofort an — kein Warten auf den 10-s-Takt.
+
+### Recherche: Löschbestätigung (PhotoKit)
+- Ergebnis eindeutig: Drittanbieter-Apps können den System-Löschdialog
+  **nicht** unterdrücken, auch nicht „einmalig bestätigen“ — keine API,
+  kein Entitlement; gilt selbst für Assets, die die App selbst angelegt
+  hat. iCloud-Fotos umgeht das nur, weil es die Systembibliothek selbst
+  ist. Fibu bündelt deshalb alle Löschungen eines Laufs in EINEN Dialog.
+
+---
+
 ## 2026-08-22 — Auto-Refresh statt Buttons, ein Status-Banner, Plus-Menü mit Remote-Import, Widget-Diagnose
 
 ### Automatische Aktualisierung (Buttons weg)

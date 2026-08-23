@@ -34,8 +34,30 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
+  void initState() {
+    super.initState();
+    // Beim ersten Aufbau sofort prüfen, ob es lokal (Mediathek) oder remote
+    // (Speicherstand) Änderungen gibt — nicht erst auf den 10-s-Takt warten.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForChangesNow());
+  }
+
+  /// Sofortige Bedarfsprüfung: Sync-Bedarf (lokal) + Speicherstände (remote).
+  void _checkForChangesNow() {
+    if (!mounted) return;
+    ref.read(widgetStatusProvider.notifier).recomputeAndPush();
+    ref.invalidate(primaryQuotaProvider);
+    ref.invalidate(remoteQuotaProvider);
+    ref.invalidate(remoteFibuUsageProvider);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
+
+    // Jedes Mal, wenn der Nutzer in den Dashboard-Tab wechselt, sofort prüfen.
+    ref.listen<int>(shellIndexProvider, (previous, next) {
+      if (next == 0 && previous != 0) _checkForChangesNow();
+    });
 
     if (platform == TargetPlatform.windows) {
       return _buildWindows(context);
@@ -189,7 +211,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildStatusBanner(context, activeJob, strings),
-            SizedBox(height: theme.lg),
             if (setupHint != null) ...[
               setupHint!,
             ] else ...[
@@ -360,9 +381,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(fluent.FluentIcons.sync, size: 16, semanticLabel: 'Sync'),
+                // Spinner statt stummem Grau, solange tasks.json lädt —
+                // der Button erklärt sich selbst.
+                if (!tasksLoaded)
+                  const SizedBox(
+                      width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
+                else
+                  const Icon(fluent.FluentIcons.sync, size: 16, semanticLabel: 'Sync'),
                 const SizedBox(width: 8),
-                Text(strings.syncAll),
+                Text(tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
               ],
             ),
           ),
@@ -398,7 +425,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                 _buildStatusBanner(context, activeJob, strings),
-              SizedBox(height: theme.lg),
               if (setupHint != null) ...[
                 setupHint!,
               ] else ...[
@@ -509,14 +535,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
-                            cupertino.CupertinoIcons.arrow_2_circlepath,
-                            color: cupertino.CupertinoColors.white,
-                            size: 20,
-                            semanticLabel: 'Sync',
-                          ),
+                          // Spinner + Klartext, solange die Aufgaben laden —
+                          // sonst wirkt der graue Button wie ein Fehler.
+                          if (!ref.watch(tasksLoadedProvider))
+                            const cupertino.CupertinoActivityIndicator(
+                                color: cupertino.CupertinoColors.white)
+                          else
+                            const Icon(
+                              cupertino.CupertinoIcons.arrow_2_circlepath,
+                              color: cupertino.CupertinoColors.white,
+                              size: 20,
+                              semanticLabel: 'Sync',
+                            ),
                           const SizedBox(width: 8),
-                          Text(strings.syncAll),
+                          Text(ref.watch(tasksLoadedProvider)
+                              ? strings.syncAll
+                              : strings.syncButtonWaitTasks),
                         ],
                       ),
                     ),
@@ -642,7 +676,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildStatusBanner(context, activeJob, strings),
-            SizedBox(height: theme.lg),
             if (setupHint != null) ...[
               setupHint!,
             ] else ...[
@@ -723,8 +756,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ref.watch(networkStatusProvider).online
                       ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
                       : null,
-                  icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
-                  label: Text(strings.syncAll),
+                  icon: ref.watch(tasksLoadedProvider)
+                      ? const Icon(material.Icons.sync, semanticLabel: 'Sync')
+                      : const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: material.CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                  label: Text(ref.watch(tasksLoadedProvider)
+                      ? strings.syncAll
+                      : strings.syncButtonWaitTasks),
                   style: material.ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
@@ -803,8 +844,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   /// Ein einziges, ruhiges Status-Banner — nicht tappbar, eine Zeile.
   /// Zustände: Offline (grau) → Sync läuft (Akzent) → Fehler (rot) →
   /// Abgebrochen (grau) → Sync fällig (orange) → Alles aktuell (grün).
+  ///
+  /// EHRLICHKEIT: Ohne konfigurierte Aufgaben gibt es nichts zu melden —
+  /// dann erscheint KEIN Banner (kein „Alles synchronisiert“-Pseudoerfolg;
+  /// der Einrichtungshinweis übernimmt die Führung).
   Widget _buildStatusBanner(BuildContext context, ActiveJobState job, AppStrings strings) {
-    return _buildGlobalStatusWidget(context, job.status, strings);
+    final hasTasks = ref.watch(tasksListProvider).isNotEmpty;
+    final jobIdle = job.status == RcloneJobStatus.completed ||
+        job.status == RcloneJobStatus.cancelled;
+    if (!hasTasks && jobIdle) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.theme.lg),
+      child: _buildGlobalStatusWidget(context, job.status, strings),
+    );
   }
 
   // --- Common Helper Widgets ---

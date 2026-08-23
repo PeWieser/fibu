@@ -4,11 +4,34 @@ import SwiftUI
 // MARK: - Geteilte Daten (App Group ↔ App ↔ Widget)
 //
 // Die Haupt-App pusht den Sync-Zustand nach jedem Run via MethodChannel
-// „fibu/widget" in UserDefaults(suiteName: group.com.example.fibu) als JSON.
+// „fibu/widget" in UserDefaults(suiteName: <App-Group>) als JSON.
 // Das Widget liest ihn einfach aus — synchron, billig, ohne App-Start.
+//
+// WICHTIG: Die App-Group-ID wird zur Laufzeit aus dem Signierprofil
+// (embedded.mobileprovision) gelesen — Sideload-Tools (iLoader, AltStore,
+// Sideloadly …) benennen App-Groups beim Signieren häufig um. Die Haupt-App
+// löst die ID identisch auf (siehe AppDelegate.swift).
 
-private let appGroupID = "group.com.example.fibu"
+private let fallbackAppGroupID = "group.com.example.fibu"
 private let statusKey = "fibu_widget_status"
+
+private func resolveAppGroupID() -> String {
+  guard let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
+        let data = FileManager.default.contents(atPath: path),
+        let content = String(data: data, encoding: .isoLatin1),
+        let start = content.range(of: "<?xml"),
+        let end = content.range(of: "</plist>") else { return fallbackAppGroupID }
+  let plistString = String(content[start.lowerBound..<end.upperBound])
+  guard let plistData = plistString.data(using: .isoLatin1),
+        let plist = try? PropertyListSerialization.propertyList(
+          from: plistData, options: [], format: nil) as? [String: Any],
+        let entitlements = plist["Entitlements"] as? [String: Any],
+        let groups = entitlements["com.apple.security.application-groups"] as? [String],
+        let first = groups.first, !first.isEmpty else { return fallbackAppGroupID }
+  return first
+}
+
+private let appGroupID: String = resolveAppGroupID()
 
 struct SharedTask: Codable {
   let name: String
@@ -125,12 +148,13 @@ private struct _FibuSmall: View {
   var body: some View {
     let state = entry.status
     let color: Color = {
-      guard let s = state else { return calmColor }
+      guard let s = state, s.activeTaskCount > 0 else { return calmColor }
       if !s.lastError.isEmpty { return errorColor }
       return s.needsSync ? pendingColor : okColor
     }()
     let title: String = {
-      guard let s = state else { return FibuText.noTasks }
+      // Keine Aufgaben = kein „Aktuell“-Versprechen — ehrlicher Leerzustand.
+      guard let s = state, s.activeTaskCount > 0 else { return FibuText.noTasks }
       if !s.lastError.isEmpty { return s.lastError }
       return s.needsSync ? FibuText.needsSync : FibuText.upToDate
     }()
@@ -248,12 +272,12 @@ private struct __FibuLargeHeader: View {
   var body: some View {
     let s = entry.status
     let color: Color = {
-      guard let s = s else { return calmColor }
+      guard let s = s, s.activeTaskCount > 0 else { return calmColor }
       if !s.lastError.isEmpty { return errorColor }
       return s.needsSync ? pendingColor : okColor
     }()
     let title: String = {
-      guard let s = s else { return FibuText.noTasks }
+      guard let s = s, s.activeTaskCount > 0 else { return FibuText.noTasks }
       if !s.lastError.isEmpty { return s.lastError }
       return s.needsSync ? FibuText.needsSync : FibuText.upToDate
     }()

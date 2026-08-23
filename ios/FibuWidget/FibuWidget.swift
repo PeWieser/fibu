@@ -92,6 +92,20 @@ final class FibuProvider: TimelineProvider {
   }
 }
 
+// MARK: - Hintergrund (iOS 17+ verlangt containerBackground — ohne diese
+// API rendert das System das Widget nur als Platzhalter!)
+
+extension View {
+  @ViewBuilder
+  func fibuWidgetBackground() -> some View {
+    if #available(iOSApplicationExtension 17.0, *) {
+      self.containerBackground(for: .widget) { Color(.systemBackground) }
+    } else {
+      self.background(Color(.systemBackground))
+    }
+  }
+}
+
 // MARK: - Darstellung
 
 private let accent = Color(red: 0.0, green: 0.478, blue: 1.0)      // App-Akzent
@@ -136,6 +150,7 @@ struct FibuWidgetEntryView: View {
         _FibuSmall(entry: entry)
       }
     }
+    .fibuWidgetBackground()
     .widgetURL(URL(string: "fibu://open"))
   }
 }
@@ -159,27 +174,27 @@ private struct _FibuSmall: View {
       return s.needsSync ? FibuText.needsSync : FibuText.upToDate
     }()
 
-    VStack(spacing: 10) {
+    VStack(spacing: 12) {
       ZStack {
-        Circle().fill(color.opacity(0.16)).frame(width: 56, height: 56)
+        Circle().fill(color.opacity(0.16)).frame(width: 62, height: 62)
         Image(systemName: "arrow.triangle.2.circlepath")
-          .font(.system(size: 22, weight: .semibold))
+          .font(.system(size: 25, weight: .semibold))
           .foregroundColor(color)
       }
       Text(title)
-        .font(.system(size: 15, weight: .semibold))
+        .font(.system(size: 16, weight: .semibold))
         .foregroundColor(color)
         .multilineTextAlignment(.center)
         .lineLimit(2)
-        .minimumScaleFactor(0.8)
+        .minimumScaleFactor(0.75)
       Text("\(FibuText.lastSync): \(state.map { FibuProvider.formatSyncTime($0.lastSyncIso) } ?? "—")")
-        .font(.system(size: 11))
+        .font(.system(size: 12))
         .foregroundColor(Color.secondary)
         .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
-    .padding(12)
+    .padding(8)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(.systemBackground))
   }
 }
 
@@ -192,41 +207,41 @@ private struct _FibuMedium: View {
     let state = entry.status
     let tasks = Array((state?.tasks ?? []).prefix(3))
 
-    HStack(spacing: 16) {
+    HStack(spacing: 14) {
       _FibuSmall(entry: entry)
-        .frame(width: 95)
+        .frame(width: 108)
 
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: 9) {
         if tasks.isEmpty {
           Text(FibuText.noTasks)
-            .font(.system(size: 12))
+            .font(.system(size: 14))
             .foregroundColor(Color.secondary)
         } else {
           ForEach(tasks, id: \.name) { t in
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
               Circle()
                 .fill(taskColor(t.status))
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
               Text(t.name)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Color.primary)
                 .lineLimit(1)
               Spacer()
               Text(FibuProvider.formatSyncTime(t.lastSyncIso))
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundColor(Color.secondary)
+                .lineLimit(1)
             }
           }
         }
         Spacer()
         Text("\(state?.activeTaskCount ?? 0) \(FibuText.tasksLabel)")
-          .font(.system(size: 11))
+          .font(.system(size: 12))
           .foregroundColor(Color.secondary)
       }
     }
-    .padding(14)
+    .padding(6)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(.systemBackground))
   }
 }
 
@@ -236,33 +251,33 @@ private struct _FibuLarge: View {
   let entry: FibuEntry
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: 14) {
       __FibuLargeHeader(entry: entry)
       Divider().padding(.vertical, 2)
       if (entry.status?.tasks.isEmpty ?? true) {
         Text(FibuText.noTasks)
-          .font(.system(size: 13))
+          .font(.system(size: 15))
           .foregroundColor(Color.secondary)
       } else {
         ForEach(Array((entry.status?.tasks ?? []).prefix(6)), id: \.name) { t in
-          HStack {
-            Circle().fill(taskColor(t.status)).frame(width: 8, height: 8)
+          HStack(spacing: 10) {
+            Circle().fill(taskColor(t.status)).frame(width: 9, height: 9)
             Text(t.name)
-              .font(.system(size: 13, weight: .medium))
+              .font(.system(size: 15, weight: .medium))
               .foregroundColor(Color.primary)
               .lineLimit(1)
             Spacer()
             Text(FibuProvider.formatSyncTime(t.lastSyncIso))
-              .font(.system(size: 11))
+              .font(.system(size: 12))
               .foregroundColor(Color.secondary)
+              .lineLimit(1)
           }
         }
       }
       Spacer()
     }
-    .padding(16)
+    .padding(8)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(.systemBackground))
   }
 }
 
@@ -284,14 +299,14 @@ private struct __FibuLargeHeader: View {
 
     HStack(spacing: 12) {
       ZStack {
-        Circle().fill(color.opacity(0.16)).frame(width: 46, height: 46)
+        Circle().fill(color.opacity(0.16)).frame(width: 52, height: 52)
         Image(systemName: "arrow.triangle.2.circlepath")
-          .font(.system(size: 18, weight: .semibold))
+          .font(.system(size: 20, weight: .semibold))
           .foregroundColor(color)
       }
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: 3) {
         Text(title)
-          .font(.system(size: 16, weight: .semibold))
+          .font(.system(size: 17, weight: .semibold))
           .foregroundColor(color)
           .lineLimit(2)
           .minimumScaleFactor(0.8)

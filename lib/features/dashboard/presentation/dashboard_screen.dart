@@ -154,6 +154,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     Navigator.of(context).push(route);
   }
 
+  /// „Letztes Backup: 23.08.2026, 12:15“ — dezent unter dem Sync-Button.
+  /// Ohne konfigurierte Aufgaben unsichtbar (nichts versprechen).
+  Widget _lastSyncInfo(BuildContext context, AppStrings strings) {
+    final theme = context.theme;
+    if (ref.watch(tasksListProvider).isEmpty) return const SizedBox.shrink();
+    final iso = ref.watch(widgetStatusProvider).lastSyncIso;
+    final dt = DateTime.tryParse(iso);
+    final text = dt == null
+        ? strings.lastBackupNever
+        : strings.lastBackupAt(strings.formatDateTime(dt));
+    return Padding(
+      padding: EdgeInsets.only(top: theme.sm),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: theme.textSecondary,
+          fontSize: 12,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+
   Widget _setupActionRow(
       BuildContext context, AppThemeData theme, String label, VoidCallback onTap) {
     final platform = defaultTargetPlatform;
@@ -167,9 +191,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 52),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+          padding: EdgeInsets.symmetric(horizontal: theme.lg, vertical: theme.md),
           child: Row(
             children: [
               Expanded(
@@ -212,6 +236,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           children: [
             _buildStatusBanner(context, activeJob, strings),
             if (setupHint != null) ...[
+              SizedBox(height: theme.sm),
               setupHint!,
             ] else ...[
               quotaAsync.when(
@@ -250,6 +275,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildActiveJobPanelWindows(context, activeJob, strings),
               SizedBox(height: theme.xl),
               _buildSyncActionsWindows(context, activeJob, strings),
+              _lastSyncInfo(context, strings),
               SizedBox(height: theme.xl),
               fluent.Tooltip(
                 message: ref.watch(networkStatusProvider).online
@@ -420,7 +446,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-          child: Column(
+          child: Center(
+            child: ConstrainedBox(
+              // iPad: volle Bildschirmbreite liest sich schlecht — Inhalt
+              // mittig auf max. 700 pt begrenzen (iPhone bleibt unverändert).
+              constraints: const BoxConstraints(maxWidth: 700),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               IosTheme.largeTitle(strings.navDashboard, theme),
@@ -431,6 +462,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   children: [
                 _buildStatusBanner(context, activeJob, strings),
               if (setupHint != null) ...[
+                SizedBox(height: theme.sm),
                 setupHint!,
               ] else ...[
               quotaAsync.when(
@@ -561,6 +593,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
                 ),
+              _lastSyncInfo(context, strings),
               const SizedBox(height: 12),
               Semantics(
                 label: ref.watch(networkStatusProvider).online
@@ -612,8 +645,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
           ],
+              ),
+            ),
+          ),
         ),
-      ),
       ),
     );
   }
@@ -694,6 +729,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           children: [
             _buildStatusBanner(context, activeJob, strings),
             if (setupHint != null) ...[
+              SizedBox(height: theme.sm),
               setupHint!,
             ] else ...[
             quotaAsync.when(
@@ -789,6 +825,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
               ),
+            _lastSyncInfo(context, strings),
             const SizedBox(height: 12),
             material.Tooltip(
               message: ref.watch(networkStatusProvider).online
@@ -961,6 +998,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Expanded(
             child: Text(
               statusText,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: theme.textPrimary,
                 fontWeight: FontWeight.bold,

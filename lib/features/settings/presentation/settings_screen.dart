@@ -15,6 +15,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
 import 'debug_log_screen.dart';
+import 'licenses_screen.dart';
 
 /// Platform-adaptive Settings screen structured according to Apple HIG:
 /// 1. Cloud Storage (Manage Cloud Drives)
@@ -57,43 +58,16 @@ class SettingsScreen extends ConsumerWidget {
     Navigator.of(context).push(route);
   }
 
-  /// Öffnet die vollständige Open-Source-Lizenzliste (LicenseRegistry:
-  /// alle Flutter-/Dart-Pakete plus manuell registrierte Komponenten wie
-  /// rclone/librclone und gomobile — siehe main.dart).
-  ///
-  /// Die Material-LicensePage braucht MaterialLocalizations und ein
-  /// Material-Theme; beides wird hier lokal bereitgestellt, damit die Seite
-  /// auch in der Cupertino- und Fluent-Shell funktioniert.
+  /// Öffnet alle Open-Source-Lizenzen als EIN durchscrollbares Dokument
+  /// (LicenseRegistry: alle Dart-Pakete plus manuell registrierte
+  /// Komponenten wie rclone/librclone und gomobile — siehe main.dart).
   void _openLicenses(BuildContext context, AppStrings strings, AppThemeData theme) {
     final platform = defaultTargetPlatform;
-    final isDark = theme.canvas.computeLuminance() < 0.5;
-
-    Widget buildPage(BuildContext _) {
-      return Localizations.override(
-        context: context,
-        delegates: const [
-          material.DefaultMaterialLocalizations.delegate,
-          cupertino.DefaultCupertinoLocalizations.delegate,
-          DefaultWidgetsLocalizations.delegate,
-        ],
-        child: material.Theme(
-          data: isDark
-              ? material.ThemeData(brightness: material.Brightness.dark, useMaterial3: true)
-              : material.ThemeData(brightness: material.Brightness.light, useMaterial3: true),
-          child: material.LicensePage(
-            applicationName: 'Fibu',
-            applicationVersion: strings.appVersionValue,
-            applicationLegalese: '© 2026 Fibu · rclone-powered multi-cloud backup',
-          ),
-        ),
-      );
-    }
-
     final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: buildPage)
+        ? fluent.FluentPageRoute(builder: (_) => const LicensesScreen())
         : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: buildPage)
-            : material.MaterialPageRoute(builder: buildPage));
+            ? cupertino.CupertinoPageRoute(builder: (_) => const LicensesScreen())
+            : material.MaterialPageRoute(builder: (_) => const LicensesScreen()));
     Navigator.of(context).push(route);
   }
 

@@ -229,6 +229,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       logs: [...state.logs, startMsg],
     );
 
+    final startedAt = DateTime.now();
     try {
       final jobId = await _rcloneService.startBackupJob(
         localPath: task.sourcePath,
@@ -291,6 +292,14 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
 
       try {
         await completer.future;
+        // Blitz-Läufe (nichts zu übertragen) kurz halten: Ein Balken, der
+        // nur aufblitzt, wirkt hektisch. Mindestens ~1,6 s sichtbare Ruhe —
+        // echte Übertragungen dauern ohnehin länger und warten nie.
+        final elapsed = DateTime.now().difference(startedAt);
+        const minVisible = Duration(milliseconds: 1600);
+        if (elapsed < minVisible) {
+          await Future.delayed(minVisible - elapsed);
+        }
         if (!mounted) {
           await statusSub.cancel();
           return false;

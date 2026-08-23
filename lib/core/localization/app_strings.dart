@@ -845,6 +845,26 @@ class AppStrings {
   String get openSourceLicensesSubtitle => isGerman
       ? 'Verwendete Bibliotheken und ihre Lizenzen'
       : 'Bundled libraries and their licenses';
+  String get licensesIntro => isGerman
+      ? 'Fibu ist Open Source (MIT-Lizenz) und baut auf bewährten Open-Source-Komponenten auf — allen voran rclone (MIT), Flutter (BSD-3) und gomobile (BSD-3).\n\nDarunter folgen die vollständigen Lizenztexte aller enthaltenen Komponenten in einem Dokument.'
+      : 'Fibu is open source (MIT license) and builds on proven open-source components — most notably rclone (MIT), Flutter (BSD-3) and gomobile (BSD-3).\n\nBelow are the full license texts of all bundled components in a single document.';
+  String get licensesLoading =>
+      isGerman ? 'Lizenzen werden zusammengestellt …' : 'Collecting licenses…';
+
+  // --- Letztes Backup (Dashboard) ---
+  String get lastBackupNever => isGerman ? 'Noch kein Backup' : 'No backup yet';
+  String lastBackupAt(String when) =>
+      isGerman ? 'Letztes Backup: $when' : 'Last backup: $when';
+
+  /// Kompakte, lokalisierte Datums-/Zeitformatierung (ohne intl-Paket).
+  String formatDateTime(DateTime dt) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    final d = dt.toLocal();
+    final date = isGerman
+        ? '${two(d.day)}.${two(d.month)}.${d.year}'
+        : '${d.year}-${two(d.month)}-${two(d.day)}';
+    return '$date, ${two(d.hour)}:${two(d.minute)}';
+  }
 
   // --- Status-Banner (ein Banner, klare Zustände) ---
   String get statusOffline =>

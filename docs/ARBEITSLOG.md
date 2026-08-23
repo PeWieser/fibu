@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-08-23 — Letztes Backup sichtbar, ruhiger Balken, klügere Zielordner-Wahl, Widgets iOS-17-fix, ein Lizenz-Dokument
+
+### Dashboard
+- **„Letztes Backup: 23.08.2026, 12:15“** dezent unter dem Sync-Button
+  (alle Plattformen; Tabellenziffern; ohne Aufgaben unsichtbar).
+- **Mehr Luft im Leerzustand:** Abstand über dem Einrichtungshinweis,
+  Aktionszeilen auf 52 pt mit großzügigerem Innenabstand.
+- **Kein aufblitzender Balken mehr:** Blitz-Läufe (nichts zu übertragen)
+  werden auf mindestens ~1,6 s sichtbare Ruhe gehalten — echte
+  Übertragungen warten nie.
+- **iPad:** Dashboard-Inhalt mittig auf max. 700 pt begrenzt; Banner-Text
+  mit maxLines/Ellipsis gegen Abschneiden auf kleinen Geräten.
+
+### Widgets (WICHTIG: iOS-17-Rendering-Fix)
+- Seit iOS 17 verlangt WidgetKit die **containerBackground-API** — ohne sie
+  zeigt das System nur einen Platzhalter („statischer Inhalt“!). Jetzt
+  adoptiert (ein containerBackground an der Wurzel, Fallback für iOS 15/16).
+- Platz besser genutzt: größere Icons/Typo in allen drei Größen.
+
+### Task-Wizard
+- **Zielordner-Vorauswahl:** Existiert `fibu-backup` im Root des Remotes →
+  „Vorhandener Ordner“ mit genau diesem vorausgewählt; sonst „Neuer Ordner“
+  (fibu-backup). Offline/Fehler → Standard bleibt.
+
+### Rechtliches
+- Standard-LicensePage (verwirrende Paketliste) ersetzt durch **ein einziges
+  durchscrollbares Dokument**: freundliche Einordnung oben (MIT, rclone,
+  Flutter, gomobile), darunter alle vollständigen Lizenztexte, rclone &
+  gomobile zuerst; Lesebreite auf 680 pt begrenzt.
+
+### Gerätekompatibilität (iPhone 6s/iOS 15 → iPhone 17/iOS 27, iPad)
+- Deployment-Target überall 15.0 (Runner + Widget-Extension) — verifiziert.
+- containerBackground nur ab iOS 17 (#available), Fallback davor.
+- SafeArea überall; Banner/Zeilen mit Overflow-Schutz; iPad-Lesebreiten.
+
+---
+
 ## 2026-08-23 — Einfache Sync-Verben, Offline-Gating, Zweisprachigkeits-Pass, Repo-Aufräumen, Doku (EN)
 
 ### Sync-Meldungen: einfache Verben

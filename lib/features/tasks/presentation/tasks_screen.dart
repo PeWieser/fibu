@@ -867,6 +867,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     }
     _isActive = task?.isActive ?? true;
 
+    // Zielordner intelligent vorbelegen (nur bei NEUEN Aufgaben):
+    // Existiert im Root des Remotes bereits ein „fibu-backup“-Ordner, wird
+    // „Vorhandener Ordner“ mit genau diesem vorausgewählt — sonst
+    // „Neuer Ordner“ mit dem Namen fibu-backup. Kein Nachdenken nötig.
+    if (task == null) _preselectTargetFolder();
+
     // iOS nutzt standardmäßig den Reiter "Fotos & Videos".
     _sourceTab = (widget.platform == TargetPlatform.iOS ? 'media' : 'folders');
 
@@ -986,6 +992,32 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       }
     } catch (_) {
       if (mounted) setState(() => _loadingFolders = false);
+    }
+  }
+
+  /// Prüft das Root-Verzeichnis des gewählten Remotes auf einen bestehenden
+  /// „fibu-backup“-Ordner und wählt den Zielordner-Modus entsprechend vor.
+  Future<void> _preselectTargetFolder() async {
+    if (_selectedRemotes.isEmpty) return;
+    try {
+      final files = await ref
+          .read(rcloneServiceProvider)
+          .listFiles(_selectedRemotes.first, '');
+      if (!mounted) return;
+      final hasFibuFolder =
+          files.any((f) => f.isDir && f.name == 'fibu-backup');
+      setState(() {
+        if (hasFibuFolder) {
+          _selectedTargetFolderMode = TargetFolderMode.custom;
+          _selectedRemoteTargetFolder = 'fibu-backup';
+          _targetFolderController.text = 'fibu-backup';
+        } else {
+          _selectedTargetFolderMode = TargetFolderMode.newFolder;
+          _targetFolderController.text = 'fibu-backup';
+        }
+      });
+    } catch (_) {
+      // Root nicht lesbar (offline etc.) → Standard „Neuer Ordner“ bleibt.
     }
   }
 

@@ -612,7 +612,7 @@ class AppStrings {
   String get developerLabel => isGerman ? 'Entwickler' : 'Developer';
   String get developerValue => 'Fibu Open Source Team';
   String get cloudEngineLabel => isGerman ? 'Cloud-Engine' : 'Cloud Engine';
-  String get cloudEngineValue => 'rclone (70+ Provider)';
+  String get cloudEngineValue => isGerman ? 'rclone (70+ Anbieter)' : 'rclone (70+ providers)';
   String get licenseLabel => isGerman ? 'Lizenz' : 'License';
   String get licenseValue => 'MIT License';
   String get aboutDescription => isGerman
@@ -673,38 +673,36 @@ class AppStrings {
       ? 'Aufgabe erfolgreich synchronisiert.'
       : 'Task synchronized successfully.';
 
-  // --- Sync-Fortschritt (Engine-Labels, via AppStrings.current) ---
+  // --- Sync-Fortschritt: EINFACHE Verben, keine Technik-Sätze ---
   String get syncOfflineNoNetwork => isGerman
-      ? 'Offline: Keine aktive Netzwerkverbindung'
-      : 'Offline: no active network connection';
+      ? 'Offline — keine Internetverbindung'
+      : 'Offline — no internet connection';
   String syncStagePreparing(String label) =>
-      isGerman ? 'Vorbereitung: $label' : 'Preparing: $label';
-  String get syncMirrorRunning => isGerman
-      ? 'Mirror-Sync (Löschprotokoll) wird ausgeführt …'
-      : 'Running mirror sync (deletion log)…';
-  String get syncDeletionScan =>
-      isGerman ? 'Lösch-Erkennung' : 'Deletion scan';
-  String get syncPhaseScan => isGerman
-      ? 'Analysiere lokale & Cloud-Dateien'
-      : 'Analyzing local & cloud files';
-  String get syncPhaseUpload => isGerman ? 'Lade hoch' : 'Uploading';
-  String get syncPhaseTombstones =>
-      isGerman ? 'Wende Löschprotokoll an' : 'Applying deletion log';
-  String get syncPhaseDownload =>
-      isGerman ? 'Lade aus der Cloud' : 'Downloading from cloud';
-  String get syncPhaseDeleteLocal => isGerman
-      ? 'Übernehme Cloud-Löschungen'
-      : 'Applying cloud deletions';
-  String get syncAllUpToDate => isGerman
-      ? 'Alles aktuell — nichts zu übertragen.'
-      : 'Everything up to date — nothing to transfer.';
-  String syncMirrorDoneSummary(String summary) =>
-      isGerman ? 'Mirror abgeschlossen ($summary)' : 'Mirror completed ($summary)';
-  String get syncCompletedLabel => isGerman ? 'Abgeschlossen' : 'Completed';
-  String get syncMirrorReady => isGerman ? 'Spiegel bereit' : 'Mirror ready';
+      isGerman ? 'Vorbereiten …' : 'Preparing…';
+  String get syncMirrorRunning => isGerman ? 'Überprüfen …' : 'Checking…';
+  String get syncDeletionScan => isGerman ? 'Überprüfen' : 'Checking';
+  String get syncPhaseScan => isGerman ? 'Überprüfen' : 'Checking';
+  String get syncPhaseUpload => isGerman ? 'Hochladen' : 'Uploading';
+  String get syncPhaseTombstones => isGerman ? 'Aufräumen' : 'Cleaning up';
+  String get syncPhaseDownload => isGerman ? 'Herunterladen' : 'Downloading';
+  String get syncPhaseDeleteLocal => isGerman ? 'Löschen' : 'Deleting';
+  String get syncAllUpToDate =>
+      isGerman ? 'Alles aktuell.' : 'Everything up to date.';
+  String syncDoneCounts(int uploaded, int downloaded) => isGerman
+      ? 'Fertig — $uploaded hochgeladen · $downloaded heruntergeladen'
+      : 'Done — $uploaded uploaded · $downloaded downloaded';
+  String get syncCompletedLabel => isGerman ? 'Fertig' : 'Done';
+  String get syncMirrorReady => isGerman ? 'Vorbereitet' : 'Prepared';
   String syncReadAlbum(String album) =>
-      isGerman ? 'Album „$album“ lesen' : 'Reading album “$album”';
-  String get syncStartAnalysis => isGerman ? 'Starte Analyse …' : 'Starting analysis…';
+      isGerman ? 'Überprüfen …' : 'Checking…';
+  String get syncStartAnalysis => isGerman ? 'Überprüfen …' : 'Checking…';
+  String get errNoJobId => isGerman
+      ? 'rclone lieferte keine Job-ID zurück'
+      : 'rclone did not return a job id';
+  String get errUnknown => isGerman ? 'Unbekannter Fehler' : 'Unknown error';
+  String get errPhotoPermission => isGerman
+      ? 'Kein Zugriff auf Fotos & Mediathek (Berechtigung verweigert)'
+      : 'No access to Photos library (permission denied)';
 
   // --- Zeitplan-Beschreibung (lokalisiert, ersetzt Modell-Hardcodes) ---
   String scheduleDescriptionFor(String scheduleDay, String scheduleTime) {
@@ -757,6 +755,64 @@ class AppStrings {
 
   // --- Anmeldefelder (Fallback ohne Provider-Metadaten) ---
   String get passwordFieldLabel => isGerman ? 'Passwort' : 'Password';
+
+  // --- Sprachauswahl (Einstellungen) ---
+  String get languageModeSystem => isGerman ? 'System (automatisch)' : 'System (automatic)';
+
+  /// Übersetzt die (deutsch gepflegten) Feldlabels der Provider-Registry
+  /// für die englische Oberfläche. Unbekannte oder bereits englische Labels
+  /// werden unverändert durchgereicht.
+  String providerFieldLabel(String label) {
+    if (isGerman) return label;
+    const map = <String, String>{
+      '2FA Code (falls aktiv)': '2FA code (if enabled)',
+      'API-Key / Passwort': 'API key / password',
+      'API-Schlüssel': 'API key',
+      'Account Key oder SAS-Token': 'Account key or SAS token',
+      'App-Passwort': 'App password',
+      'Basis-Remote & Pfad': 'Base remote & path',
+      'Benutzer-Token': 'User token',
+      'Benutzerdefinierter Endpoint (optional)': 'Custom endpoint (optional)',
+      'Benutzername / E-Mail': 'Username / email',
+      'Benutzername': 'Username',
+      'Chunk-Größe': 'Chunk size',
+      'Dateinamen-Passwort (Salt / optional)': 'Filename password (salt, optional)',
+      'Dateinamen-Verschlüsselung': 'Filename encryption',
+      'E-Mail / Telefonnummer': 'Email / phone number',
+      'E-Mail': 'Email',
+      'E-Mail-Adresse': 'Email address',
+      'Explizites FTPS (TLS) verwenden': 'Use explicit FTPS (TLS)',
+      'FTP Hostname / IP': 'FTP hostname / IP',
+      'GCP Projektnummer (optional)': 'GCP project number (optional)',
+      'HTTP Ordner URL': 'HTTP folder URL',
+      'Hadoop Benutzer': 'Hadoop user',
+      'Hauptpasswort für Verschlüsselung': 'Master password for encryption',
+      'Laufwerk-Typ': 'Drive type',
+      'Passwort / API-Token': 'Password / API token',
+      'Passwort / App-Token': 'Password / app token',
+      'Passwort': 'Password',
+      'Pfad zum privaten SSH-Key (optional)': 'Path to private SSH key (optional)',
+      'SSH Benutzername': 'SSH username',
+      'SSH Passwort (optional falls Key genutzt)': 'SSH password (optional if key is used)',
+      'Satellite Adresse (optional)': 'Satellite address (optional)',
+      'Schreib-Strategie': 'Write strategy',
+      'Server Host / IP': 'Server host / IP',
+      'Server-Typ': 'Server type',
+      'Server-URL': 'Server URL',
+      'Service Account JSON Pfad (optional)': 'Service account JSON path (optional)',
+      'Tenant Name (optional)': 'Tenant name (optional)',
+      'Upstreams (z.B. ordner1=drive:a ordner2=b2:b)':
+          'Upstreams (e.g. folder1=drive:a folder2=b2:b)',
+      'Verknüpfte Remotes (getrennt durch Leerzeichen)':
+          'Linked remotes (space-separated)',
+      'Verschlüsselungs-Passphrase': 'Encryption passphrase',
+      'Wasabi Access Key': 'Wasabi access key',
+      'Wasabi Secret Key': 'Wasabi secret key',
+      'Windows Domain (optional)': 'Windows domain (optional)',
+      'Ziel-Remote & Pfad': 'Target remote & path',
+    };
+    return map[label] ?? label;
+  }
 
   // --- Speicherdetails-Dialog ---
   String get storageDetailedUtilization => isGerman

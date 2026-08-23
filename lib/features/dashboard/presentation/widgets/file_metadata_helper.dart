@@ -1,3 +1,5 @@
+import '../../../../core/localization/app_strings.dart';
+
 /// Categorization of file formats for specialized inspector and preview views.
 enum FileCategory {
   image,
@@ -11,6 +13,9 @@ enum FileCategory {
 
 /// Helper class providing detailed, realistic file metadata tailored to each file type.
 class FileMetadataHelper {
+  /// Zweisprachige Labels via AppStrings.current (Service-Schicht ohne Ref).
+  static bool get _de => AppStrings.current.isGerman;
+
   static String getExtension(String fileName) {
     if (!fileName.contains('.')) return '';
     return fileName.split('.').last.toLowerCase();
@@ -88,19 +93,19 @@ class FileMetadataHelper {
     final cat = getCategory(fileName);
     switch (cat) {
       case FileCategory.image:
-        return '$ext Bilddatei';
+        return _de ? '$ext Bilddatei' : '$ext image file';
       case FileCategory.video:
-        return '$ext Videodatei';
+        return _de ? '$ext Videodatei' : '$ext video file';
       case FileCategory.audio:
-        return '$ext Audiodatei';
+        return _de ? '$ext Audiodatei' : '$ext audio file';
       case FileCategory.textCode:
-        return '$ext Text-/Quellcode';
+        return _de ? '$ext Text-/Quellcode' : '$ext text/source code';
       case FileCategory.document:
-        return '$ext Dokument';
+        return _de ? '$ext Dokument' : '$ext document';
       case FileCategory.archive:
-        return '$ext Archiv';
+        return _de ? '$ext Archiv' : '$ext archive';
       case FileCategory.binary:
-        return '$ext Datei';
+        return _de ? '$ext Datei' : '$ext file';
     }
   }
 
@@ -172,13 +177,13 @@ class FileMetadataHelper {
   }) {
     final Map<String, String> data = {};
 
-    data['Dateiname'] = fileName;
-    data['Dateigröße'] = formatExactBytes(fileSize);
-    data['Erweiterung'] = getExtension(fileName).toUpperCase();
-    data['Kategorie'] = getFormatLabel(fileName);
-    data['MIME-Typ'] = getMimeType(fileName);
+    data[_de ? 'Dateiname' : 'File name'] = fileName;
+    data[_de ? 'Dateigröße' : 'File size'] = formatExactBytes(fileSize);
+    data[_de ? 'Erweiterung' : 'Extension'] = getExtension(fileName).toUpperCase();
+    data[_de ? 'Kategorie' : 'Category'] = getFormatLabel(fileName);
+    data[_de ? 'MIME-Typ' : 'MIME type'] = getMimeType(fileName);
     if (modTime != null) {
-      data['Änderungsdatum'] = modTime;
+      data[_de ? 'Änderungsdatum' : 'Modified'] = modTime;
     }
 
     return data;

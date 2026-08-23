@@ -252,14 +252,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildSyncActionsWindows(context, activeJob, strings),
               SizedBox(height: theme.xl),
               fluent.Tooltip(
-                message: strings.exploreRemoteFiles,
+                message: ref.watch(networkStatusProvider).online
+                    ? strings.exploreRemoteFiles
+                    : strings.statusOffline,
                 child: fluent.Button(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
-                    );
-                  },
+                  // Offline gibt es nichts zu durchsuchen — ausgegraut.
+                  onPressed: !ref.watch(networkStatusProvider).online
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
+                          );
+                        },
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: Padding(
@@ -558,7 +563,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               const SizedBox(height: 12),
               Semantics(
-                label: strings.exploreRemoteFiles,
+                label: ref.watch(networkStatusProvider).online
+                    ? strings.exploreRemoteFiles
+                    : strings.statusOffline,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 44),
                   child: cupertino.CupertinoButton(
@@ -570,23 +577,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         Icon(
                           cupertino.CupertinoIcons.folder,
-                          color: theme.accent,
+                          color: ref.watch(networkStatusProvider).online
+                              ? theme.accent
+                              : theme.textSecondary,
                           size: 18,
                           semanticLabel: strings.exploreRemoteFiles,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           strings.exploreRemoteFiles,
-                          style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: ref.watch(networkStatusProvider).online
+                                ? theme.accent
+                                : theme.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
-                      );
-                    },
+                    // Offline gibt es nichts zu durchsuchen — ausgegraut.
+                    onPressed: !ref.watch(networkStatusProvider).online
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
+                            );
+                          },
                   ),
                 ),
               ),
@@ -774,7 +791,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             const SizedBox(height: 12),
             material.Tooltip(
-              message: strings.exploreRemoteFiles,
+              message: ref.watch(networkStatusProvider).online
+                  ? strings.exploreRemoteFiles
+                  : strings.statusOffline,
               child: material.OutlinedButton.icon(
                 icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
                 label: Text(strings.exploreRemoteFiles),
@@ -782,12 +801,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   minimumSize: const Size.fromHeight(48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
-                  );
-                },
+                // Offline gibt es nichts zu durchsuchen — ausgegraut.
+                onPressed: !ref.watch(networkStatusProvider).online
+                    ? null
+                    : () {
+                        Navigator.push(
+                          context,
+                          material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
+                        );
+                      },
               ),
             ),
             ],

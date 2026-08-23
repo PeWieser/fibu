@@ -25,6 +25,18 @@ import 'debug_log_screen.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  /// Lokalisiertes Label eines Sprachmodus (System / Deutsch / English).
+  String _localeModeLabel(AppStrings strings, AppLocaleMode mode) {
+    switch (mode) {
+      case AppLocaleMode.system:
+        return strings.languageModeSystem;
+      case AppLocaleMode.de:
+        return 'Deutsch';
+      case AppLocaleMode.en:
+        return 'English';
+    }
+  }
+
   void _navigateToCloudDrives(BuildContext context) {
     final platform = defaultTargetPlatform;
     final route = platform == TargetPlatform.windows
@@ -101,7 +113,7 @@ class SettingsScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  mode.displayName,
+                  _localeModeLabel(strings, mode),
                   style: TextStyle(
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -370,7 +382,7 @@ class SettingsScreen extends ConsumerWidget {
                           items: AppLocaleMode.values.map((mode) {
                             return fluent.ComboBoxItem<AppLocaleMode>(
                               value: mode,
-                              child: Text(mode.displayName),
+                              child: Text(_localeModeLabel(strings, mode)),
                             );
                           }).toList(),
                           onChanged: (mode) {
@@ -581,7 +593,7 @@ class SettingsScreen extends ConsumerWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(currentLocaleMode.displayName, style: TextStyle(color: theme.accent, fontSize: 15)),
+                          Text(_localeModeLabel(strings, currentLocaleMode), style: TextStyle(color: theme.accent, fontSize: 15)),
                           const SizedBox(width: 4),
                           const Icon(
                             cupertino.CupertinoIcons.chevron_up_chevron_down,
@@ -799,7 +811,7 @@ class SettingsScreen extends ConsumerWidget {
                   items: AppLocaleMode.values.map((mode) {
                     return material.DropdownMenuItem(
                       value: mode,
-                      child: Text(mode.displayName),
+                      child: Text(_localeModeLabel(strings, mode)),
                     );
                   }).toList(),
                   onChanged: (mode) {

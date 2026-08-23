@@ -150,7 +150,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     return [
       SizedBox(height: theme.md),
       Text(
-        field.label,
+        strings.providerFieldLabel(field.label),
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
       if (field.hint.isNotEmpty) ...[

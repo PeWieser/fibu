@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-08-23 — Einfache Sync-Verben, Offline-Gating, Zweisprachigkeits-Pass, Repo-Aufräumen, Doku (EN)
+
+### Sync-Meldungen: einfache Verben
+- Fortschrittstexte sind jetzt schlicht: **Überprüfen · Hochladen ·
+  Herunterladen · Aufräumen · Löschen · Vorbereiten · Fertig** — keine
+  Technik-Sätze, keine Dateinamen-Anhängsel, keine Emoji-Summen mehr.
+  Zähler („x von y“) kommen weiterhin separat an.
+- Abschluss: „Fertig — x hochgeladen · y heruntergeladen“ bzw.
+  „Alles aktuell.“
+
+### Offline-Gating
+- „Cloud-Dateien durchsuchen“ ist offline ausgegraut (alle Plattformen),
+  inkl. Tooltip/Label „Offline — keine Internetverbindung“.
+
+### Zweisprachigkeit (kompletter Pass)
+- **Provider-Feldlabels** (Registry, ~45 deutsche Labels) werden für die
+  englische Oberfläche über `AppStrings.providerFieldLabel` übersetzt.
+- Sprachauswahl „System (automatisch)“ lokalisiert (statt Enum-Hardcode).
+- Datei-Metadaten (Vorschau): Name/Größe/Erweiterung/Kategorie/MIME/Datum
+  sowie Format-Labels („JPG Bilddatei“ → „JPG image file“) DE/EN.
+- Sichtbare Engine-Fehler zweisprachig: keine Job-ID, unbekannter Fehler,
+  Foto-Berechtigung verweigert.
+- Bewusst NICHT übersetzt: Diagnose-Log-Zeilen (technisches Artefakt).
+
+### Repo-Aufräumen
+- Entfernt: alle Probe-Screenshots im Root, `task.md`, `todo.md`,
+  `walkthrough.md`, `test_report_style.md` sowie die veralteten
+  Snapshot-Dokumente `ABLAUF_AUDIT`, `APPLE_AUDIT`, `CODE_AUDIT`,
+  `IOS_AUDIT`, `TEST_MATRIX`, `UMSETZUNGSPLAN`.
+- Neu: `docs/ARCHITECTURE.md` (englisch, aktuell) — Sync-Engines,
+  Remote-Identitätsmodell, Widget-Pipeline, Hintergrund-Scheduling, CI.
+- README überarbeitet (englisch, aktuell): Anmelden statt Verbindungstest,
+  ein Status-Banner, Auto-Refresh, Widgets mit dynamischer App-Group,
+  Cloud-Löschungs-Propagation, Album-Zuordnung, Task-Import, Lizenzen.
+
+---
+
 ## 2026-08-23 — Widget-Fix für Sideloading, ehrliche Meldungen, Autofill-Komfort, Sofort-Prüfung
 
 ### Widget: App-Group dynamisch (iLoader & Co.)

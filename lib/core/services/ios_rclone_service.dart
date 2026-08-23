@@ -503,7 +503,7 @@ class IosRcloneService implements RcloneService {
                   bytesTransferred: 0,
                   totalBytes: 0,
                   percentage: 0,
-                  currentFile: '${AppStrings.current.syncDeletionScan}: $label',
+                  currentFile: AppStrings.current.syncDeletionScan,
                   eta: '',
                   speedBytesPerSecond: 0,
                 ));
@@ -537,15 +537,14 @@ class IosRcloneService implements RcloneService {
               'delete-local': s.syncPhaseDeleteLocal,
             };
             final label = phaseLabels[phase] ?? phase;
-            final fileName =
-                item.isEmpty ? '' : item.split('/').where((s) => s.isNotEmpty).last;
             final hasCounters = total > 0;
             progress.add(RcloneProgressEvent(
               jobId: jobId,
               bytesTransferred: 0,
               totalBytes: 0,
               percentage: hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
-              currentFile: fileName.isEmpty ? '$label…' : '$label: $fileName',
+              // Einfache Verben („Hochladen“) — Zähler kommen separat an.
+              currentFile: label,
               eta: hasCounters ? '' : '…',
               speedBytesPerSecond: 0,
               itemsDone: done,
@@ -569,10 +568,8 @@ class IosRcloneService implements RcloneService {
             totalBytes: 0,
             percentage: 100,
             currentFile: result.hasChanges
-                ? AppStrings.current.syncMirrorDoneSummary(
-                    '↑${result.uploaded} ↓${result.downloaded} '
-                    '🗑${result.trashedLocal}/${result.trashedRemote} + '
-                    '${result.deletedLocal}/${result.deletedRemote}')
+                ? AppStrings.current
+                    .syncDoneCounts(result.uploaded, result.downloaded)
                 : AppStrings.current.syncAllUpToDate,
             eta: '0s',
             speedBytesPerSecond: 0,
@@ -608,7 +605,7 @@ class IosRcloneService implements RcloneService {
 
       final rcJobId = (startRes['jobid'] as num?)?.toInt();
       if (rcJobId == null) {
-        _fail(jobId, 'rclone lieferte keine Job-ID zurück');
+        _fail(jobId, AppStrings.current.errNoJobId);
         return;
       }
       _rcJobIds[jobId] = rcJobId;
@@ -691,7 +688,7 @@ class IosRcloneService implements RcloneService {
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
         AppLog.info('sync', 'Job $jobId abgeschlossen: $transferred/$total Bytes übertragen');
       } else {
-        final err = status['error'] as String? ?? 'Unbekannter Fehler';
+        final err = status['error'] as String? ?? AppStrings.current.errUnknown;
         _fail(jobId, err);
       }
       return;
@@ -916,7 +913,7 @@ class IosRcloneService implements RcloneService {
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
       AppLog.error('media', 'Foto/Mediathek-Berechtigung verweigert – Staging abgebrochen');
-      throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
+      throw Exception(AppStrings.current.errPhotoPermission);
     }
 
     // Zwei Staging-Modi:
@@ -1175,7 +1172,7 @@ class IosRcloneService implements RcloneService {
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
       AppLog.error('media', 'Foto/Mediathek-Berechtigung verweigert');
-      throw Exception('Keine Berechtigung für Fotos und Mediathek (Zugriff verweigert)');
+      throw Exception(AppStrings.current.errPhotoPermission);
     }
 
     final trimmed = localPath.trim();
@@ -1418,8 +1415,6 @@ class IosRcloneService implements RcloneService {
           'delete-local': s.syncPhaseDeleteLocal,
         };
         final label = phaseLabels[phase] ?? phase;
-        final fileName =
-            item.isEmpty ? '' : item.split('/').where((s) => s.isNotEmpty).last;
         final hasCounters = total > 0;
         progress.add(RcloneProgressEvent(
           jobId: jobId,
@@ -1427,7 +1422,8 @@ class IosRcloneService implements RcloneService {
           totalBytes: 0,
           percentage:
               hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
-          currentFile: fileName.isEmpty ? '$label…' : '$label: $fileName',
+          // Einfache Verben („Hochladen“) — Zähler kommen separat an.
+          currentFile: label,
           eta: hasCounters ? '' : '…',
           speedBytesPerSecond: 0,
           itemsDone: done,
@@ -1445,10 +1441,8 @@ class IosRcloneService implements RcloneService {
         totalBytes: 0,
         percentage: 100,
         currentFile: result.hasChanges
-            ? AppStrings.current.syncMirrorDoneSummary(
-                '↑${result.uploaded} ↓${result.downloaded} '
-                '🗑${result.trashedLocal}/${result.trashedRemote} + '
-                '${result.deletedLocal}/${result.deletedRemote}')
+            ? AppStrings.current
+                .syncDoneCounts(result.uploaded, result.downloaded)
             : AppStrings.current.syncAllUpToDate,
         eta: '0s',
         speedBytesPerSecond: 0,

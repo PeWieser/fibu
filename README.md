@@ -34,7 +34,9 @@ Support for every cloud storage and protocol in the rclone ecosystem:
       └── WhatsApp/
           └── IMG_1337.JPG
   ```
-- **Two-way mirroring (echo):** Synchronizes deletions and changes cleanly between the local device and the cloud. A persistent local mirror lives at `Documents/FibuMirror` (including a tombstone deletion log).
+- **Two-way mirroring (echo, manifest-only):** Synchronizes changes and deletions in both directions without keeping permanent local copies — only metadata and a tombstone deletion log are stored (hidden in Application Support). Assets are exported on demand for upload and removed right after.
+- **Cloud deletions propagate to the device:** files deleted directly in the cloud (e.g. in the MEGA web app) are detected via listing-diff against the last provably-synced state and removed locally through the iOS system confirmation sheet (one batched dialog per run; declines are remembered). Safety brakes prevent an outage from ever wiping the library.
+- **Album-correct downloads:** files added in the cloud under `Photos/<Album>/…` are imported into the matching photo album (created if needed) instead of landing in Recents only.
 - **Collision-free staging filenames:** Empty or duplicated asset titles (iOS often returns null titles), screen recordings, live photos, and `/L0/001`-style asset IDs are deterministically uniquified per asset — target paths never resolve to directories.
 - **Incremental mode without duplicate storage:** Pure upload tasks stage into a transient cache folder that is deleted right after the upload — no permanent local copies of your photos. Uploads stay incremental on the remote (rclone skips identical size/modtime files).
 - **Album picker shows photo/video counts** per album (plus a grand total), loaded asynchronously via `assetCountAsync`.
@@ -48,8 +50,9 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - Enables fast incremental backups and offline browsing in the Cloud Explorer.
 
 ### 5. Resilient Offline & Network State Machine
-- **Live network status:** a central `networkStatusProvider` built on `connectivity_plus` (initial check + live stream). Going offline shows a banner on the dashboard immediately; when connectivity returns, the UI updates automatically.
-- **Sync blocker & global Wi-Fi-only:** No sync starts while offline; Wi-Fi-only is a single **global** setting that applies to the dashboard queue, single-task syncs, and the background scheduler.
+- **One calm status banner:** the dashboard shows exactly one line — grey (offline), accent (syncing), red (failed), amber (changes found — sync needed), green (up to date). It never claims success while nothing is configured.
+- **Auto-refresh, no refresh buttons:** remotes, quota and sync-needed state refresh automatically every 10 s (20 s in Low Power Mode), foreground-only, online-only, never during a sync. Opening the dashboard triggers an immediate check.
+- **Sync blocker & global Wi-Fi-only:** Sync and cloud-explorer actions are disabled while offline; Wi-Fi-only is a single **global** setting that applies to the dashboard queue, single-task syncs, and the background scheduler.
 - **Clear errors instead of hangs:** rclone calls use fast-fail connection options (15s connect timeouts, minimal retries) plus hard Dart timeouts — the real provider error (e.g. `couldn't login …`) is extracted from error details and shown clearly instead of eternal loading states.
 
 ### 6. Apple-Minimalist UI/UX Design
@@ -62,13 +65,15 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - **Live theme switching:** System light/dark changes are applied instantly (WidgetsBindingObserver → `appThemeProvider`), no app restart needed.
 
 ### 7. Real rclone Behaviour in the Wizard & Cloud Drive List
-- **Real connection test:** "Test connection" creates a temporary remote, lists its root, and deletes it again — errors (invalid credentials, unreachable host, bad S3 keys) surface *before* anything is saved. Adding a remote is **locked until the test passes** (or OAuth authorization completed); editing any credential field re-arms the test.
-- **iCloud Keychain autofill (iOS):** `AutofillGroup` with `AutofillHints.username`/`password` gives native QuickType suggestions; after a successful add, iOS offers to save the credentials.
-- **Provider-scoped credential suggestions:** Fibu additionally remembers credentials per rclone type (MEGA, S3, WebDAV, SFTP/FTP …) in the Keychain (via `flutter_secure_storage`) and offers them as tappable chips when adding another remote of the same provider.
+- **Real sign-in:** "Sign In" creates a temporary remote, lists its root, and deletes it again — errors (invalid credentials, unreachable host, bad S3 keys) surface *before* anything is saved. Adding a remote is **locked until sign-in succeeds** (or OAuth authorization completed); editing any credential field re-arms it.
+- **iCloud Keychain autofill (iOS):** `AutofillGroup` with `AutofillHints.username`/`password` gives native QuickType suggestions; the keyboard dismisses automatically once AutoFill has filled the password. Credentials are stored through a native Security.framework channel (no third-party storage plugin).
+- **Detected task import:** tasks stored on a remote (`.fibu/config.json`) are offered right after connecting — and any time later via the “+” menu on the Tasks tab (multi-select import). Remote references resolve dynamically: id → display name → provider type → the remote the config was found on.
 - **Per-remote storage info:** total quota from `getQuota` ("x of y used", "n/a" for providers without `about` support) **plus** the space Fibu itself occupies in the `fibu-backup` folder (computed recursively).
 
 ### 8. Convenience & Integrations (iOS)
+- **Home-screen widgets (3 sizes):** live sync state per task (ok / pending / never / error), last sync time, and a sync-needed indicator. Data flows through an App Group whose ID is resolved at runtime from the signing profile — so widgets keep working with sideload tools that rename app groups. Refreshed on app start/resume, after every task change, and by the 2-hour background run.
 - **Home-screen context menu:** Long-press the app icon → **"Sync Now"** (quick action, SF symbol) starts the sync queue immediately — works from cold start as well.
+- **Open-source licenses:** Settings → Legal shows the full auto-generated license list, including manually registered entries for the statically linked rclone (MIT) and gomobile (BSD-3).
 - **Diagnostics log:** Settings → "Sync Log & Diagnostics" shows every action with timestamps and severity (engine, rclone RPCs, remotes, media staging, syncs, offline events) — copyable for support. Everything is also appended to a persistent log file at `Documents/fibu.log` (next to `rclone.conf`, visible in the Files app under "On My iPhone").
 
 ---
@@ -76,13 +81,13 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 ## Project Structure
 
 ```text
-fibu win/
+fibu/
 ├── lib/
 │   ├── core/
 │   │   ├── localization/         # Bilingual (German & English) via AppStrings
 │   │   ├── services/             # RcloneService (timeouts/logging), RcloneProviderRegistry,
-│   │   │                         # SyncManifestService, AppLog, SecureStore (Apple Keychain),
-│   │   │                         # NetworkStatus, QuickActions, MirrorSyncEngine
+│   │   │                         # SyncManifestService, AppLog, SecureStore (native Keychain channel),
+│   │   │                         # NetworkStatus, AutoRefresh, QuickActions, mirror engines
 │   │   └── utils/                # File handlers, byte formatting
 │   ├── features/
 │   │   ├── dashboard/            # Overview, hero status, storage cards, explorer
@@ -137,5 +142,15 @@ flutter run -d android
 
 ---
 
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together (sync engines, remote identity model, widget pipeline, background scheduling, CI).
+- [`docs/ARBEITSLOG.md`](docs/ARBEITSLOG.md) — chronological work log of the ongoing development sessions (German).
+
+CI builds an unsigned iOS IPA on every push to `main` (`.github/workflows/build-ios.yml`); the artifact `ios-app-release` is attached to each run.
+
+---
+
 ## License
 MIT License. Built for secure, decentralized, and independent data backups.
+Bundled open-source components are listed in-app under Settings → Legal → Open-Source Licenses.

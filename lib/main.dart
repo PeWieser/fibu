@@ -11,6 +11,7 @@ import 'theme/theme.dart';
 import 'theme/ios_theme.dart';
 import 'core/localization/app_strings.dart';
 import 'core/services/app_log_service.dart';
+import 'core/services/auto_refresh_service.dart';
 import 'core/services/quick_actions_service.dart';
 import 'core/services/scheduler_service.dart';
 import 'core/services/widget_status_service.dart';
@@ -141,6 +142,9 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
     // in die Widget-Extension pushen.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(widgetStatusProvider.notifier).recomputeAndPush();
+      // Automatische Aktualisierung (ersetzt alle „Aktualisieren“-Buttons):
+      // 10 s normal, 20 s im Stromsparmodus — nur im Vordergrund und online.
+      ref.read(autoRefreshServiceProvider).start();
     });
 
     // iOS-Homescreen-Quick-Action „Jetzt synchronisieren“.
@@ -171,6 +175,10 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Auto-Refresh nur im Vordergrund laufen lassen (Akku!).
+    ref
+        .read(autoRefreshServiceProvider)
+        .setForeground(state == AppLifecycleState.resumed);
     // App kommt zurück in den Vordergrund → Sync-Bedarf neu bewerten und in
     // die Homescreen-Widgets pushen (hält Banner + Widgets aktuell, auch wenn
     // zwischenzeitlich fotografiert wurde).

@@ -19,6 +19,7 @@ import '../../../core/services/sync_config_service.dart';
 import '../../../core/localization/app_strings.dart';
 import 'tasks_controller.dart';
 import 'task_detail_screen.dart';
+import 'remote_task_import_screen.dart';
 
 /// Platform-adaptive Tasks and Backup Jobs screen.
 /// Renders layout dynamically based on current platform:
@@ -33,6 +34,10 @@ class TasksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final platform = defaultTargetPlatform;
+
+    // Erkannte Remote-Aufgaben im Hintergrund laden/aktuell halten — das
+    // Plus-Menü entscheidet damit sofort, ob es die Import-Option anbietet.
+    ref.watch(remoteTaskCandidatesProvider);
 
     if (platform == TargetPlatform.windows) {
       return _buildWindows(context, ref);
@@ -62,7 +67,7 @@ class TasksScreen extends ConsumerWidget {
             fluent.CommandBarButton(
               icon: Icon(fluent.FluentIcons.add, semanticLabel: strings.addTask),
               label: Text(strings.addTask),
-              onPressed: () => showAddEditTaskDialog(context, ref, null, TargetPlatform.windows),
+              onPressed: () => _handleAddTap(context, ref, TargetPlatform.windows),
             ),
           ],
         ),
@@ -187,7 +192,7 @@ class TasksScreen extends ConsumerWidget {
             padding: EdgeInsets.zero,
             onPressed: () {
               IosHaptics.light();
-              showAddEditTaskDialog(context, ref, null, TargetPlatform.iOS);
+              _handleAddTap(context, ref, TargetPlatform.iOS);
             },
             child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
           ),
@@ -307,7 +312,7 @@ class TasksScreen extends ConsumerWidget {
           tooltip: strings.addTask,
           backgroundColor: theme.accent,
           onPressed: () =>
-              _showAddEditTaskDialog(context, ref, null, TargetPlatform.android),
+              _handleAddTap(context, ref, TargetPlatform.android),
           child: const Icon(material.Icons.add,
               color: Color(0xFFFFFFFF), semanticLabel: 'Add Task'),
         ),
@@ -511,6 +516,122 @@ class TasksScreen extends ConsumerWidget {
       );
       return result ?? false;
     }
+  }
+
+  // =========================================================================
+  // PLUS-MENÜ: Neue Aufgabe ODER erkannte Remote-Aufgaben importieren
+  // =========================================================================
+
+  /// Tipp auf „+“: Gibt es auf den Cloud-Laufwerken erkannte, noch nicht
+  /// importierte Aufgaben, erscheint ein Menü (Neue Aufgabe / Importieren).
+  /// Sonst öffnet sich direkt die Aufgaben-Maske — kein unnötiger Zwischenschritt.
+  void _handleAddTap(BuildContext context, WidgetRef ref, TargetPlatform platform) {
+    final strings = ref.read(stringsProvider);
+    final candidates =
+        ref.read(remoteTaskCandidatesProvider).valueOrNull ?? const <BackupTask>[];
+    if (candidates.isEmpty) {
+      _showAddEditTaskDialog(context, ref, null, platform);
+      return;
+    }
+
+    if (platform == TargetPlatform.iOS) {
+      cupertino.showCupertinoModalPopup<void>(
+        context: context,
+        builder: (ctx) => cupertino.CupertinoActionSheet(
+          actions: [
+            cupertino.CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showAddEditTaskDialog(context, ref, null, platform);
+              },
+              child: Text(strings.newTaskOption),
+            ),
+            cupertino.CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openImportScreen(context, candidates, platform);
+              },
+              child: Text(strings.importDetectedTasksOption(candidates.length)),
+            ),
+          ],
+          cancelButton: cupertino.CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(strings.cancel),
+          ),
+        ),
+      );
+    } else if (platform == TargetPlatform.windows) {
+      fluent.showDialog<void>(
+        context: context,
+        builder: (ctx) => fluent.ContentDialog(
+          title: fluent.Text(strings.addTask),
+          actions: [
+            fluent.FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showAddEditTaskDialog(context, ref, null, platform);
+              },
+              child: Text(strings.newTaskOption,
+                  style: const TextStyle(color: Color(0xFFFFFFFF))),
+            ),
+            fluent.Button(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openImportScreen(context, candidates, platform);
+              },
+              child: Text(strings.importDetectedTasksOption(candidates.length)),
+            ),
+            fluent.Button(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(strings.cancel),
+            ),
+          ],
+        ),
+      );
+    } else {
+      material.showModalBottomSheet<void>(
+        context: context,
+        builder: (ctx) => material.SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.ListTile(
+                leading: const Icon(material.Icons.add, semanticLabel: 'New task'),
+                title: Text(strings.newTaskOption),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddEditTaskDialog(context, ref, null, platform);
+                },
+              ),
+              material.ListTile(
+                leading: const Icon(material.Icons.cloud_download_outlined,
+                    semanticLabel: 'Import tasks'),
+                title: Text(strings.importDetectedTasksOption(candidates.length)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openImportScreen(context, candidates, platform);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  void _openImportScreen(
+    BuildContext context,
+    List<BackupTask> candidates,
+    TargetPlatform platform,
+  ) {
+    final page = RemoteTaskImportScreen(candidates: candidates);
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute<int>(builder: (_) => page)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute<int>(builder: (_) => page)
+            : material.MaterialPageRoute<int>(builder: (_) => page));
+    Navigator.of(context).push(route);
   }
 
   // =========================================================================

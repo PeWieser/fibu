@@ -159,7 +159,6 @@ class RcloneProviderRegistry {
         ConfigFieldDefinition(
           key: 'user',
           label: 'E-Mail-Adresse',
-          hint: 'dein.name@beispiel.de',
         ),
         ConfigFieldDefinition(
           key: 'pass',

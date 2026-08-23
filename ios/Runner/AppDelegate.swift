@@ -68,6 +68,26 @@ import Rclone
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KeychainChannel") {
       KeychainChannel.register(with: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemInfoChannel") {
+      SystemInfoChannel.register(with: registrar.messenger())
+    }
+  }
+}
+
+/// Channel `fibu/system`: kleine System-Infos für die Flutter-Seite.
+/// Aktuell nur `lowPowerMode` (steuert das Auto-Refresh-Intervall: 10 s
+/// normal, 20 s im Stromsparmodus).
+final class SystemInfoChannel: NSObject {
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "fibu/system", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "lowPowerMode":
+        result(ProcessInfo.processInfo.isLowPowerModeEnabled)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }
 
@@ -83,9 +103,20 @@ final class WidgetStatusChannel: NSObject {
       if call.method == "setStatus",
          let dict = call.arguments as? [String: Any] {
         do {
+          // Diagnose: Ohne provisionierte App-Group (z. B. beim Sideload-
+          // Signieren verloren gegangen) kann das Widget NIE Daten sehen —
+          // das wird jetzt als Fehler gemeldet statt still verschluckt.
+          guard FileManager.default
+                  .containerURL(forSecurityApplicationGroupIdentifier: appGroup) != nil,
+                let defaults = UserDefaults(suiteName: appGroup) else {
+            result(FlutterError(
+              code: "app_group_unavailable",
+              message: "App-Group \(appGroup) ist nicht provisioniert — Widget kann keine Daten empfangen (Signierung prüfen: App Groups müssen für App UND Widget-Extension erhalten bleiben).",
+              details: nil))
+            return
+          }
           let data = try JSONSerialization.data(withJSONObject: dict)
-          if let json = String(data: data, encoding: .utf8),
-             let defaults = UserDefaults(suiteName: appGroup) {
+          if let json = String(data: data, encoding: .utf8) {
             defaults.set(json, forKey: statusKey)
             defaults.synchronize()
             #if canImport(WidgetKit) && !targetEnvironment(macCatalyst)

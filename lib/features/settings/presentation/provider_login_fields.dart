@@ -95,7 +95,6 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
         ConfigFieldDefinition(
           key: 'user',
           label: strings.emailOrUserLabel,
-          hint: 'name@beispiel.de',
         ),
         ConfigFieldDefinition(
           key: 'pass',

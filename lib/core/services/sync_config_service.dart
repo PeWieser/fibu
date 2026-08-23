@@ -372,3 +372,33 @@ final syncConfigServiceProvider = Provider<SyncConfigService>((ref) {
   final rclone = ref.watch(rcloneServiceProvider);
   return SyncConfigService(rclone);
 });
+
+/// Auf den Cloud-Laufwerken erkannte, noch NICHT importierte Aufgaben
+/// (aus `.fibu/config.json` aller verbundenen Remotes; Remote-Referenzen
+/// bereits dynamisch aufgelöst). Grundlage für „Erkannte Aufgaben
+/// importieren“ im Plus-Menü der Aufgaben-Liste.
+final remoteTaskCandidatesProvider =
+    FutureProvider<List<BackupTask>>((ref) async {
+  // BEWUSST ref.read statt watch für die Registry: Der Auto-Refresh
+  // invalidiert remoteEntriesProvider alle 10–20 s — die Remote-Configs
+  // (.fibu/config.json) sollen aber nur bei echten Änderungen neu geladen
+  // werden (Task-Liste ändert sich / Remote hinzugefügt → invalidate).
+  final entries = await ref.read(remoteRegistryServiceProvider).entries();
+  if (entries.isEmpty) return const [];
+  final localIds = ref.watch(tasksListProvider).map((t) => t.id).toSet();
+  final service = ref.watch(syncConfigServiceProvider);
+
+  final result = <BackupTask>[];
+  final seen = <String>{};
+  for (final entry in entries) {
+    final config = await service.readRemoteConfig(entry.id);
+    if (config == null) continue;
+    for (final task
+        in service.convertConfigToTasks(config, entry.id, null, entries)) {
+      if (localIds.contains(task.id)) continue;
+      if (!seen.add(task.id)) continue;
+      result.add(task);
+    }
+  }
+  return result;
+});

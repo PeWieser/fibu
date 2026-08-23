@@ -789,6 +789,25 @@ class AppStrings {
   String get openSourceLicensesSubtitle => isGerman
       ? 'Verwendete Bibliotheken und ihre Lizenzen'
       : 'Bundled libraries and their licenses';
+
+  // --- Status-Banner (ein Banner, klare Zustände) ---
+  String get statusOffline =>
+      isGerman ? 'Offline — keine Internetverbindung' : 'Offline — no internet connection';
+
+  // --- Plus-Menü & Remote-Task-Import ---
+  String get newTaskOption => isGerman ? 'Neue Aufgabe' : 'New Task';
+  String importDetectedTasksOption(int count) => isGerman
+      ? 'Erkannte Aufgaben importieren ($count)'
+      : 'Import detected tasks ($count)';
+  String get importRemoteTasksTitle =>
+      isGerman ? 'Aufgaben importieren' : 'Import Tasks';
+  String get importAction => isGerman ? 'Importieren' : 'Import';
+  String get remoteTasksExplanation => isGerman
+      ? 'Diese Aufgaben wurden auf deinen Cloud-Laufwerken gefunden (.fibu/config.json). Wähle aus, welche du übernehmen möchtest.'
+      : 'These tasks were found on your cloud drives (.fibu/config.json). Choose which ones to adopt.';
+  String tasksImportedSuccess(int count) => isGerman
+      ? (count == 1 ? '1 Aufgabe importiert.' : '$count Aufgaben importiert.')
+      : (count == 1 ? '1 task imported.' : '$count tasks imported.');
 }
 
 /// Riverpod provider delivering active AppStrings based on current AppLocale.

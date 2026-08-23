@@ -2,6 +2,51 @@
 
 ---
 
+## 2026-08-22 — Auto-Refresh statt Buttons, ein Status-Banner, Plus-Menü mit Remote-Import, Widget-Diagnose
+
+### Automatische Aktualisierung (Buttons weg)
+- Neuer `AutoRefreshService`: alle **10 s** (bzw. **20 s im Stromsparmodus**,
+  iOS `lowPowerModeEnabled` via neuem `fibu/system`-Channel) werden Remotes,
+  Quota und Sync-Bedarf aktualisiert — nur im Vordergrund, nur online, nie
+  während eines Syncs. Fibu-Beleg (rekursive Listung) bewusst nur jeder
+  6. Zyklus.
+- Alle „Aktualisieren“-Buttons entfernt: Dashboard, Cloud-Laufwerke,
+  Cloud-Explorer (Fehler-Retry bleibt).
+
+### Ein Status-Banner
+- Dashboard zeigt genau EIN ruhiges Banner, eine Zeile, nicht tappbar:
+  **Grau** (offline) → **Akzent** (Sync läuft) → **Rot** (Fehler) →
+  **Grau** (abgebrochen) → **Orange** (Sync fällig) → **Grün** (aktuell).
+- Separater Offline-Hinweis + „Aktivitätsprotokoll anzeigen“-Zeile entfernt
+  (Logs weiterhin unter Einstellungen → Diagnose-Log).
+
+### Sync-Button
+- Zusätzlich zum Lade-Gate jetzt auch **offline ausgegraut** (alle Plattformen).
+
+### Plus-Menü: verpassten Task-Import nachholen
+- Neuer `remoteTaskCandidatesProvider`: erkennt auf allen Remotes Aufgaben aus
+  `.fibu/config.json`, die lokal noch fehlen (Remote-Referenzen dynamisch
+  aufgelöst).
+- Tipp auf „+“: Gibt es Kandidaten → Apple-Action-Sheet („Neue Aufgabe“ /
+  „Erkannte Aufgaben importieren (N)“); sonst direkt die Aufgaben-Maske.
+- Neuer `RemoteTaskImportScreen`: Multiple-Choice-Auswahl, „Importieren“
+  oben rechts (alle drei Plattformen).
+
+### Anmeldefelder
+- Demo-E-Mail-Platzhalter („name@beispiel.de“) entfernt.
+
+### Widget-Diagnose
+- `fibu/widget`-Channel meldet jetzt einen expliziten Fehler, wenn die
+  App-Group `group.com.example.fibu` nicht provisioniert ist (häufigste
+  Ursache beim Sideload-Signieren) → sichtbar im fibu.log statt still ok.
+
+### Frage beantwortet (Cloud-Löschung ohne Fibu)
+- Ja: Erkennung basiert auf Listing-Diff gegen den „nachweislich gesynct“-
+  Zustand des letzten Laufs — kein Tombstone nötig. MEGA verschiebt in den
+  Rubbish Bin, den rclone nicht listet → Datei gilt als gelöscht.
+
+---
+
 ## 2026-08-22 — Cloud-Löschungen lokal, Album-Zuordnung beim Download, Quota-Auto-Refresh
 
 ### Mirror: Direkte Cloud-Löschungen kommen jetzt lokal an

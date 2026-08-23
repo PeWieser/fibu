@@ -1063,24 +1063,6 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                   ),
                 ),
                 const Spacer(),
-                fluent.Tooltip(
-                  message: strings.refresh,
-                  child: MouseRegion(
-                    cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                      child: fluent.IconButton(
-                        icon: _isRefreshing
-                            ? RotationTransition(
-                                turns: _rotationController,
-                                child: Icon(fluent.FluentIcons.refresh, size: 18, color: theme.accent, semanticLabel: strings.refresh),
-                              )
-                            : Icon(fluent.FluentIcons.refresh, size: 18, color: theme.textPrimary, semanticLabel: strings.refresh),
-                        onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
             SizedBox(height: theme.md),
@@ -1115,25 +1097,6 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudExplorerTitle),
         previousPageTitle: strings.back,
-        trailing: Semantics(
-          label: strings.refresh,
-          child: MouseRegion(
-            cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: cupertino.CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
-                child: _isRefreshing
-                    ? RotationTransition(
-                        turns: _rotationController,
-                        child: Icon(cupertino.CupertinoIcons.refresh, color: theme.accent, semanticLabel: strings.refresh),
-                      )
-                    : Icon(cupertino.CupertinoIcons.refresh, semanticLabel: strings.refresh),
-              ),
-            ),
-          ),
-        ),
       ),
       child: SafeArea(
         child: Padding(
@@ -1230,26 +1193,6 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
     return material.Scaffold(
       appBar: material.AppBar(
         title: Text(strings.cloudExplorerTitle),
-        actions: [
-          material.Tooltip(
-            message: strings.refresh,
-            child: MouseRegion(
-              cursor: _isLoading || _isRefreshing ? SystemMouseCursors.basic : SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: material.IconButton(
-                  icon: _isRefreshing
-                      ? RotationTransition(
-                          turns: _rotationController,
-                          child: Icon(material.Icons.refresh, color: theme.accent, semanticLabel: strings.refresh),
-                        )
-                      : Icon(material.Icons.refresh, semanticLabel: strings.refresh),
-                  onPressed: _isLoading || _isRefreshing ? null : () => _handleRefresh(showSuccessBanner: true),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Padding(
         padding: EdgeInsets.all(theme.md),

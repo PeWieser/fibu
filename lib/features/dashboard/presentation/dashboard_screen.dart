@@ -20,12 +20,11 @@ import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
-import 'widgets/dashboard_dialogs.dart';
 import 'cloud_explorer_screen.dart';
 
-/// Platform-adaptive Dashboard Screen. Renders layout dynamically based on current platform.
-/// Handles page-refresh commands with animated spinning indicators and feedback toasts,
-/// and provides rich contextual tooltips across cards, status banner, and actions.
+/// Platform-adaptive Dashboard Screen. Renders layout dynamically based on
+/// the current platform. Alle Live-Daten aktualisieren sich automatisch
+/// (AutoRefreshService) — keine manuellen Refresh-Buttons mehr.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -33,116 +32,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _spinController;
-  bool _isRefreshing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _spinController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-  }
-
-  @override
-  void dispose() {
-    _spinController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleRefresh(BuildContext context, AppStrings strings) async {
-    if (_isRefreshing) return;
-    IosHaptics.light();
-    setState(() => _isRefreshing = true);
-    _spinController.repeat();
-
-    ref.invalidate(remoteEntriesProvider);
-    ref.invalidate(remotesProvider);
-    ref.invalidate(primaryQuotaProvider);
-    // Auch die per-Remote-Quotas & den Fibu-Beleg frisch laden — sonst
-    // aktualisiert sich die Speicherkarte erst über Cloud-Laufwerke.
-    ref.invalidate(remoteQuotaProvider);
-    ref.invalidate(remoteFibuUsageProvider);
-
-    // Handlungsbedarf prüfen: Mediathek gegen den letzten Sync-Stand halten
-    // (billige Zählung, keine Exporte) — Ergebnis fließt in Banner + Widgets.
-    await ref.read(widgetStatusProvider.notifier).recomputeAndPush();
-
-    // Provide tactile feedback duration
-    await Future.delayed(const Duration(milliseconds: 650));
-
-    if (!mounted) return;
-    _spinController.stop();
-    _spinController.reset();
-    setState(() => _isRefreshing = false);
-
-    final needsSync = ref.read(widgetStatusProvider).needsSync;
-    _showRefreshFeedback(
-      this.context,
-      strings,
-      message: needsSync ? strings.syncNeededMessage : strings.checkedUpToDate,
-      isWarning: needsSync,
-    );
-  }
-
-  void _showRefreshFeedback(
-    BuildContext context,
-    AppStrings strings, {
-    required String message,
-    required bool isWarning,
-  }) {
-    final platform = defaultTargetPlatform;
-    if (platform == TargetPlatform.windows) {
-      fluent.displayInfoBar(
-        context,
-        builder: (context, close) => fluent.InfoBar(
-          title: fluent.Text(
-              isWarning ? strings.syncNeededBanner : strings.refreshedSuccess),
-          content: fluent.Text(message),
-          severity: isWarning
-              ? fluent.InfoBarSeverity.warning
-              : fluent.InfoBarSeverity.success,
-          onClose: close,
-        ),
-      );
-    } else if (platform == TargetPlatform.iOS) {
-      final overlay = Overlay.of(context);
-      final entry = OverlayEntry(
-        builder: (context) => Positioned(
-          bottom: 50.0,
-          left: 20.0,
-          right: 20.0,
-          child: SafeArea(
-            child: cupertino.CupertinoPopupSurface(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                child: Text(
-                  message,
-                  style: cupertino.CupertinoTheme.of(context).textTheme.textStyle,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      overlay.insert(entry);
-      Future.delayed(const Duration(seconds: 2), () {
-        if (entry.mounted) entry.remove();
-      });
-    } else {
-      material.ScaffoldMessenger.of(context).showSnackBar(
-        material.SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-          behavior: material.SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
@@ -292,28 +182,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           strings.navDashboard,
           style: fluent.FluentTheme.of(context).typography.title,
         ),
-        commandBar: fluent.CommandBar(
-          primaryItems: [
-            fluent.CommandBarButton(
-              icon: _isRefreshing
-                  ? const SizedBox(width: 16, height: 16, child: fluent.ProgressRing())
-                  : RotationTransition(
-                      turns: _spinController,
-                      child: Icon(fluent.FluentIcons.refresh, semanticLabel: strings.refresh),
-                    ),
-              label: Text(strings.refresh),
-              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
-            ),
-          ],
-        ),
       ),
       content: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: theme.xl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildOfflineHint(context, strings),
-            _buildClickableStatusBanner(context, activeJob, strings),
+            _buildStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             if (setupHint != null) ...[
               setupHint!,
@@ -465,13 +340,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
       );
     }
 
-    // Sync erst erlauben, wenn tasks.json fertig gelesen ist — sonst meldet
-    // ein zu früher Tipp fälschlich „keine aktiven Aufgaben“.
+    // Sync erst erlauben, wenn tasks.json fertig gelesen ist UND eine
+    // Internetverbindung besteht.
     final tasksLoaded = ref.watch(tasksLoadedProvider);
+    final online = ref.watch(networkStatusProvider).online;
+    final canSync = tasksLoaded && online;
     return fluent.Tooltip(
-      message: tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
+      message: !online
+          ? strings.statusOffline
+          : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
       child: fluent.FilledButton(
-        onPressed: tasksLoaded
+        onPressed: canSync
             ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
             : null,
         child: ConstrainedBox(
@@ -502,25 +381,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     final setupHint = _buildSetupHint(context, strings);
 
     return cupertino.CupertinoPageScaffold(
-      navigationBar: cupertino.CupertinoNavigationBar(
+      navigationBar: const cupertino.CupertinoNavigationBar(
         // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
-        middle: const SizedBox.shrink(),
-        trailing: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: Semantics(
-            label: strings.refresh,
-            child: cupertino.CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
-              child: _isRefreshing
-                  ? const cupertino.CupertinoActivityIndicator(radius: 9)
-                  : RotationTransition(
-                      turns: _spinController,
-                      child: Icon(cupertino.CupertinoIcons.refresh, size: 22, semanticLabel: strings.refresh),
-                    ),
-            ),
-          ),
-        ),
+        // Kein Refresh-Button mehr — alles aktualisiert sich automatisch.
+        middle: SizedBox.shrink(),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -533,8 +397,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-              _buildOfflineHint(context, strings),
-              _buildClickableStatusBanner(context, activeJob, strings),
+                _buildStatusBanner(context, activeJob, strings),
               SizedBox(height: theme.lg),
               if (setupHint != null) ...[
                 setupHint!,
@@ -624,17 +487,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
                 )
               else
                 Semantics(
-                  label: ref.watch(tasksLoadedProvider)
-                      ? strings.syncAll
-                      : strings.syncButtonWaitTasks,
+                  label: !ref.watch(networkStatusProvider).online
+                      ? strings.statusOffline
+                      : (ref.watch(tasksLoadedProvider)
+                          ? strings.syncAll
+                          : strings.syncButtonWaitTasks),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: cupertino.CupertinoButton.filled(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       borderRadius: BorderRadius.circular(theme.radiusSm),
-                      // Ausgegraut, bis tasks.json gelesen ist — sonst meldet
-                      // ein zu früher Tipp fälschlich „keine aktiven Aufgaben“.
-                      onPressed: !ref.watch(tasksLoadedProvider)
+                      // Ausgegraut, bis tasks.json gelesen ist UND online —
+                      // offline kann kein Backup laufen.
+                      onPressed: !ref.watch(tasksLoadedProvider) ||
+                              !ref.watch(networkStatusProvider).online
                           ? null
                           : () {
                               IosHaptics.medium();
@@ -769,24 +635,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
       appBar: material.AppBar(
         title: Text(strings.navDashboard),
         elevation: 0,
-        actions: [
-          material.Tooltip(
-            message: strings.refresh,
-            child: material.IconButton(
-              icon: _isRefreshing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: material.CircularProgressIndicator(strokeWidth: 2.5),
-                    )
-                  : RotationTransition(
-                      turns: _spinController,
-                      child: Icon(material.Icons.refresh, semanticLabel: strings.refresh),
-                    ),
-              onPressed: _isRefreshing ? null : () => _handleRefresh(context, strings),
-            ),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(theme.lg),
@@ -794,7 +642,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildOfflineHint(context, strings),
-            _buildClickableStatusBanner(context, activeJob, strings),
+            _buildStatusBanner(context, activeJob, strings),
             SizedBox(height: theme.lg),
             if (setupHint != null) ...[
               setupHint!,
@@ -865,12 +713,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
               )
             else
               material.Tooltip(
-                message: ref.watch(tasksLoadedProvider)
-                    ? strings.syncAll
-                    : strings.syncButtonWaitTasks,
+                message: !ref.watch(networkStatusProvider).online
+                    ? strings.statusOffline
+                    : (ref.watch(tasksLoadedProvider)
+                        ? strings.syncAll
+                        : strings.syncButtonWaitTasks),
                 child: material.ElevatedButton.icon(
-                  // Ausgegraut, bis tasks.json gelesen ist.
-                  onPressed: ref.watch(tasksLoadedProvider)
+                  // Ausgegraut, bis tasks.json gelesen ist UND online.
+                  onPressed: ref.watch(tasksLoadedProvider) &&
+                          ref.watch(networkStatusProvider).online
                       ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
                       : null,
                   icon: const Icon(material.Icons.sync, semanticLabel: 'Sync'),
@@ -950,93 +801,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     );
   }
 
-  /// Live-Offline-Hinweis: sichtbar, solange keine Internetverbindung besteht.
-  /// Verschwindet automatisch (live über networkStatusProvider), sobald die
-  /// Verbindung zurückkehrt.
-  Widget _buildOfflineHint(BuildContext context, AppStrings strings) {
-    final theme = context.theme;
-    final net = ref.watch(networkStatusProvider);
-    if (net.online) return const SizedBox.shrink();
-
-    final platform = defaultTargetPlatform;
-    final icon = platform == TargetPlatform.windows
-        ? fluent.FluentIcons.error
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoIcons.wifi_slash
-            : material.Icons.wifi_off);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: theme.md),
-      child: Semantics(
-        label: '${strings.offlineBannerTitle}. ${strings.offlineBannerMessage}',
-        child: Container(
-          padding: EdgeInsets.all(theme.md),
-          decoration: BoxDecoration(
-            color: theme.offline.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(theme.radiusSm),
-            border: Border.all(color: theme.offline.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: theme.offline, size: 22, semanticLabel: strings.offlineBannerTitle),
-              SizedBox(width: theme.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.offlineBannerTitle.toUpperCase(),
-                      style: TextStyle(
-                        color: theme.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      strings.offlineBannerMessage,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.3),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- Clickable Status Banner Wrapper ---
-  Widget _buildClickableStatusBanner(BuildContext context, ActiveJobState job, AppStrings strings) {
-    final platform = defaultTargetPlatform;
-    final bannerWidget = GestureDetector(
-      onTap: () => showSyncLogsDialog(context, job.logs, job.status),
-      behavior: HitTestBehavior.opaque,
-      child: Semantics(
-        label: '${strings.activityLogsTitle}. ${strings.viewActivityLogs}',
-        button: true,
-        child: _buildGlobalStatusWidget(context, job.status, strings),
-      ),
-    );
-
-    if (platform == TargetPlatform.windows) {
-      return fluent.Tooltip(
-        message: strings.tooltipSyncBanner,
-        child: bannerWidget,
-      );
-    } else if (platform == TargetPlatform.iOS) {
-      return Semantics(
-        label: strings.tooltipSyncBanner,
-        child: bannerWidget,
-      );
-    }
-
-    return material.Tooltip(
-      message: strings.tooltipSyncBanner,
-      child: bannerWidget,
-    );
+  /// Ein einziges, ruhiges Status-Banner — nicht tappbar, eine Zeile.
+  /// Zustände: Offline (grau) → Sync läuft (Akzent) → Fehler (rot) →
+  /// Abgebrochen (grau) → Sync fällig (orange) → Alles aktuell (grün).
+  Widget _buildStatusBanner(BuildContext context, ActiveJobState job, AppStrings strings) {
+    return _buildGlobalStatusWidget(context, job.status, strings);
   }
 
   // --- Common Helper Widgets ---
@@ -1046,58 +815,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
     String statusText;
     IconData icon;
 
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+
     // Handlungsbedarf (Mediathek geändert seit letztem Sync / Task nie
     // gelaufen): Im Ruhezustand wird das grüne Banner orange.
     final needsSync = ref.watch(widgetStatusProvider).needsSync;
+    // Offline schlägt alles außer einem aktiv laufenden Sync-Status.
+    final online = ref.watch(networkStatusProvider).online;
 
-    switch (status) {
-      case RcloneJobStatus.pending:
-      case RcloneJobStatus.syncing:
-        statusColor = theme.accent;
-        statusText = strings.syncActive;
-        icon = defaultTargetPlatform == TargetPlatform.windows
-            ? fluent.FluentIcons.sync_status
-            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.arrow_2_circlepath : material.Icons.sync);
-        break;
-      case RcloneJobStatus.failed:
-        statusColor = theme.error;
-        statusText = strings.syncFailed;
-        icon = defaultTargetPlatform == TargetPlatform.windows
-            ? fluent.FluentIcons.error
-            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.exclamationmark_triangle : material.Icons.error);
-        break;
-      case RcloneJobStatus.cancelled:
-        statusColor = theme.offline;
-        statusText = strings.syncCancelled;
-        icon = defaultTargetPlatform == TargetPlatform.windows
-            ? fluent.FluentIcons.cancel
-            : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.xmark_circle : material.Icons.cancel);
-        break;
-      case RcloneJobStatus.completed:
-        if (needsSync) {
-          statusColor = theme.warning;
-          statusText = strings.syncNeededBanner;
-          icon = defaultTargetPlatform == TargetPlatform.windows
-              ? fluent.FluentIcons.warning
-              : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.exclamationmark_circle : material.Icons.warning_amber);
-        } else {
-          statusColor = theme.success;
-          statusText = strings.allFilesSynced;
-          icon = defaultTargetPlatform == TargetPlatform.windows
-              ? fluent.FluentIcons.completed
-              : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.check_mark_circled : material.Icons.check_circle);
-        }
-        break;
+    if (!online) {
+      statusColor = theme.offline;
+      statusText = strings.statusOffline;
+      icon = isWindows
+          ? fluent.FluentIcons.error
+          : (isIOS ? cupertino.CupertinoIcons.wifi_slash : material.Icons.wifi_off);
+    } else {
+      switch (status) {
+        case RcloneJobStatus.pending:
+        case RcloneJobStatus.syncing:
+          statusColor = theme.accent;
+          statusText = strings.syncActive;
+          icon = isWindows
+              ? fluent.FluentIcons.sync_status
+              : (isIOS ? cupertino.CupertinoIcons.arrow_2_circlepath : material.Icons.sync);
+          break;
+        case RcloneJobStatus.failed:
+          statusColor = theme.error;
+          statusText = strings.syncFailed;
+          icon = isWindows
+              ? fluent.FluentIcons.error
+              : (isIOS ? cupertino.CupertinoIcons.exclamationmark_triangle : material.Icons.error);
+          break;
+        case RcloneJobStatus.cancelled:
+          statusColor = theme.offline;
+          statusText = strings.syncCancelled;
+          icon = isWindows
+              ? fluent.FluentIcons.cancel
+              : (isIOS ? cupertino.CupertinoIcons.xmark_circle : material.Icons.cancel);
+          break;
+        case RcloneJobStatus.completed:
+          if (needsSync) {
+            statusColor = theme.warning;
+            statusText = strings.syncNeededBanner;
+            icon = isWindows
+                ? fluent.FluentIcons.warning
+                : (isIOS ? cupertino.CupertinoIcons.exclamationmark_circle : material.Icons.warning_amber);
+          } else {
+            statusColor = theme.success;
+            statusText = strings.allFilesSynced;
+            icon = isWindows
+                ? fluent.FluentIcons.completed
+                : (isIOS ? cupertino.CupertinoIcons.check_mark_circled : material.Icons.check_circle);
+          }
+          break;
+      }
     }
 
-    final chevronIcon = defaultTargetPlatform == TargetPlatform.windows
-        ? fluent.FluentIcons.chevron_right
-        : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.chevron_forward : material.Icons.chevron_right);
-
-    final infoIcon = defaultTargetPlatform == TargetPlatform.windows
-        ? fluent.FluentIcons.info
-        : (defaultTargetPlatform == TargetPlatform.iOS ? cupertino.CupertinoIcons.info_circle : material.Icons.info_outline);
-
+    // Ein Banner, eine Zeile: Icon + Status. Nicht tappbar, kein Chevron.
     return Container(
       padding: EdgeInsets.all(theme.md),
       constraints: const BoxConstraints(minHeight: 52),
@@ -1111,45 +886,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTi
           Icon(icon, color: statusColor, size: 24, semanticLabel: statusText),
           SizedBox(width: theme.md),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    color: theme.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(
-                      infoIcon,
-                      size: 12,
-                      color: theme.textSecondary,
-                      semanticLabel: strings.viewActivityLogs,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      strings.viewActivityLogs,
-                      style: TextStyle(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            child: Text(
+              statusText,
+              style: TextStyle(
+                color: theme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
-          ),
-          Icon(
-            chevronIcon,
-            color: statusColor,
-            size: 16,
-            semanticLabel: strings.viewActivityLogs,
           ),
         ],
       ),

@@ -118,17 +118,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           mainAxisAlignment: MainAxisAlignment.end,
           primaryItems: [
             fluent.CommandBarButton(
-              icon: _isRefreshing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: fluent.ProgressRing(strokeWidth: 2.0),
-                    )
-                  : const Icon(fluent.FluentIcons.refresh, size: 16, semanticLabel: 'Refresh'),
-              label: Text(strings.refresh),
-              onPressed: _isRefreshing ? null : _handleRefresh,
-            ),
-            fluent.CommandBarButton(
               icon: const Icon(fluent.FluentIcons.add, size: 16, semanticLabel: 'Add Drive'),
               label: Text(strings.addCloudDrive),
               onPressed: () => _openAddRemoteWizard(context, TargetPlatform.windows),
@@ -257,20 +246,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                child: cupertino.CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: _isRefreshing ? null : _handleRefresh,
-                  child: _isRefreshing
-                      ? const cupertino.CupertinoActivityIndicator()
-                      : const Icon(cupertino.CupertinoIcons.arrow_clockwise, semanticLabel: 'Refresh'),
-                ),
-              ),
-            ),
-            SizedBox(width: theme.xs),
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: ConstrainedBox(
@@ -411,23 +386,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         title: Text(strings.cloudDrivesTitle),
         elevation: 0,
         actions: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              child: material.IconButton(
-                icon: _isRefreshing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: material.CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : const Icon(material.Icons.refresh, semanticLabel: 'Refresh'),
-                onPressed: _isRefreshing ? null : _handleRefresh,
-                tooltip: strings.refresh,
-              ),
-            ),
-          ),
           material.IconButton(
             icon: const Icon(material.Icons.add, semanticLabel: 'Add Drive'),
             tooltip: strings.addCloudDrive,
@@ -1023,6 +981,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       // Config-Erkennung aber die Kennung verwenden (die rclone kennt).
       final displayName = ref.read(remoteDisplayNameProvider(addedRemoteName));
       _showNotification(strings.driveAddedSuccess(displayName), isError: false);
+      // Neu erreichbare Remote-Configs für das Plus-Menü der Aufgaben laden.
+      ref.invalidate(remoteTaskCandidatesProvider);
       await _checkAndPromptRemoteConfig(addedRemoteName, platform);
     }
   }
@@ -1055,6 +1015,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               localRemotes,
             );
         ref.read(tasksListProvider.notifier).importTasks(tasks);
+        ref.invalidate(remoteTaskCandidatesProvider);
         
         // Download existing cloud files to local task directory
         for (final task in tasks) {

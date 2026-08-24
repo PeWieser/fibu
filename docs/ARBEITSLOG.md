@@ -2,6 +2,25 @@
 
 ---
 
+## 2026-08-24 — Setup-Hinweis gestaffelt, Sync-Banner ehrlich, Remote-Picker für Union/Crypt
+
+### Dashboard Setup-Hinweis
+- **0 Laufwerke + 0 Aufgaben** → nur „Laufwerk hinzufügen“ (kein „Aufgabe erstellen“ mehr daneben).
+- **Laufwerk vorhanden, keine Aufgabe** → nur „Aufgabe erstellen“.
+- Beides vorhanden → normales Dashboard. Reihenfolge bewusst: ohne Ziel wäre eine Aufgabe sinnlos.
+
+### Sync-Banner (needsSync bleibt stehen)
+- Bug: Gelbes Banner „Änderungen gefunden — Sync fällig“ blitzte kurz auf und sprang zurück auf grün „Alle Dateien synchronisiert“, obwohl lokal und remote nicht übereinstimmten.
+- Ursache: `recomputeAndPush` setzte `needsSync` nur beim Übergang `ok → pending`. War der Status schon `pending`/`never`/`error`, wurde `needsSync` wieder `false`.
+- Fix: Jeder Status außer `ok` hält `needsSync` dauerhaft; Fehler werden am neuen Task-Stand gemessen; `reportTaskRun` bewertet alle Tasks, nicht nur den zuletzt gelaufenen.
+
+### Virtuelle Backends: Multiple-Choice statt Freitext
+- Union, Crypt, Combine, Alias, Chunker, Compress: statt `drive1:pfad drive2:pfad` tippen erscheint eine Auswahl der bereits verbundenen Cloud-Laufwerke (Single bzw. Multi).
+- Ohne Basis-Laufwerk: klarer Hinweis „Zuerst ein normales Cloud-Laufwerk verbinden“.
+- `ProviderAuth.buildConfig` formatiert die Auswahl rclone-konform (`id:`, Union-Liste, Combine `driveN=id:`).
+
+---
+
 ## 2026-08-23 — Letztes Backup sichtbar, ruhiger Balken, klügere Zielordner-Wahl, Widgets iOS-17-fix, ein Lizenz-Dokument
 
 ### Dashboard

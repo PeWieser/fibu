@@ -69,5 +69,35 @@ void main() {
         isNull,
       );
     });
+
+    test('buildConfig formats remote-picker selections for union/crypt/combine', () async {
+      final union = RcloneProviderRegistry.findById('union')!;
+      final unionCfg = await ProviderAuth.buildConfig(
+        providerId: 'union',
+        descriptor: union,
+        values: {'remotes': 'fibu-aaaa: fibu-bbbb:'},
+        obscure: (p) async => p,
+      );
+      expect(unionCfg['remotes'], 'fibu-aaaa: fibu-bbbb:');
+
+      final crypt = RcloneProviderRegistry.findById('crypt')!;
+      final cryptCfg = await ProviderAuth.buildConfig(
+        providerId: 'crypt',
+        descriptor: crypt,
+        values: {'remote': 'fibu-cccc:', 'password': 'pw'},
+        obscure: (p) async => 'o:$p',
+      );
+      expect(cryptCfg['remote'], 'fibu-cccc:');
+      expect(cryptCfg['password'], 'o:pw');
+
+      final combine = RcloneProviderRegistry.findById('combine')!;
+      final combineCfg = await ProviderAuth.buildConfig(
+        providerId: 'combine',
+        descriptor: combine,
+        values: {'upstreams': 'fibu-aaaa: fibu-bbbb:'},
+        obscure: (p) async => p,
+      );
+      expect(combineCfg['upstreams'], 'drive1=fibu-aaaa: drive2=fibu-bbbb:');
+    });
   });
 }

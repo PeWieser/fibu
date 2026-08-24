@@ -241,6 +241,10 @@ class ProviderAuth {
   }
 
   /// Baut die rclone-Config. Geheimnisse werden über [obscure] verdunkelt.
+  ///
+  /// Remote-Picker-Felder speichern IDs als „id:“ (single) bzw.
+  /// „id1: id2:“ (multi). Für Combine formatiert diese Methode das zu
+  /// rclone-konformem „name=id: name2=id2:“ um.
   static Future<Map<String, String>> buildConfig({
     required String providerId,
     required RcloneProviderDescriptor? descriptor,
@@ -250,6 +254,7 @@ class ProviderAuth {
   }) async {
     final config = <String, String>{...staticConfig(providerId)};
     final fields = descriptor?.fields ?? const <ConfigFieldDefinition>[];
+    final type = rcloneType(providerId);
 
     if (fields.isEmpty && !isOAuth(descriptor)) {
       // Fallback für unbekannte Typen: user/pass/host/port.
@@ -264,8 +269,15 @@ class ProviderAuth {
     } else {
       for (final field in fields) {
         final raw = values[field.key] ?? field.defaultValue ?? '';
-        final value = raw.trim();
+        var value = raw.trim();
         if (value.isEmpty) continue;
+        if (field.remotePicker != RemotePickerMode.none) {
+          value = _formatRemotePickerValue(
+            type: type,
+            fieldKey: field.key,
+            raw: value,
+          );
+        }
         config[field.key] = field.isSecret ? await obscure(value) : value;
       }
     }
@@ -275,6 +287,45 @@ class ProviderAuth {
           '{"access_token":"$oauthToken","token_type":"Bearer","expiry":"0001-01-01T00:00:00Z"}';
     }
     return config;
+  }
+
+  /// Formatiert die Auswahl aus dem Remote-Picker für rclone.
+  /// Single → „id:“; Multi/Union → „id1: id2:“; Combine → „n1=id1: n2=id2:“.
+  static String _formatRemotePickerValue({
+    required String type,
+    required String fieldKey,
+    required String raw,
+  }) {
+    final tokens = raw
+        .split(RegExp(r'\s+'))
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return raw;
+
+    // Bereits combine-Format belassen.
+    if (tokens.every((t) => t.contains('='))) return tokens.join(' ');
+
+    final ids = <String>[];
+    for (final t in tokens) {
+      final colon = t.indexOf(':');
+      final id = colon >= 0 ? t.substring(0, colon) : t;
+      if (id.isEmpty) continue;
+      ids.add(id);
+    }
+    if (ids.isEmpty) return raw;
+
+    if (type == 'combine' || fieldKey == 'upstreams') {
+      // rclone combine: "drive1=remote1: drive2=remote2:"
+      final parts = <String>[];
+      for (var i = 0; i < ids.length; i++) {
+        parts.add('drive${i + 1}=${ids[i]}:');
+      }
+      return parts.join(' ');
+    }
+
+    // union remotes / crypt remote / alias / …
+    return ids.map((id) => '$id:').join(' ');
   }
 
   /// null wenn gültig, sonst ein kurzer Hinweis (kein Jargon).

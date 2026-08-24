@@ -41,6 +41,33 @@ void main() {
       expect(mega, isNotNull);
       expect(mega!.authType, AuthType.credentials);
     });
+
+    test('virtual backends expose remote picker instead of free-text', () {
+      final union = RcloneProviderRegistry.findById('union');
+      expect(union, isNotNull);
+      final unionRemotes =
+          union!.fields.firstWhere((f) => f.key == 'remotes');
+      expect(unionRemotes.remotePicker, RemotePickerMode.multi);
+
+      final crypt = RcloneProviderRegistry.findById('crypt');
+      expect(crypt, isNotNull);
+      final cryptRemote =
+          crypt!.fields.firstWhere((f) => f.key == 'remote');
+      expect(cryptRemote.remotePicker, RemotePickerMode.single);
+
+      final combine = RcloneProviderRegistry.findById('combine');
+      expect(combine, isNotNull);
+      final upstreams =
+          combine!.fields.firstWhere((f) => f.key == 'upstreams');
+      expect(upstreams.remotePicker, RemotePickerMode.multi);
+
+      final alias = RcloneProviderRegistry.findById('alias');
+      expect(alias, isNotNull);
+      expect(
+        alias!.fields.firstWhere((f) => f.key == 'remote').remotePicker,
+        RemotePickerMode.single,
+      );
+    });
   });
 
   group('SyncManifest Serialization Tests', () {

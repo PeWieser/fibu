@@ -209,22 +209,31 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
         final existing = state.tasks.where((s) => s.taskId == id);
         if (existing.isNotEmpty) {
           var st = existing.first;
-          if (isMedia &&
-              st.status == 'ok' &&
-              st.mediaCountAtLastSync != countNow) {
-            // Bibliothek hat seit dem letzten erfolgreichen Sync gedreht.
+          // Bereits ausstehend / nie gelaufen / Fehler → Sync-Bedarf bleibt.
+          // Früher wurde needsSync nur beim Übergang ok→pending gesetzt;
+          // sobald der Status schon „pending“ war, fiel das Banner danach
+          // fälschlich auf „Alles synchronisiert“ zurück.
+          if (st.status == 'never' ||
+              st.status == 'pending' ||
+              st.status == 'error') {
             needsSync = true;
-            st = WidgetTaskState(
-              taskId: st.taskId,
-              name: st.name,
-              status: 'pending',
-              lastSyncIso: st.lastSyncIso,
-              mediaCountAtLastSync: st.mediaCountAtLastSync,
-            );
+          }
+          if (isMedia && st.mediaCountAtLastSync != countNow) {
+            // Bibliothek hat sich seit dem letzten erfolgreichen Sync geändert.
+            needsSync = true;
+            if (st.status == 'ok') {
+              st = WidgetTaskState(
+                taskId: st.taskId,
+                name: st.name,
+                status: 'pending',
+                lastSyncIso: st.lastSyncIso,
+                mediaCountAtLastSync: st.mediaCountAtLastSync,
+              );
+            }
           }
           tasks.add(st);
         } else {
-          // Nie gesynct → Widget zeigt „ausstehend".
+          // Nie gesynct → Widget zeigt „ausstehend“.
           needsSync = true;
           tasks.add(WidgetTaskState(
             taskId: id,
@@ -236,7 +245,8 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
         }
       }
 
-      final hasError = state.tasks.any((t) => t.status == 'error');
+      // Fehler am NEUEN Task-Stand messen (nicht am veralteten state.tasks).
+      final hasError = tasks.any((t) => t.status == 'error');
       state = state.copyWith(
         tasks: tasks,
         activeTaskCount: activeTasks.length,
@@ -273,11 +283,19 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
       updated.add(item);
     }
 
+    // needsSync über ALLE Tasks bewerten — ein erfolgreicher Einzel-Lauf
+    // darf andere ausstehende Tasks nicht als „alles aktuell“ maskieren.
+    final stillNeeds = error != null ||
+        updated.any((t) =>
+            t.status == 'never' ||
+            t.status == 'pending' ||
+            t.status == 'error');
+
     state = state.copyWith(
       tasks: updated,
       lastSyncIso: now,
       lastError: error ?? '',
-      needsSync: error != null,
+      needsSync: stillNeeds,
     );
     await _persist();
     await _pushToWidget();

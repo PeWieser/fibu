@@ -49,16 +49,12 @@ void main() {
         // Verify Windows Fluent scaffold elements
         expect(find.byType(fluent.ScaffoldPage), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
-        
-        // Global sync status defaults to completed
-        expect(find.text(strings.allFilesSynced), findsOneWidget);
-        
-        // Storage card should render for Windows layout
-        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
-        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
 
-        // Verify Sync All action is present
-        expect(find.text(strings.syncAll), findsOneWidget);
+        // Mock hat Remotes, aber keine Tasks → nur „Aufgabe erstellen“.
+        // Kein Pseudo-Erfolg „Alles synchronisiert“ ohne Aufgabe.
+        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.addCloudDrive), findsNothing);
+        expect(find.text(strings.allFilesSynced), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -85,10 +81,10 @@ void main() {
         // Sticky large-title navigation bar (title stays visible while scrolling)
         expect(find.byType(cupertino.CupertinoSliverNavigationBar), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
-        
-        // Storage card renders for iOS Cupertino
-        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
-        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
+
+        // Mit Mock-Remotes ohne Tasks: nur Aufgabe erstellen.
+        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.addCloudDrive), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -115,10 +111,9 @@ void main() {
         expect(find.byType(material.Scaffold), findsOneWidget);
         expect(find.byType(material.AppBar), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
-        
-        // Storage card renders for Android Material 3
-        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
-        expect(find.text(strings.cloudBackupStorage), findsOneWidget);
+
+        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.addCloudDrive), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -153,6 +148,11 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+
+        // Mit Task + Remotes: normales Dashboard (kein Setup-Hinweis).
+        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
+        expect(find.text(strings.addTask), findsNothing);
+        expect(find.text(strings.addCloudDrive), findsNothing);
 
         // Identify and tap the Sync All button
         final buttonFinder = find.widgetWithText(fluent.FilledButton, strings.syncAll);

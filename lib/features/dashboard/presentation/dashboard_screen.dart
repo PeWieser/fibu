@@ -69,9 +69,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  /// Liefert den Setup-Hinweis, solange Cloud-Laufwerk und/oder Aufgabe fehlen.
-  /// Jede Zeile ist tappbar und führt direkt zur fehlenden Aktion:
-  /// Laufwerk → Cloud-Laufwerke, Aufgabe → Aufgaben-Tab. null, wenn alles da ist.
+  /// Liefert den Setup-Hinweis für den nächsten fehlenden Schritt.
+  ///
+  /// Reihenfolge (bewusst nur EIN Hinweis, nie beide gleichzeitig):
+  ///  1. Kein Cloud-Laufwerk → nur „Laufwerk hinzufügen“
+  ///  2. Laufwerk da, aber keine Aufgabe → nur „Aufgabe erstellen“
+  ///  3. Beides da → null (normales Dashboard)
   Widget? _buildSetupHint(BuildContext context, AppStrings strings) {
     final remotesAsync = ref.watch(remotesProvider);
     // Erst anzeigen, wenn Remotes UND Task-Liste wirklich geladen sind —
@@ -86,13 +89,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final theme = context.theme;
     final platform = defaultTargetPlatform;
 
+    // Ohne Laufwerk zuerst das Laufwerk — eine Aufgabe ohne Ziel wäre sinnlos.
+    // Erst wenn mindestens ein Laufwerk existiert, die Aufgabe anbieten.
     final rows = <Widget>[
       if (!hasRemotes)
         _setupActionRow(
-            context, theme, strings.addCloudDrive, () => _openCloudDrives(context)),
-      if (!hasTasks)
+            context, theme, strings.addCloudDrive, () => _openCloudDrives(context))
+      else if (!hasTasks)
         _setupActionRow(context, theme, strings.addTask, _goToTasks),
     ];
+    if (rows.isEmpty) return null;
 
     final divider = Container(
         height: 0.5, color: theme.textSecondary.withValues(alpha: 0.2));

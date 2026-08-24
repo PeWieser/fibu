@@ -21,6 +21,22 @@ enum AuthType {
   none,
 }
 
+/// Wie ein Formularfeld bestehende Cloud-Laufwerke auswählt.
+///
+/// Statt Freitext „drive1:pfad drive2:pfad“ bekommt der Nutzer eine
+/// Multiple-Choice-Liste der bereits verbundenen Laufwerke — der Prozess
+/// bleibt so einfach wie möglich.
+enum RemotePickerMode {
+  /// Kein Remote-Picker (normales Text-/Dropdown-Feld).
+  none,
+
+  /// Genau ein verbundenes Laufwerk wählen (Crypt, Alias, Chunker, …).
+  single,
+
+  /// Mehrere verbundene Laufwerke wählen (Union, Combine).
+  multi,
+}
+
 /// Dynamic form field definition for configuring an rclone remote.
 ///
 /// Labels and hints are maintained in German (base) with optional English
@@ -37,6 +53,9 @@ class ConfigFieldDefinition {
   final String? defaultValue;
   final List<String>? dropdownOptions;
 
+  /// Wenn gesetzt: statt Texteingabe eine Auswahl der verbundenen Laufwerke.
+  final RemotePickerMode remotePicker;
+
   const ConfigFieldDefinition({
     required this.key,
     required this.label,
@@ -48,6 +67,7 @@ class ConfigFieldDefinition {
     this.isAdvanced = false,
     this.defaultValue,
     this.dropdownOptions,
+    this.remotePicker = RemotePickerMode.none,
   });
 
   /// Field label in the active UI language.
@@ -1287,10 +1307,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'remote',
-          label: 'Basis-Laufwerk & Pfad',
-          labelEn: 'Base drive & path',
-          hint: 'meinDrive:tresor',
-          hintEn: 'myDrive:vault',
+          label: 'Basis-Laufwerk',
+          labelEn: 'Base drive',
+          hint: 'Bereits verbundenes Cloud-Laufwerk wählen',
+          hintEn: 'Pick an already connected cloud drive',
+          remotePicker: RemotePickerMode.single,
         ),
         ConfigFieldDefinition(
           key: 'password',
@@ -1329,10 +1350,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'remote',
-          label: 'Basis-Laufwerk & Pfad',
-          labelEn: 'Base drive & path',
-          hint: 'meinRemote:chunks',
-          hintEn: 'myRemote:chunks',
+          label: 'Basis-Laufwerk',
+          labelEn: 'Base drive',
+          hint: 'Bereits verbundenes Cloud-Laufwerk wählen',
+          hintEn: 'Pick an already connected cloud drive',
+          remotePicker: RemotePickerMode.single,
         ),
         ConfigFieldDefinition(
           key: 'chunk_size',
@@ -1355,10 +1377,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'remotes',
-          label: 'Verknüpfte Laufwerke (durch Leerzeichen getrennt)',
-          labelEn: 'Linked drives (space-separated)',
-          hint: 'drive1:pfad drive2:pfad',
-          hintEn: 'drive1:path drive2:path',
+          label: 'Verknüpfte Laufwerke',
+          labelEn: 'Linked drives',
+          hint: 'Mindestens zwei bereits verbundene Laufwerke auswählen',
+          hintEn: 'Select at least two already connected drives',
+          remotePicker: RemotePickerMode.multi,
         ),
         ConfigFieldDefinition(
           key: 'action_policy',
@@ -1383,10 +1406,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'upstreams',
-          label: 'Upstreams (Format: name=laufwerk:pfad)',
-          labelEn: 'Upstreams (format: name=drive:path)',
-          hint: 'fotos=drive:fotos dokus=onedrive:dokus',
-          hintEn: 'photos=drive:photos docs=onedrive:docs',
+          label: 'Verknüpfte Laufwerke',
+          labelEn: 'Linked drives',
+          hint: 'Bereits verbundene Laufwerke auswählen',
+          hintEn: 'Select already connected drives',
+          remotePicker: RemotePickerMode.multi,
         ),
       ],
     ),
@@ -1403,10 +1427,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'remote',
-          label: 'Ziel-Laufwerk & Pfad',
-          labelEn: 'Target drive & path',
-          hint: 'hauptDrive:unterordner',
-          hintEn: 'mainDrive:subfolder',
+          label: 'Ziel-Laufwerk',
+          labelEn: 'Target drive',
+          hint: 'Bereits verbundenes Cloud-Laufwerk wählen',
+          hintEn: 'Pick an already connected cloud drive',
+          remotePicker: RemotePickerMode.single,
         ),
       ],
     ),
@@ -1423,10 +1448,11 @@ class RcloneProviderRegistry {
       fields: [
         ConfigFieldDefinition(
           key: 'remote',
-          label: 'Basis-Laufwerk & Pfad',
-          labelEn: 'Base drive & path',
-          hint: 'meinDrive:archiv',
-          hintEn: 'myDrive:archive',
+          label: 'Basis-Laufwerk',
+          labelEn: 'Base drive',
+          hint: 'Bereits verbundenes Cloud-Laufwerk wählen',
+          hintEn: 'Pick an already connected cloud drive',
+          remotePicker: RemotePickerMode.single,
         ),
       ],
     ),

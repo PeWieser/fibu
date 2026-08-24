@@ -88,6 +88,12 @@ class AppStrings {
   /// klassische Anmeldung — geprüft wird die Verbindung zum Basis-Laufwerk.
   String get validateSetup => isGerman ? 'Verbindung prüfen' : 'Validate Setup';
   String get providerGuideHeader => isGerman ? 'So funktioniert die Einrichtung' : 'How Setup Works';
+  /// Hinweis, wenn Union/Crypt/… angelegt wird, aber noch kein Basis-Laufwerk da ist.
+  String get noBaseDrivesForVirtual => isGerman
+      ? 'Zuerst ein normales Cloud-Laufwerk verbinden — danach kannst du es hier auswählen.'
+      : 'Connect a regular cloud drive first — then you can pick it here.';
+  /// Accessibility-Suffix für ausgewählte Laufwerke in der Multiple-Choice-Liste.
+  String get selectedLabel => isGerman ? 'ausgewählt' : 'selected';
   String get connectionSuccess => isGerman ? 'Angemeldet – Verbindung steht.' : 'Signed in – connection works.';
   String get oauthMissingClientHint => isGerman
       ? 'Dieser Anbieter braucht eine eigene Anmeldung im Browser. Die ist hier noch nicht eingerichtet.'
@@ -841,17 +847,17 @@ class AppStrings {
         'dropbox':
             'Die Anmeldung erfolgt direkt bei Dropbox im Browser — Fibu erhält nur Zugriff auf seinen eigenen App-Ordner bzw. die erteilte Berechtigung. Dein Passwort wird nicht in der App gespeichert.',
         'crypt':
-            'Der Tresor verschlüsselt jede Datei bereits auf deinem Gerät, bevor sie in ein bereits verbundenes Cloud-Laufwerk hochgeladen wird. Du benötigst: ein vorhandenes Laufwerk als Basis (Angabe im Format laufwerk:ordner) und ein eigenes Hauptpasswort. Die Cloud sieht ausschließlich verschlüsselte Inhalte. Wichtig: Ohne das Hauptpasswort sind die Daten unwiederbringlich verloren — bewahre es sicher auf.',
+            'Der Tresor verschlüsselt jede Datei bereits auf deinem Gerät, bevor sie in ein bereits verbundenes Cloud-Laufwerk hochgeladen wird. Wähle unten ein vorhandenes Laufwerk und vergib ein eigenes Hauptpasswort. Die Cloud sieht ausschließlich verschlüsselte Inhalte. Wichtig: Ohne das Hauptpasswort sind die Daten unwiederbringlich verloren — bewahre es sicher auf.',
         'chunker':
-            'Chunker teilt große Dateien beim Hochladen automatisch in handliche Blöcke auf und setzt sie beim Herunterladen wieder zusammen — sinnvoll für Clouds mit Beschränkungen der Dateigröße. Du benötigst ein verbundenes Basis-Laufwerk (laufwerk:ordner). Die Chunk-Größe bestimmt die maximale Größe der Einzelteile (Standard: 2 GB).',
+            'Chunker teilt große Dateien beim Hochladen automatisch in handliche Blöcke auf und setzt sie beim Herunterladen wieder zusammen — sinnvoll für Clouds mit Beschränkungen der Dateigröße. Wähle unten ein verbundenes Basis-Laufwerk. Die Chunk-Größe bestimmt die maximale Größe der Einzelteile (Standard: 2 GB).',
         'union':
-            'Union fasst mehrere Cloud-Laufwerke zu einem einzigen großen virtuellen Laufwerk zusammen. Du benötigst mindestens zwei bereits verbundene Laufwerke und trägst sie im Format laufwerk1:pfad laufwerk2:pfad durch Leerzeichen getrennt ein. Neue Dateien werden je nach Schreib-Strategie verteilt: „epall“ schreibt auf alle Laufwerke, „lfs“ auf das Laufwerk mit dem meisten freien Speicher, „rand“ zufällig. Gelesen wird übergreifend aus allen Laufwerken.',
+            'Union fasst mehrere Cloud-Laufwerke zu einem einzigen großen virtuellen Laufwerk zusammen. Wähle unten mindestens zwei bereits verbundene Laufwerke aus. Neue Dateien werden je nach Schreib-Strategie verteilt: „epall“ schreibt auf alle Laufwerke, „lfs“ auf das Laufwerk mit dem meisten freien Speicher, „rand“ zufällig. Gelesen wird übergreifend aus allen Laufwerken.',
         'combine':
-            'Combine bündelt Ordner verschiedener Cloud-Laufwerke in einem einzigen virtuellen Laufwerk, in dem jede Quelle als eigener Unterordner erscheint. Du benötigst bestehende Laufwerke und eine Zuordnung im Format name=laufwerk:pfad (z. B. fotos=drive:fotos dokus=onedrive:dokus), durch Leerzeichen getrennt.',
+            'Combine bündelt Ordner verschiedener Cloud-Laufwerke in einem einzigen virtuellen Laufwerk, in dem jede Quelle als eigener Unterordner erscheint. Wähle unten die gewünschten, bereits verbundenen Laufwerke aus.',
         'alias':
-            'Ein Alias ist eine einfache Verknüpfung auf ein vorhandenes Laufwerk oder einen Unterordner — praktisch, um z. B. einen tief gelegenen Ordner wie ein eigenständiges Laufwerk anzusprechen. Du benötigst lediglich das Ziel im Format laufwerk:unterordner.',
+            'Ein Alias ist eine einfache Verknüpfung auf ein vorhandenes Laufwerk — praktisch, um es unter einem eigenen Namen anzusprechen. Wähle unten das Ziel-Laufwerk aus.',
         'compress':
-            'Dieses Laufwerk komprimiert Dateien vor dem Hochladen transparent mit gzip und entpackt sie beim Zugriff automatisch. Du benötigst ein verbundenes Basis-Laufwerk (laufwerk:ordner). Gut geeignet für Dokumente; bei bereits komprimierten Medien wie Fotos oder Videos ist der Gewinn gering.',
+            'Dieses Laufwerk komprimiert Dateien vor dem Hochladen transparent mit gzip und entpackt sie beim Zugriff automatisch. Wähle unten ein verbundenes Basis-Laufwerk. Gut geeignet für Dokumente; bei bereits komprimierten Medien wie Fotos oder Videos ist der Gewinn gering.',
         's3':
             'Du benötigst ein Zugriffsschlüssel-Paar aus AWS IAM (Access Key ID und Secret Access Key) sowie die Region deines Buckets. Fibu erstellt keine Buckets — der Bucket muss bereits existieren. Neue Schlüssel legst du in der AWS-Konsole unter „IAM → Zugriffsdaten“ an.',
         's3-wasabi':
@@ -929,17 +935,17 @@ class AppStrings {
       'dropbox':
           'You sign in directly with Dropbox in your browser — Fibu only receives the granted permission. Your password is never stored in the app.',
       'crypt':
-          'The vault encrypts every file on your device before it is uploaded to an already connected cloud drive. You need: an existing drive as base (given as remote:folder) and your own master password. The cloud only ever sees encrypted content. Important: without the master password the data cannot be recovered — keep it somewhere safe.',
+          'The vault encrypts every file on your device before it is uploaded to an already connected cloud drive. Pick an existing drive below and set your own master password. The cloud only ever sees encrypted content. Important: without the master password the data cannot be recovered — keep it somewhere safe.',
       'chunker':
-          'Chunker automatically splits large files into manageable pieces on upload and reassembles them on download — useful for clouds with file size limits. You need a connected base drive (remote:folder). The chunk size defines the maximum size of each part (default: 2 GB).',
+          'Chunker automatically splits large files into manageable pieces on upload and reassembles them on download — useful for clouds with file size limits. Pick a connected base drive below. The chunk size defines the maximum size of each part (default: 2 GB).',
       'union':
-          'Union pools multiple cloud drives into one single large virtual drive. You need at least two already connected drives; enter them space-separated as drive1:path drive2:path. New files are distributed according to the write policy: “epall” writes to all drives, “lfs” to the drive with the most free space, “rand” randomly. Reads work across all drives.',
+          'Union pools multiple cloud drives into one single large virtual drive. Select at least two already connected drives below. New files are distributed according to the write policy: “epall” writes to all drives, “lfs” to the drive with the most free space, “rand” randomly. Reads work across all drives.',
       'combine':
-          'Combine merges folders from different cloud drives into one virtual drive where each source appears as its own subfolder. You need existing drives and a mapping of the form name=drive:path (e.g. photos=drive:photos docs=onedrive:docs), space-separated.',
+          'Combine merges folders from different cloud drives into one virtual drive where each source appears as its own subfolder. Select the connected drives you want below.',
       'alias':
-          'An alias is a simple shortcut to an existing drive or subfolder — handy for addressing a deeply nested folder like a drive of its own. All you need is the target in the form drive:subfolder.',
+          'An alias is a simple shortcut to an existing drive — handy for addressing it under its own name. Pick the target drive below.',
       'compress':
-          'This drive transparently compresses files with gzip before uploading and unpacks them on access. You need a connected base drive (remote:folder). Works well for documents; photos and videos gain little.',
+          'This drive transparently compresses files with gzip before uploading and unpacks them on access. Pick a connected base drive below. Works well for documents; photos and videos gain little.',
       's3':
           'You need an access key pair from AWS IAM (Access Key ID and Secret Access Key) and the region of your bucket. Fibu does not create buckets — the bucket must already exist. Create new keys in the AWS console under “IAM → Access keys”.',
       's3-wasabi':

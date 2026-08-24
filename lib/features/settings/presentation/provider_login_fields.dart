@@ -4,10 +4,12 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/provider_auth.dart';
 import '../../../core/services/rclone_provider_registry.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../theme/theme.dart';
 
 /// Gemeinsame Anmeldefelder für einen rclone-Provider.
@@ -15,7 +17,11 @@ import '../../../theme/theme.dart';
 /// Kein eigener „gespeicherte Zugänge“-Button. Apple-Schlüsselbund /
 /// System-Autofill füllt Benutzer/Passwort, weil die Felder korrekte
 /// AutofillHints + Associated Domain haben.
-class ProviderLoginFields extends StatefulWidget {
+///
+/// Für virtuelle Backends (Union, Crypt, Alias, …) erscheint statt
+/// Freitext eine Multiple-Choice-Auswahl der bereits verbundenen
+/// Cloud-Laufwerke.
+class ProviderLoginFields extends ConsumerStatefulWidget {
   const ProviderLoginFields({
     super.key,
     required this.platform,
@@ -42,10 +48,11 @@ class ProviderLoginFields extends StatefulWidget {
   final VoidCallback onToggleAdvanced;
 
   @override
-  State<ProviderLoginFields> createState() => _ProviderLoginFieldsState();
+  ConsumerState<ProviderLoginFields> createState() =>
+      _ProviderLoginFieldsState();
 }
 
-class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
+class _ProviderLoginFieldsState extends ConsumerState<ProviderLoginFields> {
   TargetPlatform get platform => widget.platform;
   AppThemeData get theme => widget.theme;
   AppStrings get strings => widget.strings;
@@ -164,7 +171,9 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
         ),
       ],
       SizedBox(height: theme.xs),
-      if (field.dropdownOptions != null && field.dropdownOptions!.isNotEmpty)
+      if (field.remotePicker != RemotePickerMode.none)
+        _remotePicker(context, field)
+      else if (field.dropdownOptions != null && field.dropdownOptions!.isNotEmpty)
         _dropdown(context, field)
       else
         _textField(field, isLast: isLast),
@@ -193,6 +202,180 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     return material.TextButton(
       onPressed: onToggleAdvanced,
       child: Text(label),
+    );
+  }
+
+  /// Multiple-Choice über die bereits verbundenen Cloud-Laufwerke.
+  /// Single: ein Laufwerk; Multi: beliebig viele (Union/Combine).
+  Widget _remotePicker(BuildContext context, ConfigFieldDefinition field) {
+    final entriesAsync = ref.watch(remoteEntriesProvider);
+    final entries = entriesAsync.valueOrNull ?? const <RemoteEntry>[];
+    final controller =
+        controllers[field.key] ?? TextEditingController();
+    controllers[field.key] = controller;
+
+    if (entriesAsync.isLoading && entries.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: theme.sm),
+        child: platform == TargetPlatform.iOS
+            ? const cupertino.CupertinoActivityIndicator()
+            : platform == TargetPlatform.windows
+                ? const SizedBox(
+                    width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
+                : const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: material.CircularProgressIndicator(strokeWidth: 2),
+                  ),
+      );
+    }
+
+    if (entries.isEmpty) {
+      return Container(
+        padding: EdgeInsets.all(theme.md),
+        decoration: BoxDecoration(
+          color: theme.warning.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(theme.radiusSm),
+          border: Border.all(color: theme.warning.withValues(alpha: 0.35)),
+        ),
+        child: Text(
+          strings.noBaseDrivesForVirtual,
+          style: TextStyle(color: theme.textPrimary, fontSize: 13, height: 1.35),
+        ),
+      );
+    }
+
+    final multi = field.remotePicker == RemotePickerMode.multi;
+    final selectedIds = _parseSelectedRemoteIds(controller.text);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final entry in entries)
+          _remoteChoiceRow(
+            entry: entry,
+            selected: selectedIds.contains(entry.id),
+            multi: multi,
+            onTap: () {
+              final next = Set<String>.from(selectedIds);
+              if (multi) {
+                if (next.contains(entry.id)) {
+                  next.remove(entry.id);
+                } else {
+                  next.add(entry.id);
+                }
+              } else {
+                next
+                  ..clear()
+                  ..add(entry.id);
+              }
+              // Gespeichert als rclone-IDs mit abschließendem „:“
+              // (rclone erwartet „remote:“ bzw. „r1: r2:“).
+              controller.text = next.map((id) => '$id:').join(' ');
+              setState(() {});
+              onChanged();
+            },
+          ),
+      ],
+    );
+  }
+
+  /// Liest die im Controller gespeicherten Remote-IDs (Format „id:“ oder „id:path“).
+  Set<String> _parseSelectedRemoteIds(String raw) {
+    final result = <String>{};
+    for (final token in raw.split(RegExp(r'\s+'))) {
+      final t = token.trim();
+      if (t.isEmpty) continue;
+      // Combine speichert „name=id:“ — hier nur die ID extrahieren.
+      final eq = t.indexOf('=');
+      final body = eq >= 0 ? t.substring(eq + 1) : t;
+      final colon = body.indexOf(':');
+      final id = colon >= 0 ? body.substring(0, colon) : body;
+      if (id.isNotEmpty) result.add(id);
+    }
+    return result;
+  }
+
+  Widget _remoteChoiceRow({
+    required RemoteEntry entry,
+    required bool selected,
+    required bool multi,
+    required VoidCallback onTap,
+  }) {
+    final typeLabel = RemoteEntry.prettyType(entry.type);
+    final subtitle = typeLabel.isNotEmpty && typeLabel != entry.name
+        ? typeLabel
+        : null;
+
+    final leading = Icon(
+      selected
+          ? (multi
+              ? cupertino.CupertinoIcons.checkmark_square_fill
+              : cupertino.CupertinoIcons.checkmark_circle_fill)
+          : (multi
+              ? cupertino.CupertinoIcons.square
+              : cupertino.CupertinoIcons.circle),
+      color: selected ? theme.accent : theme.textSecondary,
+      size: 22,
+      semanticLabel: selected
+          ? '${entry.name} ${strings.selectedLabel}'
+          : entry.name,
+    );
+
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.sm),
+        child: Row(
+          children: [
+            leading,
+            SizedBox(width: theme.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    style: TextStyle(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      fontSize: 15,
+                      color: theme.textPrimary,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        margin: EdgeInsets.only(bottom: theme.xs),
+        decoration: BoxDecoration(
+          color: selected
+              ? theme.accent.withValues(alpha: 0.10)
+              : theme.surface,
+          borderRadius: BorderRadius.circular(theme.radiusSm),
+          border: Border.all(
+            color: selected
+                ? theme.accent.withValues(alpha: 0.40)
+                : theme.textSecondary.withValues(alpha: 0.18),
+          ),
+        ),
+        child: content,
+      ),
     );
   }
 

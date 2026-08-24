@@ -74,6 +74,13 @@ empty cloud side, not an error.
   every 6th cycle. There are no manual refresh buttons.
 - The dashboard shows **one** status banner (offline / syncing / failed /
   sync needed / up to date) and hides it entirely while nothing is configured.
+- Setup guidance is **staged**: with 0 drives only “Add Cloud Drive” is shown;
+  with a drive but 0 tasks only “Add Task”. Never both at once.
+- `needsSync` stays true for any task in `pending` / `never` / `error` (not only
+  on the `ok → pending` transition), so the yellow “sync needed” banner does not
+  flip back to green while local and remote still differ.
+- Virtual backends (union, crypt, combine, alias, chunker, compress) pick
+  already-connected drives via multiple-choice instead of free-text paths.
 - Progress messages are simple verbs (Checking, Uploading, Downloading,
   Cleaning up, Deleting); counts arrive separately as `itemsDone/itemsTotal`.
 

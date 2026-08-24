@@ -465,11 +465,10 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Dateiname vollständig anzeigen (kein Abschneiden).
                             Text(
                               file.name,
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textPrimary),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             SizedBox(height: theme.xs),
                             Row(
@@ -993,6 +992,8 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final platform = defaultTargetPlatform;
     final theme = context.theme;
     final strings = context.strings;
@@ -1588,11 +1589,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Namen niemals horizontal abschneiden — mehrzeilig
+                            // umbrechen, damit lange Bezeichnungen lesbar bleiben.
                             Text(
                               file.name,
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.textPrimary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             SizedBox(height: theme.xs / 2),
                             Text(
@@ -1649,18 +1650,16 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Namen niemals horizontal abschneiden — mehrzeilig
+                            // umbrechen, damit lange Bezeichnungen lesbar bleiben.
                             Text(
                               file.name,
                               style: TextStyle(fontSize: 14, color: theme.textPrimary, fontWeight: FontWeight.w500),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             SizedBox(height: theme.xs / 2),
                             Text(
                               '${strings.fileSize} ${_formatBytes(file.size)} | ${_formatDate(file.modTime)}',
                               style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

@@ -12,7 +12,7 @@ import 'package:fibu/core/services/rclone_provider.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
-import 'package:fibu/features/dashboard/presentation/widgets/storage_card.dart';
+import 'package:fibu/features/dashboard/presentation/widgets/multi_remote_storage_card.dart';
 
 void main() {
   group('DashboardScreen Widget Tests', () {
@@ -53,8 +53,8 @@ void main() {
         // Global sync status defaults to completed
         expect(find.text(strings.allFilesSynced), findsOneWidget);
         
-        // StorageCard should render for Windows layout
-        expect(find.byType(StorageCard), findsOneWidget);
+        // Storage card should render for Windows layout
+        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
         expect(find.text(strings.cloudBackupStorage), findsOneWidget);
 
         // Verify Sync All action is present
@@ -82,11 +82,12 @@ void main() {
 
         // Verify iOS Cupertino elements
         expect(find.byType(cupertino.CupertinoPageScaffold), findsOneWidget);
-        expect(find.byType(cupertino.CupertinoNavigationBar), findsOneWidget);
+        // Sticky large-title navigation bar (title stays visible while scrolling)
+        expect(find.byType(cupertino.CupertinoSliverNavigationBar), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
         
-        // StorageCard renders for iOS Cupertino
-        expect(find.byType(StorageCard), findsOneWidget);
+        // Storage card renders for iOS Cupertino
+        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
         expect(find.text(strings.cloudBackupStorage), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -115,8 +116,8 @@ void main() {
         expect(find.byType(material.AppBar), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
         
-        // StorageCard renders for Android Material 3
-        expect(find.byType(StorageCard), findsOneWidget);
+        // Storage card renders for Android Material 3
+        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
         expect(find.text(strings.cloudBackupStorage), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;

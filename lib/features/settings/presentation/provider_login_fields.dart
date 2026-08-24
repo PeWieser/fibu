@@ -147,16 +147,19 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     ConfigFieldDefinition field, {
     required bool isLast,
   }) {
+    // Labels und Hinweise werden in der aktiven Sprache angezeigt.
+    final label = field.localizedLabel(strings.locale);
+    final hint = field.localizedHint(strings.locale);
     return [
       SizedBox(height: theme.md),
       Text(
-        strings.providerFieldLabel(field.label),
+        label,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
-      if (field.hint.isNotEmpty) ...[
+      if (hint.isNotEmpty) ...[
         const SizedBox(height: 2),
         Text(
-          field.hint,
+          hint,
           style: TextStyle(color: theme.textSecondary, fontSize: 12),
         ),
       ],
@@ -169,9 +172,8 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
   }
 
   Widget _advancedToggle() {
-    final label = showAdvanced
-        ? strings.advancedSettings
-        : strings.advancedSettings;
+    final label =
+        showAdvanced ? strings.hideAdvancedSettings : strings.advancedSettings;
     if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoButton(
         padding: EdgeInsets.zero,
@@ -293,6 +295,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
     final keyboard = ProviderAuth.keyboardFor(field);
     final action = ProviderAuth.actionFor(field, isLast);
     final focusNode = _nodeFor(field.key);
+    final hint = field.localizedHint(strings.locale);
     // Passwortfelder: Autofill-Erkennung → Tastatur automatisch einklappen.
     if (secret) _hookAutofillDismiss(field.key, controller);
 
@@ -300,7 +303,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
       return cupertino.CupertinoTextField(
         controller: controller,
         focusNode: focusNode,
-        placeholder: field.hint.isNotEmpty ? field.hint : null,
+        placeholder: hint.isNotEmpty ? hint : null,
         padding: const EdgeInsets.all(12),
         obscureText: hidden,
         autofillHints: hints,
@@ -330,7 +333,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
       return fluent.TextBox(
         controller: controller,
         focusNode: focusNode,
-        placeholder: field.hint.isNotEmpty ? field.hint : null,
+        placeholder: hint.isNotEmpty ? hint : null,
         obscureText: hidden,
         keyboardType: keyboard,
         textInputAction: action,
@@ -358,7 +361,7 @@ class _ProviderLoginFieldsState extends State<ProviderLoginFields> {
       textCapitalization: TextCapitalization.none,
       onChanged: (_) => onChanged(),
       decoration: material.InputDecoration(
-        hintText: field.hint.isNotEmpty ? field.hint : null,
+        hintText: hint.isNotEmpty ? hint : null,
         border: const material.OutlineInputBorder(),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

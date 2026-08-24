@@ -11,7 +11,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
-import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
@@ -33,6 +32,8 @@ class TasksScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final platform = defaultTargetPlatform;
 
     // Erkannte Remote-Aufgaben im Hintergrund laden/aktuell halten — das
@@ -165,41 +166,45 @@ class TasksScreen extends ConsumerWidget {
     if (tasks.isEmpty) {
       listContent = _buildEmptyState(context, ref, TargetPlatform.iOS, theme, strings);
     } else {
-      listContent = SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(0, 0, 0, theme.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      listContent = Padding(
+        padding: EdgeInsets.only(bottom: theme.lg),
+        child: cupertino.CupertinoListSection.insetGrouped(
           children: [
-            IosTheme.largeTitle(strings.tasksTitle, theme),
-            cupertino.CupertinoListSection.insetGrouped(
-              children: [
-                for (final task in tasks)
-                  _buildIOSTaskRow(context, ref, task, theme, strings),
-              ],
-            ),
+            for (final task in tasks)
+              _buildIOSTaskRow(context, ref, task, theme, strings),
           ],
         ),
       );
     }
 
+    // Large Title mit fixierter Navigationsleiste: Der Titel bleibt beim
+    // Scrollen sichtbar (er kollabiert in die kompakte Leiste, HIG-konform).
     return cupertino.CupertinoPageScaffold(
-      navigationBar: cupertino.CupertinoNavigationBar(
-        middle: const SizedBox.shrink(),
-        trailing: SizedBox(
-          width: 44,
-          height: 44,
-          child: cupertino.CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () {
-              IosHaptics.light();
-              _handleAddTap(context, ref, TargetPlatform.iOS);
-            },
-            child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
-          ),
-        ),
-      ),
       backgroundColor: theme.canvas,
-      child: SafeArea(child: listContent),
+      child: CustomScrollView(
+        slivers: [
+          cupertino.CupertinoSliverNavigationBar(
+            largeTitle: Text(strings.tasksTitle),
+            backgroundColor: theme.surface,
+            trailing: SizedBox(
+              width: 44,
+              height: 44,
+              child: cupertino.CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  IosHaptics.light();
+                  _handleAddTap(context, ref, TargetPlatform.iOS);
+                },
+                child: Icon(cupertino.CupertinoIcons.add, semanticLabel: strings.addTask),
+              ),
+            ),
+          ),
+          SliverSafeArea(
+            top: false,
+            sliver: SliverToBoxAdapter(child: listContent),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1451,6 +1456,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     // Registry-basierte Liste der Remote-IDs. In der Aufgabe noch

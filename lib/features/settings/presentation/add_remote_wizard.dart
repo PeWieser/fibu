@@ -114,15 +114,17 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   }
 
   void _selectProvider(RcloneProviderDescriptor provider) {
+    final strings = context.strings;
+    final displayName = provider.localizedName(strings.locale);
     setState(() {
       _selectedProviderId = provider.id;
-      _selectedProviderName = provider.name;
+      _selectedProviderName = displayName;
       _providerError = null;
       _step2Verified = false;
       _showAdvanced = false;
       _revealedSecrets.clear();
       if (_nameController.text.trim().isEmpty || _nameWasAutoFilled) {
-        _nameController.text = provider.name;
+        _nameController.text = displayName;
         _nameWasAutoFilled = true;
         _nameError = null;
       }
@@ -138,10 +140,14 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       final rest = all.where((p) => !p.isPopular).toList();
       return [...popular, ...rest];
     }
+    // Suche berücksichtigt deutsche UND englische Bezeichnungen sowie die
+    // interne Kennung, damit die Liste in beiden Sprachen durchsuchbar ist.
     return all
         .where((p) =>
             p.name.toLowerCase().contains(query) ||
+            p.nameEn.toLowerCase().contains(query) ||
             p.description.toLowerCase().contains(query) ||
+            p.descriptionEn.toLowerCase().contains(query) ||
             p.id.toLowerCase().contains(query))
         .toList();
   }
@@ -408,6 +414,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
+    // Theme live verfolgen, damit der Wizard bei Dark-/Light-/Palettenwechsel
+    // sofort neu einfärbt (Text- und Objektfarben).
+    ref.watch(appThemeProvider);
     final theme = context.theme;
     final strings = context.strings;
     if (widget.platform == TargetPlatform.iOS) {
@@ -439,7 +448,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       itemBuilder: (context, index) {
         final provider = filtered[index];
         final selected = _selectedProviderId == provider.id;
-        final title = provider.name;
+        final title = provider.localizedName(strings.locale);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _selectProvider(provider),
@@ -496,6 +505,56 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     );
   }
 
+  /// Erklärbox für Anbieter mit komplexerer Einrichtung (Union, Crypt, S3 …):
+  /// Was man braucht, was passiert und wie es funktioniert.
+  Widget _setupGuide(AppThemeData theme, AppStrings strings) {
+    final descriptor = _selectedDescriptor;
+    if (descriptor == null) return const SizedBox.shrink();
+    final guide = strings.providerSetupGuide(descriptor.id);
+    if (guide == null || guide.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: theme.lg),
+      padding: EdgeInsets.all(theme.md),
+      decoration: BoxDecoration(
+        color: theme.accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: theme.accent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(cupertino.CupertinoIcons.info_circle,
+                  size: 16, color: theme.accent),
+              SizedBox(width: theme.xs),
+              Expanded(
+                child: Text(
+                  strings.providerGuideHeader,
+                  style: TextStyle(
+                    color: theme.accent,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: theme.xs),
+          Text(
+            guide,
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _step2Body(AppThemeData theme, AppStrings strings) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -510,6 +569,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           style: TextStyle(color: theme.textSecondary, fontSize: 13),
         ),
         SizedBox(height: theme.lg),
+        _setupGuide(theme, strings),
         if (_isOAuthProvider) ...[
           Text(strings.oauthInfoNotice,
               style: TextStyle(color: theme.textSecondary, fontSize: 15, height: 1.4)),
@@ -585,13 +645,18 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   }
 
   Widget _testButton(AppThemeData theme, AppStrings strings) {
+    // Virtuelle Backends (Crypt, Union, …) haben keine klassische Anmeldung —
+    // dort heißt die Aktion neutral „Verbindung prüfen“.
+    final label = _selectedDescriptor?.authType == AuthType.none
+        ? strings.validateSetup
+        : strings.testConnection;
     if (widget.platform == TargetPlatform.iOS) {
       return cupertino.CupertinoButton(
         color: theme.accent,
         onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
         child: _isTesting
             ? const cupertino.CupertinoActivityIndicator()
-            : Text(strings.testConnection,
+            : Text(label,
                 style: const TextStyle(color: Color(0xFFFFFFFF))),
       );
     }
@@ -601,7 +666,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         child: _isTesting
             ? const SizedBox(
                 width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
-            : Text(strings.testConnection,
+            : Text(label,
                 style: const TextStyle(color: Color(0xFFFFFFFF))),
       );
     }
@@ -613,7 +678,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
               height: 16,
               child: material.CircularProgressIndicator(
                   strokeWidth: 2, color: Color(0xFFFFFFFF)))
-          : Text(strings.testConnection),
+          : Text(label),
     );
   }
 

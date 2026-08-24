@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../theme/theme.dart';
 import '../../../../core/services/rclone_service.dart';
@@ -11,7 +12,7 @@ import 'dashboard_dialogs.dart';
 /// Platform-adaptive storage card displaying space quota information (used, total, and percentage indicator).
 /// Follows platform specific design languages (Fluent on Windows, Cupertino on iOS, Material 3 on Android).
 /// Clickable: Tapping triggers a detailed space utilization popup modal.
-class StorageCard extends StatelessWidget {
+class StorageCard extends ConsumerWidget {
   final QuotaInfo quota;
   final String title;
 
@@ -22,7 +23,9 @@ class StorageCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final platform = defaultTargetPlatform;
     final theme = context.theme;
 

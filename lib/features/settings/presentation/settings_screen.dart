@@ -433,17 +433,22 @@ class SettingsScreen extends ConsumerWidget {
     final currentLocaleMode = ref.watch(localeModeProvider);
     final config = ref.watch(themeConfigProvider);
 
+    // Large Title mit fixierter Navigationsleiste: Der Titel bleibt beim
+    // Scrollen sichtbar (er kollabiert in die kompakte Leiste, HIG-konform).
     return cupertino.CupertinoPageScaffold(
-      navigationBar: const cupertino.CupertinoNavigationBar(
-        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
-        middle: SizedBox.shrink(),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              IosTheme.largeTitle(strings.settingsTitle, theme),
+      backgroundColor: theme.canvas,
+      child: CustomScrollView(
+        slivers: [
+          cupertino.CupertinoSliverNavigationBar(
+            largeTitle: Text(strings.settingsTitle),
+            backgroundColor: theme.surface,
+          ),
+          SliverSafeArea(
+            top: false,
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // 1. Cloud Drives Section
               cupertino.CupertinoListSection.insetGrouped(
                 header: IosTheme.sectionHeader(strings.cloudStorage, theme),
@@ -654,10 +659,12 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              SizedBox(height: theme.xl),
-            ],
+                  SizedBox(height: theme.xl),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

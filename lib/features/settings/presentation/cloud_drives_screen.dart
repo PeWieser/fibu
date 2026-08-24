@@ -84,6 +84,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   Widget build(BuildContext context) {
     // Watch locale to trigger reactive rebuilds when language changes
     ref.watch(localeProvider);
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final platform = defaultTargetPlatform;
     final theme = context.theme;
 

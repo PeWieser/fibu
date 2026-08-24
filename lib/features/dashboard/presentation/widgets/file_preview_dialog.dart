@@ -118,6 +118,8 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final theme = context.theme;
     final strings = context.strings;
     final cat = FileMetadataHelper.getCategory(widget.fileName);
@@ -572,6 +574,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Namen vollständig anzeigen (kein horizontales Abschneiden).
                 Text(
                   widget.fileName,
                   style: TextStyle(
@@ -579,8 +582,6 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                     fontWeight: FontWeight.bold,
                     color: theme.textPrimary,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '${widget.remoteName}: /${widget.remotePath}',
@@ -588,8 +589,6 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                     fontSize: 11,
                     color: theme.textSecondary,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

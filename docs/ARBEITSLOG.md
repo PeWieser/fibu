@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-08-24 — Ehrliche Sync-UI: „Hochladen“ nur bei Transfer
+
+### UX
+- Phase **Überprüfen** während Abgleich (Listen/Größe/Basename) — kein Hash-Vollscan.
+- **Hochladen** / **Herunterladen** erst bei echtem Transfer.
+- Ohne Änderungen: kurzer ruhiger Balken (~2 s) → „Alles aktuell“.
+- Kein „5 von 5 hochladen“ mehr für reine Prüfung.
+
+### Matching
+- Remote-Treffer auch per **Dateiname + Größe**, wenn der Album-Pfad abweicht.
+- Stabile lokalen rels aus `mirror_state` (assetId → letzter Pfad).
+
+---
+
 ## 2026-08-24 — Sync-Bedarf pro Task-Alben (lokal + remote)
 
 ### Idee

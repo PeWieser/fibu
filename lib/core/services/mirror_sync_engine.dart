@@ -171,35 +171,55 @@ class MirrorSyncEngine {
     //    Geräten: die zuletzt geänderte Version gewinnt, nicht der zuletzt
     //    synchronisierende Gerät.
     // =====================================================================
-    final toUpload = localFiles.entries
-        .where((entry) {
-          final remote = remoteFiles[entry.key];
-          if (remote == null || remote.isDir) return remote == null;
-          // Größe identisch → schon am Ziel, nicht erneut als Kandidat.
-          try {
-            if (remote.size > 0 && remote.size == entry.value.lengthSync()) {
-              return false;
-            }
-          } catch (_) {}
-          return _localIsNewer(entry.value, remote);
-        })
-        .toList();
-    if (toUpload.isNotEmpty) {
-      AppLog.info('sync', 'Mirror-Phase Upload-Kandidaten: ${toUpload.length} → $remoteName:$remotePath');
+    // Basename-Index für Pfad-Mismatch (lokal A/x, remote B/x).
+    final remoteByBase = <String, List<MapEntry<String, RcloneFileInfo>>>{};
+    for (final e in remoteFiles.entries) {
+      if (e.value.isDir) continue;
+      final base = e.key.split('/').last.toLowerCase();
+      if (base.isEmpty) continue;
+      (remoteByBase[base] ??= []).add(e);
     }
-    var up = 0;
-    for (final entry in toUpload) {
+
+    final candidates = localFiles.entries.toList();
+    if (candidates.isNotEmpty) {
+      onProgress?.call('scan', '', 0, candidates.length);
+    }
+    var checked = 0;
+    for (final entry in candidates) {
       final rel = entry.key;
       final file = entry.value;
-      up++;
-      onProgress?.call('upload', rel, up, toUpload.length);
+      checked++;
+      if (checked == 1 || checked == candidates.length || checked % 25 == 0) {
+        onProgress?.call('scan', '', checked, candidates.length);
+      }
       try {
         final localSize = file.lengthSync();
-        final remote = remoteFiles[rel];
-        if (remote != null && remote.size > 0 && remote.size == localSize) {
-          AppLog.info('sync', 'Übersprungen (bereits am Ziel, ${remote.size} B): $rel');
+        if (localSize <= 0) continue;
+
+        RcloneFileInfo? remote = remoteFiles[rel];
+        if (remote == null || remote.isDir) {
+          final base = rel.split('/').last.toLowerCase();
+          final hits = remoteByBase[base];
+          if (hits != null) {
+            for (final h in hits) {
+              if (!h.value.isDir && h.value.size == localSize) {
+                remote = h.value;
+                break;
+              }
+              remote ??= h.value.isDir ? null : h.value;
+            }
+          }
+        }
+
+        if (remote != null && !remote.isDir && remote.size > 0) {
+          if (remote.size == localSize) continue; // am Ziel
+          if (!_localIsNewer(file, remote)) continue;
+        } else if (remote != null && remote.isDir) {
           continue;
         }
+
+        // Echter Upload.
+        onProgress?.call('upload', rel, uploaded + 1, 0);
         await _rclone.copyFileToRemote(
           file.path,
           remoteName,
@@ -207,7 +227,6 @@ class MirrorSyncEngine {
         );
         uploaded++;
       } catch (e) {
-        // Einzelner Upload-Fehler: protokollieren und weiter mit den übrigen Dateien.
         AppLog.warn('sync', 'Upload fehlgeschlagen: $rel → $e');
       }
     }
@@ -306,7 +325,8 @@ class MirrorSyncEngine {
     for (final entry in toDownload) {
       final rel = entry.key;
       dl++;
-      onProgress?.call('download', rel, dl, toDownload.length);
+      // total=0 → UI zeigt „Herunterladen“ ohne irreführendes „x von y“ vorab.
+      onProgress?.call('download', rel, dl, 0);
       final dest = File('$localRoot${Platform.pathSeparator}${_localRel(rel)}');
       try {
         await dest.parent.create(recursive: true);

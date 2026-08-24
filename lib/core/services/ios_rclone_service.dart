@@ -540,18 +540,22 @@ class IosRcloneService implements RcloneService {
               'delete-local': s.syncPhaseDeleteLocal,
             };
             final label = phaseLabels[phase] ?? phase;
-            final hasCounters = total > 0;
+            // Während „Überprüfen“: unbestimmter Balken (0/0), kein „x von y“.
+            // „Hochladen“/„Herunterladen“: nur echte Transfers (total oft 0).
+            final showCounters =
+                (phase == 'upload' || phase == 'download') && done > 0;
             progress.add(RcloneProgressEvent(
               jobId: jobId,
               bytesTransferred: 0,
               totalBytes: 0,
-              percentage: hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
-              // Einfache Verben („Hochladen“) — Zähler kommen separat an.
+              percentage: showCounters && total > 0
+                  ? (done / total * 100.0).clamp(0.0, 100.0)
+                  : (phase == 'scan' ? 0.0 : 0.0),
               currentFile: label,
-              eta: hasCounters ? '' : '…',
+              eta: '',
               speedBytesPerSecond: 0,
-              itemsDone: done,
-              itemsTotal: total,
+              itemsDone: showCounters ? done : 0,
+              itemsTotal: showCounters && total > 0 ? total : 0,
             ));
           },
         );
@@ -576,6 +580,8 @@ class IosRcloneService implements RcloneService {
                 : AppStrings.current.syncAllUpToDate,
             eta: '0s',
             speedBytesPerSecond: 0,
+            itemsDone: result.uploaded + result.downloaded,
+            itemsTotal: result.uploaded + result.downloaded,
           ));
         }
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
@@ -1241,17 +1247,23 @@ class IosRcloneService implements RcloneService {
     final byRel = <String, AssetEntity>{};
     final selectedSet = selectedAlbums.toSet();
     final allowAll = selectedAlbums.isEmpty;
-    // Ein Asset gehört oft mehreren Alben — pro Asset-ID nur EINMAL zählen
-    // (sonst wachsende rel-Pfade und falsche Upload-Kandidaten).
+    // Ein Asset gehört oft mehreren Alben — pro Asset-ID nur EINMAL.
+    // Stabilität: bekannter rel aus mirror_state hat Vorrang vor „erstes Album“.
     final seenAssetIds = <String>{};
+    final previousRelByAsset = <String, String>{};
+    try {
+      final root = await _virtualStateRoot();
+      final prev = await _loadVirtualState(root);
+      for (final p in prev.items) {
+        if (p.assetId.isNotEmpty && p.rel.isNotEmpty) {
+          previousRelByAsset[p.assetId] = p.rel;
+        }
+      }
+    } catch (_) {}
 
     var total = 0;
     var done = 0;
     for (final album in albums) {
-      // „Alle Fotos“ / Recents überspringen, wenn konkrete Alben gewählt sind
-      // ODER wenn hasAll-Alben die Nutzer-Alben nur duplizieren würden.
-      // Bei allowAll: Nutzer-Alben bevorzugen, isAll zuletzt — und per
-      // seenAssetIds deduplizieren.
       if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) {
         continue;
       }
@@ -1271,9 +1283,20 @@ class IosRcloneService implements RcloneService {
           if (done % 25 == 0 || done == total) {
             onStage(AppStrings.current.syncReadAlbum(albumName), done, total);
           }
-          // Bereits in einem anderen Album erfasst → überspringen.
           if (!seenAssetIds.add(asset.id)) continue;
-          // Titel → deterministisch-eindeutiger Zielname (ohne jeglichen Export).
+
+          // Stabiler Pfad: letzter bekannter rel für diese Asset-ID.
+          final knownRel = previousRelByAsset[asset.id];
+          if (knownRel != null && knownRel.isNotEmpty) {
+            items[knownRel] = VirtualMediaItem(
+              rel: knownRel,
+              assetId: asset.id,
+              modifiedMs: asset.modifiedDateTime.millisecondsSinceEpoch,
+            );
+            byRel[knownRel] = asset;
+            continue;
+          }
+
           var base = (asset.title ?? '').trim();
           if (base.isEmpty) {
             base = 'asset_${_safeFilePart(asset.id)}.${_mirrorFallbackExtension(asset, '')}';
@@ -1455,19 +1478,21 @@ class IosRcloneService implements RcloneService {
           'delete-local': s.syncPhaseDeleteLocal,
         };
         final label = phaseLabels[phase] ?? phase;
-        final hasCounters = total > 0;
+        // „Hochladen“ nur bei echtem Transfer; Prüfen ohne irreführendes „x von y“.
+        final showCounters =
+            (phase == 'upload' || phase == 'download') && done > 0;
         progress.add(RcloneProgressEvent(
           jobId: jobId,
           bytesTransferred: 0,
           totalBytes: 0,
-          percentage:
-              hasCounters ? (done / total * 100.0).clamp(0.0, 100.0) : 0.0,
-          // Einfache Verben („Hochladen“) — Zähler kommen separat an.
+          percentage: showCounters && total > 0
+              ? (done / total * 100.0).clamp(0.0, 100.0)
+              : 0.0,
           currentFile: label,
-          eta: hasCounters ? '' : '…',
+          eta: '',
           speedBytesPerSecond: 0,
-          itemsDone: done,
-          itemsTotal: total,
+          itemsDone: showCounters ? done : 0,
+          itemsTotal: showCounters && total > 0 ? total : 0,
         ));
       },
     );

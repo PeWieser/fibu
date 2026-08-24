@@ -158,60 +158,116 @@ class VirtualMirrorSyncEngine {
     final remoteDeletedRels =
         remoteDeletedCandidates.map((i) => i.rel).toSet();
 
-    // ---------- 1) Upload: lokal neu & remote fehlt ODER lokal klar neuer ----
-    // WICHTIG: Wenn die Cloud-Datei schon existiert und eine Größe > 0 hat,
-    // laden wir NUR bei klar neuerer lokaler Modtime hoch — und zählen
-    // „uploaded“ erst, wenn die Größen wirklich abweichen (sonst: „5
-    // hochgeladen“ obwohl schon am Ziel).
-    final toUpload = localItems.values
+    // Index remote files by basename for path-mismatch tolerance
+    // (lokal Photos/A/x.jpg, remote Photos/B/x.jpg → gilt als vorhanden).
+    final remoteByBase = <String, List<MapEntry<String, RcloneFileInfo>>>{};
+    for (final e in remoteFiles.entries) {
+      if (e.value.isDir) continue;
+      final base = e.key.split('/').last.toLowerCase();
+      if (base.isEmpty) continue;
+      (remoteByBase[base] ??= []).add(e);
+    }
+
+    // ---------- 1) Upload: nur wenn remote wirklich fehlt / lokal neuer ----
+    // UI: Phase „upload“ erst beim echten Transfer — Prüfung bleibt „scan“.
+    final candidates = localItems.values
         .where((item) => !blockedRels.contains(item.rel))
         .where((item) => !remoteDeletedRels.contains(item.rel))
-        .where((item) {
-          final remote = remoteFiles[item.rel];
-          if (remote == null) return true;
-          if (remote.isDir) return false;
-          if (remote.size <= 0) return true;
-          final rMod = DateTime.tryParse(remote.modTime);
-          // Remote vorhanden mit Inhalt, aber keine brauchbare Modtime:
-          // NICHT erneut hochladen (vermeidet Dauer-Upload bei Zeitdrift).
-          if (rMod == null) return false;
-          return DateTime.fromMillisecondsSinceEpoch(item.modifiedMs)
-              .isAfter(rMod.add(const Duration(seconds: 30)));
-        })
         .toList();
-    if (toUpload.isNotEmpty) {
-      AppLog.info('sync', 'Virtual-Mirror Upload-Kandidaten: ${toUpload.length} → $remoteName:$remotePath');
+    if (candidates.isNotEmpty) {
+      onProgress?.call('scan', AppStrings.current.syncPhaseScan, 0, candidates.length);
     }
-    var up = 0;
-    for (final item in toUpload) {
-      up++;
-      onProgress?.call('upload', item.rel, up, toUpload.length);
+    var checked = 0;
+    for (final item in candidates) {
+      checked++;
+      if (checked == 1 || checked == candidates.length || checked % 10 == 0) {
+        onProgress?.call(
+            'scan', AppStrings.current.syncPhaseScan, checked, candidates.length);
+      }
+
+      // Exakter Pfad zuerst, sonst gleicher Dateiname irgendwo unter remote.
+      RcloneFileInfo? remote = remoteFiles[item.rel];
+      String? matchedRemoteRel;
+      if (remote != null && !remote.isDir) {
+        matchedRemoteRel = item.rel;
+      } else {
+        final base = item.rel.split('/').last.toLowerCase();
+        final hits = remoteByBase[base];
+        if (hits != null && hits.isNotEmpty) {
+          // Bevorzuge Treffer mit gleichem relativen Parent, sonst ersten.
+          MapEntry<String, RcloneFileInfo>? best;
+          for (final h in hits) {
+            best ??= h;
+            if (h.key == item.rel) {
+              best = h;
+              break;
+            }
+          }
+          if (best != null) {
+            matchedRemoteRel = best.key;
+            remote = best.value;
+          }
+        }
+      }
+
+      // Remote vorhanden → nur bei klar neuerer lokaler Version hochladen.
+      // Gleiche/unbekannte Größe am Ziel: als gesynct werten, KEIN Upload.
+      if (remote != null && !remote.isDir && remote.size > 0) {
+        final rMod = DateTime.tryParse(remote.modTime);
+        final localMod = DateTime.fromMillisecondsSinceEpoch(item.modifiedMs);
+        final clearlyNewer = rMod != null &&
+            localMod.isAfter(rMod.add(const Duration(seconds: 30)));
+        if (!clearlyNewer) {
+          uploadedRels.add(item.rel);
+          // Pfad-Mismatch heilen: lokalen Stand am remote-Pfad „kennen“.
+          if (matchedRemoteRel != null && matchedRemoteRel != item.rel) {
+            uploadedRels.add(matchedRemoteRel);
+          }
+          continue;
+        }
+      }
+
       File? tmp;
       try {
         tmp = await exportForUpload(item);
         if (tmp == null || !await tmp.exists()) continue;
         final localSize = await tmp.length();
         if (localSize <= 0) continue;
-        final remote = remoteFiles[item.rel];
-        // Schon identisch am Ziel (gleiche Größe) → kein Transfer, kein Zähler.
+
+        // Nach Export: Größen-Match gegen remote (auch per Basename).
         if (remote != null && remote.size > 0 && remote.size == localSize) {
           uploadedRels.add(item.rel);
-          AppLog.info('sync',
-              'Übersprungen (bereits am Ziel, ${remote.size} B): ${item.rel}');
           continue;
         }
-        await _rclone.copyFileToRemote(tmp.path, remoteName, _joinRemote(remotePath, item.rel));
+        final base = item.rel.split('/').last.toLowerCase();
+        final hits = remoteByBase[base];
+        if (hits != null) {
+          var sizeMatch = false;
+          for (final h in hits) {
+            if (!h.value.isDir && h.value.size == localSize) {
+              sizeMatch = true;
+              uploadedRels.add(item.rel);
+              break;
+            }
+          }
+          if (sizeMatch) continue;
+        }
+
+        // ECHTER Upload — erst jetzt „Hochladen“ in der UI.
+        onProgress?.call('upload', item.rel, uploaded + 1, 0);
+        await _rclone.copyFileToRemote(
+            tmp.path, remoteName, _joinRemote(remotePath, item.rel));
         uploaded++;
         uploadedRels.add(item.rel);
       } catch (e) {
         AppLog.warn('sync', 'Upload fehlgeschlagen: ${item.rel} → $e');
       } finally {
-        // Export-Datei niemals liegen lassen (manifest-only!).
         try {
           final f = tmp;
           if (f != null && await f.exists()) await f.delete();
           final parent = tmp?.parent;
-          if (parent != null && await parent.exists() &&
+          if (parent != null &&
+              await parent.exists() &&
               parent.path.contains('fibu_export_')) {
             await parent.delete(recursive: true);
           }
@@ -336,10 +392,19 @@ class VirtualMirrorSyncEngine {
     var dl = 0;
     final tmpFiles = <File>[];
     final tmpRels = <String>[];
+    // Basename der lokalen Items — Remote-Datei mit gleichem Namen gilt als lokal.
+    final localBases = <String>{
+      for (final rel in localItems.keys) rel.split('/').last.toLowerCase(),
+    };
+    // Download-Liste nach Basename filtern (Pfad-Mismatch).
+    toDownload.removeWhere((entry) {
+      final base = entry.key.split('/').last.toLowerCase();
+      return localBases.contains(base);
+    });
     for (final entry in toDownload) {
       final rel = entry.key;
       dl++;
-      onProgress?.call('download', rel, dl, toDownload.length);
+      onProgress?.call('download', rel, dl, 0);
       try {
         final tmpRoot = await Directory.systemTemp.createTemp('fibu_import_');
         final dest = File('${tmpRoot.path}/${entry.value.name}');

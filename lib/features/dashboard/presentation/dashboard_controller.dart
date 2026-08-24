@@ -296,7 +296,9 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         // nur aufblitzt, wirkt hektisch. Mindestens ~1,6 s sichtbare Ruhe —
         // echte Übertragungen dauern ohnehin länger und warten nie.
         final elapsed = DateTime.now().difference(startedAt);
-        const minVisible = Duration(milliseconds: 1600);
+        // Ruhiger Balken bei No-Op-Syncs (~2 s), damit nichts nur aufblitzt.
+        // Echte Transfers dauern länger und warten hier nie.
+        const minVisible = Duration(milliseconds: 2000);
         if (elapsed < minVisible) {
           await Future.delayed(minVisible - elapsed);
         }

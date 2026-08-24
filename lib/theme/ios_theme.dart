@@ -51,6 +51,8 @@ class IosTheme {
       primaryColor: theme.accent,
       primaryContrastingColor: cupertino.CupertinoColors.white,
       scaffoldBackgroundColor: theme.canvas,
+      // Nav-Bars: pro Screen via iosBarBackground() transparent bei Liquid Glass
+      // (iOS 26+); Default bleibt surface für iOS < 26 und System-Fallbacks.
       barBackgroundColor: theme.surface,
       textTheme: textTheme,
     );

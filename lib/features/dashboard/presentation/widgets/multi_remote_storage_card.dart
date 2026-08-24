@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/rclone_provider.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/widgets/liquid_glass.dart';
 import '../../../../theme/theme.dart';
 import '../../../../core/localization/app_strings.dart';
 
@@ -57,56 +58,64 @@ class MultiRemoteStorageCard extends ConsumerWidget {
         final otherColor = theme.accent.withValues(alpha: 0.3);
         final freeColor = theme.textSecondary.withValues(alpha: 0.15);
 
-        return Container(
+        final body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              strings.cloudBackupStorage,
+              style: TextStyle(
+                color: theme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            SizedBox(height: theme.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              child: SizedBox(
+                height: 10,
+                child: (totalUsed + free) <= 0
+                    ? Container(color: freeColor)
+                    : Row(
+                        children: [
+                          if (fibuUsed > 0)
+                            Expanded(flex: fibuUsed, child: Container(color: fibuColor)),
+                          if (otherUsed > 0)
+                            Expanded(flex: otherUsed, child: Container(color: otherColor)),
+                          if (free > 0)
+                            Expanded(flex: free, child: Container(color: freeColor)),
+                        ],
+                      ),
+              ),
+            ),
+            SizedBox(height: theme.sm),
+            Text(
+              totalQuota > 0
+                  ? strings.quotaSummaryUsedOf(
+                      formatBytes(totalUsed), formatBytes(totalQuota))
+                  : '${formatBytes(totalUsed)} · ${strings.quotaSummaryUnavailable}',
+              style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  fontFeatures: const [FontFeature.tabularFigures()]),
+            ),
+          ],
+        );
+
+        // iOS 26+: natives Liquid Glass; darunter opake Surface wie bisher.
+        return LiquidGlassPanel(
           padding: EdgeInsets.all(theme.lg),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(theme.radiusLg),
-            border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
+          borderRadius: BorderRadius.circular(theme.radiusLg),
+          fallback: Container(
+            padding: EdgeInsets.all(theme.lg),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(theme.radiusLg),
+              border: Border.all(color: theme.textSecondary.withValues(alpha: 0.15)),
+            ),
+            child: body,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                strings.cloudBackupStorage,
-                style: TextStyle(
-                  color: theme.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              SizedBox(height: theme.sm),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                child: SizedBox(
-                  height: 10,
-                  child: (totalUsed + free) <= 0
-                      ? Container(color: freeColor)
-                      : Row(
-                          children: [
-                            if (fibuUsed > 0)
-                              Expanded(flex: fibuUsed, child: Container(color: fibuColor)),
-                            if (otherUsed > 0)
-                              Expanded(flex: otherUsed, child: Container(color: otherColor)),
-                            if (free > 0)
-                              Expanded(flex: free, child: Container(color: freeColor)),
-                          ],
-                        ),
-                ),
-              ),
-              SizedBox(height: theme.sm),
-              Text(
-                totalQuota > 0
-                    ? strings.quotaSummaryUsedOf(
-                        formatBytes(totalUsed), formatBytes(totalQuota))
-                    : '${formatBytes(totalUsed)} · ${strings.quotaSummaryUnavailable}',
-                style: TextStyle(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                    fontFeatures: const [FontFeature.tabularFigures()]),
-              ),
-            ],
-          ),
+          child: body,
         );
       },
     );

@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
+import '../../../core/widgets/liquid_glass.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/sanzo_wada_palettes.dart';
@@ -441,7 +442,7 @@ class SettingsScreen extends ConsumerWidget {
         slivers: [
           cupertino.CupertinoSliverNavigationBar(
             largeTitle: Text(strings.settingsTitle),
-            backgroundColor: theme.surface,
+            backgroundColor: iosBarBackground(ref, theme),
           ),
           SliverSafeArea(
             top: false,

@@ -81,6 +81,11 @@ empty cloud side, not an error.
   flip back to green while local and remote still differ.
 - Virtual backends (union, crypt, combine, alias, chunker, compress) pick
   already-connected drives via multiple-choice instead of free-text paths.
+- **Liquid Glass (iOS 26+ only):** native `UIGlassEffect` via MethodChannel
+  `fibu/liquid_glass` and Platform-View `fibu/liquid_glass_view` (runtime class
+  lookup — builds on older Xcode). Tab bar, nav bars, key cards and the home
+  screen widget adopt glass when available; iOS 15–25 keep the previous opaque
+  Cupertino look. Deployment target stays 15.0.
 - Progress messages are simple verbs (Checking, Uploading, Downloading,
   Cleaning up, Deleting); counts arrive separately as `itemsDone/itemsTotal`.
 

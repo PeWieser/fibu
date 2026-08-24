@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../../theme/theme.dart';
+import '../../../core/widgets/liquid_glass.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
@@ -185,7 +186,7 @@ class TasksScreen extends ConsumerWidget {
         slivers: [
           cupertino.CupertinoSliverNavigationBar(
             largeTitle: Text(strings.tasksTitle),
-            backgroundColor: theme.surface,
+            backgroundColor: iosBarBackground(ref, theme),
             trailing: SizedBox(
               width: 44,
               height: 44,

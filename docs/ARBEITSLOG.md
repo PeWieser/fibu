@@ -2,6 +2,29 @@
 
 ---
 
+## 2026-08-24 — Natives Liquid Glass (iOS 26+), darunter unverändert
+
+### App (Flutter + UIKit)
+- Neuer Channel `fibu/liquid_glass` + Platform-View `fibu/liquid_glass_view`.
+- Echtes **UIGlassEffect** per Runtime-`NSClassFromString` (kein Hard-Link →
+  kompiliert auch mit älteren Xcode-SDKs; aktiv nur ab iOS 26).
+- Tab-Bar: transparent + Glass-Streifen dahinter (iOS 26+); iOS &lt; 26 opakes surface.
+- Nav-Bars (Dashboard/Tasks/Settings): transparenter Hintergrund ab iOS 26.
+- Karten/Banner: `LiquidGlassPanel` / `LiquidGlassGroupedBox` (Status-Banner,
+  Sync-Fortschritt); Fallback = bisherige Surface-Optik.
+
+### Widgets
+- Hintergrund ab iOS 26: natives UIGlassEffect via `UIViewRepresentable`.
+- iOS 17–25: `containerBackground` + systemBackground (wie zuvor).
+- iOS 15–16: klassisches background.
+- Status-Glyph: Glass-Kreis ab 26, getönter Kreis davor.
+- Deployment Target bleibt **15.0**.
+
+### Nicht geändert
+- Android/Windows-Optik, Design-Tokens, Geschäftslogik.
+
+---
+
 ## 2026-08-24 — Setup-Hinweis gestaffelt, Sync-Banner ehrlich, Remote-Picker für Union/Crypt
 
 ### Dashboard Setup-Hinweis

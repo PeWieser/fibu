@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import UIKit
 
 // MARK: - Geteilte Daten (App Group ↔ App ↔ Widget)
 //
@@ -92,16 +93,79 @@ final class FibuProvider: TimelineProvider {
   }
 }
 
-// MARK: - Hintergrund (iOS 17+ verlangt containerBackground — ohne diese
-// API rendert das System das Widget nur als Platzhalter!)
+// MARK: - Liquid Glass (Runtime, SDK-unabhängig)
+//
+// UIGlassEffect wird per NSClassFromString geladen — kompiliert auf jedem
+// Xcode, aktiv nur ab iOS 26. Unter iOS 26: systemBackground wie bisher.
+
+private var isIOS26OrNewer: Bool {
+  ProcessInfo.processInfo.isOperatingSystemAtLeast(
+    OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+  )
+}
+
+/// UIView mit echtem UIGlassEffect (iOS 26+) oder systemBackground.
+private final class FibuGlassUIView: UIView {
+  private let effectView: UIVisualEffectView?
+
+  override init(frame: CGRect) {
+    if isIOS26OrNewer,
+       let cls = NSClassFromString("UIGlassEffect") as? NSObject.Type,
+       let effect = cls.init() as? UIVisualEffect {
+      let ev = UIVisualEffectView(effect: effect)
+      ev.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      effectView = ev
+    } else {
+      effectView = nil
+    }
+    super.init(frame: frame)
+    backgroundColor = .clear
+    isOpaque = false
+    if let effectView {
+      effectView.frame = bounds
+      addSubview(effectView)
+    } else {
+      backgroundColor = .systemBackground
+    }
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// SwiftUI-Bridge zum nativen Glass-UIView.
+private struct FibuNativeGlassView: UIViewRepresentable {
+  func makeUIView(context: Context) -> FibuGlassUIView {
+    FibuGlassUIView(frame: .zero)
+  }
+
+  func updateUIView(_ uiView: FibuGlassUIView, context: Context) {}
+}
+
+// MARK: - Hintergrund
+//
+// iOS 17+: containerBackground (Pflicht, sonst Platzhalter).
+// iOS 26+: darin natives Liquid Glass.
+// iOS 15–16: background.
 
 extension View {
   @ViewBuilder
   func fibuWidgetBackground() -> some View {
     if #available(iOSApplicationExtension 17.0, *) {
-      self.containerBackground(for: .widget) { Color(.systemBackground) }
+      self.containerBackground(for: .widget) {
+        FibuWidgetBackdrop()
+      }
     } else {
-      self.background(Color(.systemBackground))
+      self.background(FibuWidgetBackdrop())
+    }
+  }
+}
+
+struct FibuWidgetBackdrop: View {
+  var body: some View {
+    if isIOS26OrNewer {
+      FibuNativeGlassView()
+    } else {
+      Color(.systemBackground)
     }
   }
 }
@@ -175,12 +239,7 @@ private struct _FibuSmall: View {
     }()
 
     VStack(spacing: 12) {
-      ZStack {
-        Circle().fill(color.opacity(0.16)).frame(width: 62, height: 62)
-        Image(systemName: "arrow.triangle.2.circlepath")
-          .font(.system(size: 25, weight: .semibold))
-          .foregroundColor(color)
-      }
+      _StatusGlyph(color: color, size: 62, iconSize: 25)
       Text(title)
         .font(.system(size: 16, weight: .semibold))
         .foregroundColor(color)
@@ -195,6 +254,30 @@ private struct _FibuSmall: View {
     }
     .padding(8)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+}
+
+/// Status-Icon: ab iOS 26 Glass-Kreis (UIKit), davor getönter Kreis.
+private struct _StatusGlyph: View {
+  let color: Color
+  let size: CGFloat
+  let iconSize: CGFloat
+
+  var body: some View {
+    ZStack {
+      if isIOS26OrNewer {
+        // Nativer Glass-Kreis hinter dem Icon.
+        FibuNativeGlassView()
+          .frame(width: size, height: size)
+          .clipShape(Circle())
+          .overlay(Circle().stroke(color.opacity(0.35), lineWidth: 1))
+      } else {
+        Circle().fill(color.opacity(0.16)).frame(width: size, height: size)
+      }
+      Image(systemName: "arrow.triangle.2.circlepath")
+        .font(.system(size: iconSize, weight: .semibold))
+        .foregroundColor(color)
+    }
   }
 }
 
@@ -298,12 +381,7 @@ private struct __FibuLargeHeader: View {
     }()
 
     HStack(spacing: 12) {
-      ZStack {
-        Circle().fill(color.opacity(0.16)).frame(width: 52, height: 52)
-        Image(systemName: "arrow.triangle.2.circlepath")
-          .font(.system(size: 20, weight: .semibold))
-          .foregroundColor(color)
-      }
+      _StatusGlyph(color: color, size: 52, iconSize: 20)
       VStack(alignment: .leading, spacing: 3) {
         Text(title)
           .font(.system(size: 17, weight: .semibold))

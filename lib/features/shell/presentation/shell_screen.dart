@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/widgets/liquid_glass.dart';
 import 'shell_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../tasks/presentation/tasks_screen.dart';
@@ -98,15 +99,26 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   // --- iOS (Cupertino Tab Scaffold with Symmetrical Vertical Padding) ---
   Widget _buildIOS(BuildContext context, WidgetRef ref, int activeIndex, AppStrings strings, AppThemeData theme) {
-    return cupertino.CupertinoTabScaffold(
+    // iOS 26+: Tab-Bar transparent + natives Liquid Glass dahinter.
+    // iOS < 26: opakes surface wie bisher.
+    final glass = liquidGlassActive(ref);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    const tabBarHeight = 52.0;
+    final glassHeight = tabBarHeight + bottomInset;
+
+    final scaffold = cupertino.CupertinoTabScaffold(
       controller: _tabController,
       tabBar: cupertino.CupertinoTabBar(
         currentIndex: activeIndex,
         activeColor: theme.accent,
         inactiveColor: theme.textSecondary,
-        backgroundColor: theme.surface,
+        // Transparent bei Glass, sonst solid surface — Optik unter iOS 26 unverändert.
+        backgroundColor: glass ? const Color(0x00000000) : theme.surface,
+        border: glass
+            ? const Border(top: BorderSide(color: Color(0x00000000), width: 0))
+            : null,
         iconSize: 22.0,
-        height: 52.0,
+        height: tabBarHeight,
         onTap: (index) {
           IosHaptics.selection();
           ref.read(shellIndexProvider.notifier).state = index;
@@ -162,6 +174,25 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             return const DashboardScreen();
         }
       },
+    );
+
+    if (!glass) return scaffold;
+
+    // Glass ZUERST (hinten), Scaffold darüber. Der opake Seiten-Inhalt deckt
+    // Glass ab; die transparente Tab-Bar lässt es durchscheinen — Icons bleiben
+    // scharf über dem Glass.
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            child: LiquidGlassTabBarBackdrop(height: glassHeight),
+          ),
+        ),
+        scaffold,
+      ],
     );
   }
 

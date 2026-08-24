@@ -48,6 +48,9 @@ import Rclone
       if let registrar = registry.registrar(forPlugin: "KeychainChannel") {
         KeychainChannel.register(with: registrar.messenger())
       }
+      if let registrar = registry.registrar(forPlugin: "LiquidGlassChannel") {
+        LiquidGlassChannel.register(with: registrar)
+      }
     }
     // Hintergrund-Task für geplante Syncs (Identifier siehe Info.plist).
     // Hinweis: registerBGProcessingTask ist in workmanager >=0.5 nicht mehr nötig
@@ -70,6 +73,9 @@ import Rclone
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemInfoChannel") {
       SystemInfoChannel.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiquidGlassChannel") {
+      LiquidGlassChannel.register(with: registrar)
     }
   }
 }

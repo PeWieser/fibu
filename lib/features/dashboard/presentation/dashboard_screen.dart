@@ -20,6 +20,7 @@ import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
 import 'cloud_explorer_screen.dart';
+import '../../../core/widgets/liquid_glass.dart';
 
 /// Platform-adaptive Dashboard Screen. Renders layout dynamically based on
 /// the current platform. Alle Live-Daten aktualisieren sich automatisch
@@ -494,7 +495,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         slivers: [
           cupertino.CupertinoSliverNavigationBar(
             largeTitle: Text(strings.navDashboard),
-            backgroundColor: theme.surface,
+            // iOS 26+: transparent → natives Liquid Glass der System-Bar;
+            // darunter opakes surface wie bisher.
+            backgroundColor: iosBarBackground(ref, theme),
           ),
           SliverSafeArea(
             top: false,
@@ -740,55 +743,52 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildActiveJobPanelIOS(BuildContext context, ActiveJobState job, AppStrings strings) {
     final theme = context.theme;
-    return Container(
-      padding: EdgeInsets.all(theme.lg),
-      decoration: BoxDecoration(
-        color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
-        borderRadius: BorderRadius.circular(theme.radiusLg),
-        border: Border.all(color: cupertino.CupertinoColors.separator.resolveFrom(context), width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
-          SizedBox(height: theme.sm),
-          Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 2, overflow: TextOverflow.ellipsis),
-          SizedBox(height: theme.sm),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(theme.radiusSm),
-            child: SizedBox(
-              height: 6,
-              child: Stack(
-                children: [
-                  Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
-                  FractionallySizedBox(
-                    widthFactor: job.percentage / 100,
-                    child: Container(color: theme.accent),
-                  ),
-                ],
+    return LiquidGlassGroupedBox(
+      child: Padding(
+        padding: EdgeInsets.all(theme.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: theme.sm),
+            Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 2, overflow: TextOverflow.ellipsis),
+            SizedBox(height: theme.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              child: SizedBox(
+                height: 6,
+                child: Stack(
+                  children: [
+                    Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
+                    FractionallySizedBox(
+                      widthFactor: job.percentage / 100,
+                      child: Container(color: theme.accent),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          if (job.itemsTotal > 0) ...[
+            if (job.itemsTotal > 0) ...[
+              SizedBox(height: theme.sm),
+              Text(
+                strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
+                style: TextStyle(fontSize: 13, color: theme.textSecondary),
+              ),
+            ],
             SizedBox(height: theme.sm),
-            Text(
-              strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
-              style: TextStyle(fontSize: 13, color: theme.textSecondary),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (job.eta.isNotEmpty)
+                  Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary))
+                else
+                  const SizedBox.shrink(),
+                Text('${job.percentage.toStringAsFixed(1)}%',
+                    style: TextStyle(fontSize: 12, color: theme.textSecondary, fontFeatures: const [FontFeature.tabularFigures()])),
+              ],
             ),
           ],
-          SizedBox(height: theme.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (job.eta.isNotEmpty)
-                Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary))
-              else
-                const SizedBox.shrink(),
-              Text('${job.percentage.toStringAsFixed(1)}%',
-                  style: TextStyle(fontSize: 12, color: theme.textSecondary, fontFeatures: const [FontFeature.tabularFigures()])),
-            ],
-          )
-        ],
+        ),
       ),
     );
   }
@@ -1099,31 +1099,48 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     // Ein Banner, eine Zeile: Icon + Status. Nicht tappbar, kein Chevron.
-    return Container(
+    // iOS 26+: dezentes Liquid Glass unter der getönten Fläche.
+    final row = Row(
+      children: [
+        Icon(icon, color: statusColor, size: 24, semanticLabel: statusText),
+        SizedBox(width: theme.md),
+        Expanded(
+          child: Text(
+            statusText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+    final radius = BorderRadius.circular(theme.radiusSm);
+    final tinted = Container(
       padding: EdgeInsets.all(theme.md),
       constraints: const BoxConstraints(minHeight: 52),
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
+        borderRadius: radius,
         border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1.0),
       ),
-      child: Row(
-        children: [
-          Icon(icon, color: statusColor, size: 24, semanticLabel: statusText),
-          SizedBox(width: theme.md),
-          Expanded(
-            child: Text(
-              statusText,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: theme.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
+      child: row,
+    );
+    if (defaultTargetPlatform != TargetPlatform.iOS) return tinted;
+    return LiquidGlassPanel(
+      borderRadius: radius,
+      fallback: tinted,
+      child: Container(
+        padding: EdgeInsets.all(theme.md),
+        constraints: const BoxConstraints(minHeight: 52),
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.10),
+          borderRadius: radius,
+        ),
+        child: row,
       ),
     );
   }

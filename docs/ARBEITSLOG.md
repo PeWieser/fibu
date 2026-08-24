@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-08-24 — Fix: Lokale Löschung im Spiegel-Modus (kein Re-Download)
+
+### Bug
+Lokal löschen → Sync → Datei kam dauernd aus der Cloud zurück, statt remote
+gelöscht zu bleiben.
+
+### Ursachen
+1. **Tombstone-Parse:** `jsonDecode` + `whereType<Map<String, dynamic>>()`
+   verwarf oft alle Einträge (`Map<dynamic, dynamic>`), Tombstones waren
+   effektiv leer → Download holte die Cloud-Kopie wieder.
+2. **Virtual Mirror:** lokale Löschungen wurden zwar vorab in die Datei
+   geschrieben, aber die Engine erzeugte Tombstones nicht robust aus
+   `previouslySyncedRels` und entfernte gelöschte Pfade nicht aus dem
+   In-Memory-Remote-Scan → Phase Download sah sie noch.
+3. **FS-Mirror:** Mediathek-Löschungen wurden aus dem Spiegel gelöscht, aber
+   **nicht** als Tombstones an `MirrorSyncEngine` übergeben.
+
+### Fix
+- Sicheres Parse mit `Map<String, dynamic>.from(raw)`.
+- Virtual: Tombstones aus fehlenden previously-synced Pfaden; nach
+  Remote-Delete `remoteFiles.remove`; Download respektiert blocked/merged.
+- FS-Mirror: `localDeletions:` Parameter; iOS übergibt Snapshot-Diff.
+
+---
+
 ## 2026-08-24 — Natives Liquid Glass (iOS 26+), darunter unverändert
 
 ### App (Flutter + UIKit)

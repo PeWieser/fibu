@@ -103,12 +103,17 @@ class MirrorSyncEngine {
   /// Synchronisiert den persistenten lokalen Spiegel [localRoot] mit dem
   /// Remote-Verzeichnis [remoteName]:[remotePath].
   ///
+  /// [localDeletions]: relative Pfade, die VOR diesem Lauf als lokal gelöscht
+  /// erkannt wurden (Mediathek-Snapshot-Diff). Werden als Tombstones behandelt,
+  /// damit die Cloud-Kopie entfernt und nicht erneut heruntergeladen wird.
+  ///
   /// [onProgress] liefert während des Laufs Zwischenstände (Scan, Upload,
   /// Tombstones/Deletes, Download) für die UI.
   Future<MirrorSyncResult> sync({
     required String localRoot,
     required String remoteName,
     required String remotePath,
+    List<String> localDeletions = const [],
     TrashService? trash,
     MirrorProgressCallback? onProgress,
   }) async {
@@ -126,6 +131,31 @@ class MirrorSyncEngine {
     final remoteTombs = await _readRemoteTombstones(remoteName, remotePath);
     final appliedLocal = <Tombstone>[]; // lokal bereits remote ausgeführt
     final merged = <String, Tombstone>{}; // union local+remote (neueste je Pfad)
+
+    // Mediathek-first / explizite lokale Löschungen → Tombstones.
+    // Ohne diesen Schritt würde Phase 4 die noch remote vorhandene Datei
+    // sofort wieder herunterladen („Löschen → Sync → kommt zurück“).
+    if (localDeletions.isNotEmpty) {
+      final known = localTombs.map((t) => t.path).toSet();
+      final now = DateTime.now();
+      var added = 0;
+      for (final rel in localDeletions) {
+        final path = rel.replaceAll('\\', '/');
+        if (path.isEmpty || known.contains(path)) continue;
+        if (localFiles.containsKey(path)) continue; // doch noch lokal
+        localTombs.add(Tombstone(
+          path: path,
+          deletedAt: now,
+          deviceId: deviceId,
+        ));
+        known.add(path);
+        added++;
+      }
+      if (added > 0) {
+        AppLog.info('sync',
+            '$added lokale Löschungen als Tombstones übernommen (Cloud-Löschung, kein Re-Download)');
+      }
+    }
 
     int uploaded = 0;
     int downloaded = 0;
@@ -195,8 +225,13 @@ class MirrorSyncEngine {
           try {
             await _rclone.deleteFile(remoteName, _joinRemote(remotePath, tomb.path));
             deletedRemote++;
-          } catch (_) {}
+            ok = true;
+          } catch (e) {
+            AppLog.warn('sync', 'Remote-Löschung fehlgeschlagen: ${tomb.path} → $e');
+          }
         }
+        // Aus In-Memory-Remote-Liste nehmen, damit Phase 4 nicht re-downloaded.
+        if (ok) remoteFiles.remove(tomb.path);
       }
       appliedLocal.add(tomb);
       merged[tomb.path] = tomb;
@@ -428,11 +463,15 @@ class MirrorSyncEngine {
   List<Tombstone> _parseTombs(String content) {
     final list = jsonDecode(content);
     if (list is! List) return [];
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(Tombstone.fromJson)
-        .where((t) => t.path.isNotEmpty)
-        .toList();
+    // jsonDecode liefert oft Map<dynamic,dynamic> — whereType<Map<String,dynamic>>
+    // würde dann ALLE Einträge verwerfen (stille Tombstone-Amnesie).
+    final out = <Tombstone>[];
+    for (final raw in list) {
+      if (raw is! Map) continue;
+      final t = Tombstone.fromJson(Map<String, dynamic>.from(raw));
+      if (t.path.isNotEmpty) out.add(t);
+    }
+    return out;
   }
 
   String _encodeTombs(List<Tombstone> tombs) =>

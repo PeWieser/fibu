@@ -525,6 +525,9 @@ class IosRcloneService implements RcloneService {
           localRoot: srcFs,
           remoteName: remoteName,
           remotePath: remotePath,
+          // Mediathek-Löschungen als Tombstones — sonst holt der Download
+          // die Cloud-Kopie sofort wieder zurück.
+          localDeletions: localDeletions,
           trash: trash,
           onProgress: (phase, item, done, total) {
             if (progress.isClosed) return;
@@ -1145,15 +1148,32 @@ class IosRcloneService implements RcloneService {
       final f = File('${dir.path}/tombstones.json');
       final now = DateTime.now();
       final entries = <Map<String, dynamic>>[];
+      final known = <String>{};
       if (await f.exists()) {
         final content = (await f.readAsString()).trim();
         if (content.isNotEmpty) {
           final decoded = jsonDecode(content);
-          if (decoded is List) entries.addAll(decoded.whereType<Map<String, dynamic>>());
+          if (decoded is List) {
+            // Map.cast-sicher: jsonDecode liefert oft Map<dynamic,dynamic>.
+            for (final raw in decoded) {
+              if (raw is! Map) continue;
+              final m = Map<String, dynamic>.from(raw);
+              final p = m['path'] as String? ?? '';
+              if (p.isEmpty || known.contains(p)) continue;
+              known.add(p);
+              entries.add(m);
+            }
+          }
         }
       }
       for (final rel in rels) {
-        entries.add({'path': rel, 'deletedAt': now.toIso8601String(), 'deviceId': 'local'});
+        if (rel.isEmpty || known.contains(rel)) continue;
+        known.add(rel);
+        entries.add({
+          'path': rel,
+          'deletedAt': now.toIso8601String(),
+          'deviceId': 'local',
+        });
       }
       await f.writeAsString(const JsonEncoder.withIndent('  ').convert(entries));
     } catch (_) {}

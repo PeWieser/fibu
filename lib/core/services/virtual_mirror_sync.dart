@@ -105,7 +105,37 @@ class VirtualMirrorSyncEngine {
     // Erfolgreich hochgeladene Pfade dieses Laufs (für den „gesynct“-Zustand).
     final uploadedRels = <String>{};
 
-    // ---------- 0) Remote-Löschungen erkennen (Mirror: Cloud → lokal) -------
+    // ---------- 0a) Lokale Löschungen → Tombstones (Mirror: lokal → Cloud) ---
+    // Pfade, die zuletzt nachweislich gesynct waren und jetzt lokal fehlen,
+    // sind lokale Löschungen. Tombstones werden HIER erzeugt (nicht nur
+    // vorab in der Datei) — sonst holt die Download-Phase die Cloud-Kopie
+    // sofort wieder in die Mediathek.
+    if (previouslySyncedRels != null && previouslySyncedRels.isNotEmpty) {
+      final knownTombs = localTombs.map((t) => t.path).toSet();
+      final missingLocal = previouslySyncedRels
+          .where((rel) => !localItems.containsKey(rel) && !knownTombs.contains(rel))
+          .toList();
+      final prevCount = previouslySyncedRels.length;
+      // Sicherheitsbremse: massiver Schwund = Formatwechsel, keine Lösch-Welle.
+      final localDeleteAnomaly = prevCount >= 10 && missingLocal.length * 2 > prevCount;
+      if (localDeleteAnomaly) {
+        AppLog.warn('sync',
+            'Lokale Löschungen (${missingLocal.length}/$prevCount) wirken wie Formatwechsel → keine Tombstones (nächster Lauf prüft erneut)');
+      } else if (missingLocal.isNotEmpty) {
+        final now = DateTime.now();
+        for (final rel in missingLocal) {
+          localTombs.add(Tombstone(
+            path: rel,
+            deletedAt: now,
+            deviceId: 'local',
+          ));
+        }
+        AppLog.info('sync',
+            '${missingLocal.length} lokal gelöschte Medien → Tombstones (Cloud-Löschung, kein Re-Download)');
+      }
+    }
+
+    // ---------- 0b) Remote-Löschungen erkennen (Mirror: Cloud → lokal) -------
     // Ein Pfad, der beim letzten Lauf in der Cloud lag, jetzt aber weder
     // remote existiert noch ein Tombstone hat, wurde direkt in der Cloud
     // gelöscht. Diese Kandidaten dürfen NICHT wieder hochgeladen werden —
@@ -187,9 +217,17 @@ class VirtualMirrorSyncEngine {
           try {
             await _rclone.deleteFile(remoteName, _joinRemote(remotePath, tomb.path));
             deletedRemote++;
-          } catch (_) {}
+            ok = true;
+          } catch (e) {
+            AppLog.warn('sync', 'Remote-Löschung fehlgeschlagen: ${tomb.path} → $e');
+          }
         }
+        // Auch bei Erfolg aus der In-Memory-Liste nehmen, damit Phase 4
+        // (Download) die Datei nicht aus dem Scan-Stand von Laufbeginn holt.
+        if (ok) remoteFiles.remove(tomb.path);
       }
+      // Tombstone gilt IMMER — blockiert Re-Download, auch wenn Delete noch
+      // scheitert (nächster Lauf versucht erneut, holt aber nichts zurück).
       merged[tomb.path] = tomb;
     }
 
@@ -250,8 +288,11 @@ class VirtualMirrorSyncEngine {
       final rel = entry.key;
       if (entry.value.isDir) continue;
       if (rel.startsWith('.fibu') || rel.startsWith("$remotePath/.fibu")) continue;
+      // Tombstone (lokal oder remote) → niemals erneut herunterladen.
       if (merged.containsKey(rel)) continue;
       if (localItems.containsKey(rel)) continue;
+      // Explizit geblockte Pfade (z. B. abgelehnte Cloud→lokal-Löschung).
+      if (blockedRels.contains(rel)) continue;
       // Adoptierte Dateien: nur-remote ist OK — nie laden, nie anfassen.
       if (adoptedRels != null && adoptedRels.contains(rel)) continue;
       if (adoptOrphans && adoptedRels != null) {
@@ -432,13 +473,7 @@ class VirtualMirrorSyncEngine {
       if (!await file.exists()) return [];
       final content = (await file.readAsString()).trim();
       if (content.isEmpty) return [];
-      final list = jsonDecode(content);
-      if (list is! List) return [];
-      return list
-          .whereType<Map<String, dynamic>>()
-          .map(Tombstone.fromJson)
-          .where((t) => t.path.isNotEmpty)
-          .toList();
+      return _parseTombs(content);
     } catch (_) {
       return [];
     }
@@ -456,11 +491,15 @@ class VirtualMirrorSyncEngine {
     try {
       final list = jsonDecode(content);
       if (list is! List) return [];
-      return list
-          .whereType<Map<String, dynamic>>()
-          .map(Tombstone.fromJson)
-          .where((t) => t.path.isNotEmpty)
-          .toList();
+      // jsonDecode liefert oft Map<dynamic,dynamic> — whereType<Map<String,dynamic>>
+      // würde dann ALLE Tombstones verwerfen → Re-Download-Bug nach lokaler Löschung.
+      final out = <Tombstone>[];
+      for (final raw in list) {
+        if (raw is! Map) continue;
+        final t = Tombstone.fromJson(Map<String, dynamic>.from(raw));
+        if (t.path.isNotEmpty) out.add(t);
+      }
+      return out;
     } catch (_) {
       return [];
     }

@@ -2,6 +2,21 @@
 
 ---
 
+## 2026-08-24 — Sync-Bedarf pro Task-Alben (lokal + remote)
+
+### Idee
+Statt der gesamten Mediathek nur die in der jeweiligen Aufgabe
+konfigurierten Alben prüfen; remote die gleichen Alben unter
+`…/Photos/<Album>/` (flach) gegenrechnen.
+
+### Umsetzung
+- Lokal: `selectedAlbums` / `sourcePath` „photos:A|B“; leer → einmal „Alle Fotos“.
+- Remote: nur im heavy Auto-Refresh (~60 s) flache Listen der Task-Alben.
+- Baseline nach Sync speichert lokalen und remote Count je Task.
+- Kein Voll-Tree-Scan der Cloud fürs Banner.
+
+---
+
 ## 2026-08-24 — Fix: Falsches „Sync fällig“ + Schein-Uploads
 
 ### Bug

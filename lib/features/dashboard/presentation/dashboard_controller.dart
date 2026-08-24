@@ -309,9 +309,12 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
           logs: [...state.logs, endMsg],
         );
         // Homescreen-Widget informieren: Task ist erfolgreich synchronisiert.
-        await _ref
-            .read(widgetStatusProvider.notifier)
-            .reportTaskRun(task.id, task.name);
+        // Task-JSON mitgeben → Baseline = genau die konfigurierten Alben.
+        await _ref.read(widgetStatusProvider.notifier).reportTaskRun(
+              task.id,
+              task.name,
+              taskJson: _taskJsonForWidget(task),
+            );
       } finally {
         await statusSub.cancel();
       }
@@ -323,9 +326,12 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       final isCancelled = e.toString() == 'Backup cancelled' || _isCancelled;
       final friendly = _friendlySyncError(strings, e);
       final failMsg = '${_timestamp()} Task "${task.name}" failed: $friendly';
-      await _ref
-          .read(widgetStatusProvider.notifier)
-          .reportTaskRun(task.id, task.name, error: friendly);
+      await _ref.read(widgetStatusProvider.notifier).reportTaskRun(
+            task.id,
+            task.name,
+            error: friendly,
+            taskJson: _taskJsonForWidget(task),
+          );
       state = state.copyWith(
         status: isCancelled ? RcloneJobStatus.cancelled : RcloneJobStatus.failed,
         currentFile: isCancelled ? strings.backupStopped : friendly,
@@ -493,6 +499,23 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       logs: [...state.logs, cancelMsg],
     );
   }
+
+  /// Task-Felder, die der Widget-Status für die Alben-Baseline braucht.
+  Map<String, dynamic> _taskJsonForWidget(BackupTask task) => {
+        'id': task.id,
+        'name': task.name,
+        'sourcePath': task.sourcePath,
+        'selectedAlbums': task.selectedAlbums,
+        'targetRemotes': task.targetRemotes,
+        'targetRemote': task.targetRemote,
+        'targetFolderMode': task.targetFolderMode == TargetFolderMode.root
+            ? 'root'
+            : (task.targetFolderMode == TargetFolderMode.newFolder
+                ? 'newFolder'
+                : 'custom'),
+        'targetFolderName': task.targetFolderName,
+        'isActive': task.isActive,
+      };
 
   @override
   void dispose() {

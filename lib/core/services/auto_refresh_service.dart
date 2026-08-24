@@ -81,11 +81,15 @@ class AutoRefreshService {
       _ref.invalidate(remoteQuotaProvider);
       // Fibu-Beleg = rekursive Ordner-Listung → bewusst seltener
       // (jeder 6. Zyklus ≈ alle 60 s / 120 s im Stromsparmodus).
-      if (_cycle % 6 == 1) {
+      final heavy = _cycle % 6 == 1;
+      if (heavy) {
         _ref.invalidate(remoteFibuUsageProvider);
       }
-      // Lokale Seite: Sync-Bedarf neu bewerten → Banner + Widgets.
-      await _ref.read(widgetStatusProvider.notifier).recomputeAndPush();
+      // Sync-Bedarf: lokal (Task-Alben) jeden Takt; Remote-Alben-Abgleich
+      // nur im heavy-Zyklus (billige flache Listen, kein Tree-Walk).
+      await _ref
+          .read(widgetStatusProvider.notifier)
+          .recomputeAndPush(includeRemote: heavy);
     } catch (_) {
       // Auto-Refresh ist best-effort und darf nie stören.
     } finally {

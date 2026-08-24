@@ -7,7 +7,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
-import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/network_status_service.dart';
@@ -52,6 +51,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final platform = defaultTargetPlatform;
 
     // Jedes Mal, wenn der Nutzer in den Dashboard-Tab wechselt, sofort prüfen.
@@ -277,36 +278,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildSyncActionsWindows(context, activeJob, strings),
               _lastSyncInfo(context, strings),
               SizedBox(height: theme.xl),
-              fluent.Tooltip(
-                message: ref.watch(networkStatusProvider).online
-                    ? strings.exploreRemoteFiles
-                    : strings.statusOffline,
-                child: fluent.Button(
-                  // Offline gibt es nichts zu durchsuchen — ausgegraut.
-                  onPressed: !ref.watch(networkStatusProvider).online
-                      ? null
-                      : () {
-                          Navigator.push(
-                            context,
-                            fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
-                          );
-                        },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(fluent.FluentIcons.cloud, size: 16, color: theme.accent, semanticLabel: strings.exploreRemoteFiles),
-                          const SizedBox(width: 8),
-                          Text(strings.exploreRemoteFiles),
-                        ],
+              Builder(builder: (context) {
+                final online = ref.watch(networkStatusProvider).online;
+                return fluent.Tooltip(
+                  message: online ? strings.exploreRemoteFiles : strings.statusOffline,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      fluent.Button(
+                        // Offline gibt es nichts zu durchsuchen — ausgegraut.
+                        onPressed: online
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
+                                );
+                              }
+                            : null,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  fluent.FluentIcons.cloud,
+                                  size: 16,
+                                  color: online ? theme.accent : theme.textSecondary,
+                                  semanticLabel: strings.exploreRemoteFiles,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  strings.exploreRemoteFiles,
+                                  style: TextStyle(
+                                    color: online ? null : theme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      if (!online) ...[
+                        SizedBox(height: theme.xs),
+                        Text(
+                          strings.offlineActionHint,
+                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              ),
+                );
+              }),
               SizedBox(height: theme.xl),
             ],
           ],
@@ -397,7 +421,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final tasksLoaded = ref.watch(tasksLoadedProvider);
     final online = ref.watch(networkStatusProvider).online;
     final canSync = tasksLoaded && online;
-    return fluent.Tooltip(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!online) ...[
+          Padding(
+            padding: EdgeInsets.only(bottom: theme.xs),
+            child: Text(
+              strings.offlineActionHint,
+              style: TextStyle(color: theme.textSecondary, fontSize: 12),
+            ),
+          ),
+        ],
+        fluent.Tooltip(
       message: !online
           ? strings.statusOffline
           : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
@@ -426,6 +462,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ),
+        ),
+      ],
     );
   }
 
@@ -437,26 +475,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final quotaAsync = ref.watch(primaryQuotaProvider);
     final isSyncing = activeJob.status == RcloneJobStatus.syncing || activeJob.status == RcloneJobStatus.pending;
     final setupHint = _buildSetupHint(context, strings);
+    final online = ref.watch(networkStatusProvider).online;
+    final tasksLoaded = ref.watch(tasksLoadedProvider);
+    final canSync = tasksLoaded && online;
 
+    // Large Title mit fixierter Navigationsleiste: Der Titel bleibt beim
+    // Scrollen sichtbar (er kollabiert in die kompakte Leiste, HIG-konform).
+    // Kein Refresh-Button — alles aktualisiert sich automatisch.
     return cupertino.CupertinoPageScaffold(
-      navigationBar: const cupertino.CupertinoNavigationBar(
-        // Großer, natives iOS-Titel wird im Scroll-Content gerendert (Large Title).
-        // Kein Refresh-Button mehr — alles aktualisiert sich automatisch.
-        middle: SizedBox.shrink(),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              // iPad: volle Bildschirmbreite liest sich schlecht — Inhalt
-              // mittig auf max. 700 pt begrenzen (iPhone bleibt unverändert).
-              constraints: const BoxConstraints(maxWidth: 700),
-              child: Column(
+      backgroundColor: theme.canvas,
+      child: CustomScrollView(
+        slivers: [
+          cupertino.CupertinoSliverNavigationBar(
+            largeTitle: Text(strings.navDashboard),
+            backgroundColor: theme.surface,
+          ),
+          SliverSafeArea(
+            top: false,
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  // iPad: volle Bildschirmbreite liest sich schlecht — Inhalt
+                  // mittig auf max. 700 pt begrenzen (iPhone bleibt unverändert).
+                  constraints: const BoxConstraints(maxWidth: 700),
+                  child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              IosTheme.largeTitle(strings.navDashboard, theme),
               Padding(
-                padding: EdgeInsets.fromLTRB(theme.lg, 0, theme.lg, theme.lg),
+                padding: EdgeInsets.fromLTRB(theme.lg, theme.sm, theme.lg, theme.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -550,94 +596,125 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 )
               else
                 Semantics(
-                  label: !ref.watch(networkStatusProvider).online
+                  label: !online
                       ? strings.statusOffline
-                      : (ref.watch(tasksLoadedProvider)
-                          ? strings.syncAll
-                          : strings.syncButtonWaitTasks),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: cupertino.CupertinoButton.filled(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                      // Ausgegraut, bis tasks.json gelesen ist UND online —
-                      // offline kann kein Backup laufen.
-                      onPressed: !ref.watch(tasksLoadedProvider) ||
-                              !ref.watch(networkStatusProvider).online
-                          ? null
-                          : () {
-                              IosHaptics.medium();
-                              ref.read(activeJobProvider.notifier).triggerSyncAll();
-                            },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Spinner + Klartext, solange die Aufgaben laden —
-                          // sonst wirkt der graue Button wie ein Fehler.
-                          if (!ref.watch(tasksLoadedProvider))
-                            const cupertino.CupertinoActivityIndicator(
-                                color: cupertino.CupertinoColors.white)
-                          else
-                            const Icon(
-                              cupertino.CupertinoIcons.arrow_2_circlepath,
-                              color: cupertino.CupertinoColors.white,
-                              size: 20,
-                              semanticLabel: 'Sync',
-                            ),
-                          const SizedBox(width: 8),
-                          Text(ref.watch(tasksLoadedProvider)
-                              ? strings.syncAll
-                              : strings.syncButtonWaitTasks),
-                        ],
+                      : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: cupertino.CupertinoButton(
+                          color: theme.accent,
+                          // Deutlich ausgegraut statt nur reduziert opak:
+                          // Offline/tastend-graue Fläche + gedimmter Text.
+                          disabledColor: theme.offline.withValues(alpha: 0.35),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          borderRadius: BorderRadius.circular(theme.radiusSm),
+                          // Eindeutig deaktiviert, bis tasks.json gelesen ist
+                          // UND eine Internetverbindung besteht.
+                          onPressed: canSync
+                              ? () {
+                                  IosHaptics.medium();
+                                  ref.read(activeJobProvider.notifier).triggerSyncAll();
+                                }
+                              : null,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Spinner + Klartext, solange die Aufgaben laden —
+                              // sonst wirkt der graue Button wie ein Fehler.
+                              if (!tasksLoaded)
+                                cupertino.CupertinoActivityIndicator(
+                                  color: cupertino.CupertinoColors.white
+                                      .withValues(alpha: canSync ? 1 : 0.7),
+                                )
+                              else
+                                Icon(
+                                  cupertino.CupertinoIcons.arrow_2_circlepath,
+                                  color: cupertino.CupertinoColors.white
+                                      .withValues(alpha: canSync ? 1 : 0.7),
+                                  size: 20,
+                                  semanticLabel: 'Sync',
+                                ),
+                              const SizedBox(width: 8),
+                              Text(
+                                tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
+                                style: TextStyle(
+                                  color: cupertino.CupertinoColors.white
+                                      .withValues(alpha: canSync ? 1 : 0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                      if (!online) ...[
+                        SizedBox(height: theme.xs),
+                        Text(
+                          strings.offlineActionHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               _lastSyncInfo(context, strings),
               const SizedBox(height: 12),
               Semantics(
-                label: ref.watch(networkStatusProvider).online
-                    ? strings.exploreRemoteFiles
-                    : strings.statusOffline,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: cupertino.CupertinoButton(
-                    color: theme.accent.withValues(alpha: 0.15),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    borderRadius: BorderRadius.circular(theme.radiusSm),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          cupertino.CupertinoIcons.folder,
-                          color: ref.watch(networkStatusProvider).online
-                              ? theme.accent
-                              : theme.textSecondary,
-                          size: 18,
-                          semanticLabel: strings.exploreRemoteFiles,
+                label: online ? strings.exploreRemoteFiles : strings.statusOffline,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: cupertino.CupertinoButton(
+                        color: theme.accent.withValues(alpha: 0.15),
+                        // Offline deutlich ausgegraut: graue Fläche statt
+                        // Akzentfarbe, damit der Zustand sofort erkennbar ist.
+                        disabledColor: theme.textSecondary.withValues(alpha: 0.12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        borderRadius: BorderRadius.circular(theme.radiusSm),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              cupertino.CupertinoIcons.folder,
+                              color: online ? theme.accent : theme.textSecondary,
+                              size: 18,
+                              semanticLabel: strings.exploreRemoteFiles,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              strings.exploreRemoteFiles,
+                              style: TextStyle(
+                                color: online ? theme.accent : theme.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          strings.exploreRemoteFiles,
-                          style: TextStyle(
-                            color: ref.watch(networkStatusProvider).online
-                                ? theme.accent
-                                : theme.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                        // Offline gibt es nichts zu durchsuchen — deaktiviert.
+                        onPressed: online
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
+                                );
+                              }
+                            : null,
+                      ),
                     ),
-                    // Offline gibt es nichts zu durchsuchen — ausgegraut.
-                    onPressed: !ref.watch(networkStatusProvider).online
-                        ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
-                            );
-                          },
-                  ),
+                    if (!online) ...[
+                      SizedBox(height: theme.xs),
+                      Text(
+                        strings.offlineActionHint,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               ],
@@ -650,6 +727,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ),
+          ],
+        ),
     );
   }
 
@@ -667,7 +746,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
           SizedBox(height: theme.sm),
-          Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 2, overflow: TextOverflow.ellipsis),
           SizedBox(height: theme.sm),
           ClipRRect(
             borderRadius: BorderRadius.circular(theme.radiusSm),
@@ -797,58 +876,89 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               )
             else
-              material.Tooltip(
-                message: !ref.watch(networkStatusProvider).online
-                    ? strings.statusOffline
-                    : (ref.watch(tasksLoadedProvider)
-                        ? strings.syncAll
-                        : strings.syncButtonWaitTasks),
-                child: material.ElevatedButton.icon(
-                  // Ausgegraut, bis tasks.json gelesen ist UND online.
-                  onPressed: ref.watch(tasksLoadedProvider) &&
-                          ref.watch(networkStatusProvider).online
-                      ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
-                      : null,
-                  icon: ref.watch(tasksLoadedProvider)
-                      ? const Icon(material.Icons.sync, semanticLabel: 'Sync')
-                      : const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: material.CircularProgressIndicator(strokeWidth: 2),
+              Builder(builder: (context) {
+                final online = ref.watch(networkStatusProvider).online;
+                final tasksLoaded = ref.watch(tasksLoadedProvider);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!online) ...[
+                      Padding(
+                        padding: EdgeInsets.only(bottom: theme.xs),
+                        child: Text(
+                          strings.offlineActionHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
                         ),
-                  label: Text(ref.watch(tasksLoadedProvider)
-                      ? strings.syncAll
-                      : strings.syncButtonWaitTasks),
-                  style: material.ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                  ),
-                ),
-              ),
+                      ),
+                    ],
+                    material.Tooltip(
+                      message: !online
+                          ? strings.statusOffline
+                          : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                      child: material.ElevatedButton.icon(
+                        // Ausgegraut, bis tasks.json gelesen ist UND online.
+                        onPressed: tasksLoaded && online
+                            ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
+                            : null,
+                        icon: tasksLoaded
+                            ? const Icon(material.Icons.sync, semanticLabel: 'Sync')
+                            : const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: material.CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                        label: Text(tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                        style: material.ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          disabledBackgroundColor: theme.offline.withValues(alpha: 0.25),
+                          disabledForegroundColor: material.Colors.white.withValues(alpha: 0.7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
             _lastSyncInfo(context, strings),
             const SizedBox(height: 12),
-            material.Tooltip(
-              message: ref.watch(networkStatusProvider).online
-                  ? strings.exploreRemoteFiles
-                  : strings.statusOffline,
-              child: material.OutlinedButton.icon(
-                icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
-                label: Text(strings.exploreRemoteFiles),
-                style: material.OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                ),
-                // Offline gibt es nichts zu durchsuchen — ausgegraut.
-                onPressed: !ref.watch(networkStatusProvider).online
-                    ? null
-                    : () {
-                        Navigator.push(
-                          context,
-                          material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
-                        );
-                      },
-              ),
-            ),
+            Builder(builder: (context) {
+              final online = ref.watch(networkStatusProvider).online;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  material.Tooltip(
+                    message: online ? strings.exploreRemoteFiles : strings.statusOffline,
+                    child: material.OutlinedButton.icon(
+                      icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
+                      label: Text(strings.exploreRemoteFiles),
+                      style: material.OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        disabledForegroundColor: theme.textSecondary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+                      ),
+                      // Offline gibt es nichts zu durchsuchen — ausgegraut.
+                      onPressed: online
+                          ? () {
+                              Navigator.push(
+                                context,
+                                material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
+                              );
+                            }
+                          : null,
+                    ),
+                  ),
+                  if (!online) ...[
+                    SizedBox(height: theme.xs),
+                    Text(
+                      strings.offlineActionHint,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ],
+              );
+            }),
             ],
           ],
         ),

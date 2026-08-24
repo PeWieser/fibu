@@ -239,7 +239,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           children: [
             Text(
               job.currentFile.isEmpty ? strings.preparing : job.currentFile,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: theme.textPrimary, fontSize: 13),
             ),
@@ -559,6 +559,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final tasks = ref.watch(tasksListProvider);
     final taskIndex = tasks.indexWhere((t) => t.id == widget.taskId);
 
@@ -807,7 +809,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
     return cupertino.CupertinoPageScaffold(
       navigationBar: cupertino.CupertinoNavigationBar(
-        middle: Text(_isEditing ? _nameCtrl.text : task.name),
+        // Nav-Titel sind laut HIG einzeilig; lange Namen kürzen wir sauber
+        // mit Ellipse, statt sie unkontrolliert abzuschneiden.
+        middle: Text(
+          _isEditing ? _nameCtrl.text : task.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         trailing: cupertino.CupertinoButton(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           onPressed: () {

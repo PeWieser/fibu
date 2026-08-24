@@ -62,7 +62,8 @@ Support for every cloud storage and protocol in the rclone ecosystem:
   - **iOS:** Cupertino design (blur effects, SF Symbols, Cupertino navigation)
   - **Android:** Material 3 (dynamic color, elevation, floating bars)
 - **Accessibility:** 44 pt minimum touch targets, theme-driven text colors verified to stay readable in light **and** dark mode (no static label colors), WCAG-AA-friendly contrasts, Sanzo Wada palettes.
-- **Live theme switching:** System light/dark changes are applied instantly (WidgetsBindingObserver → `appThemeProvider`), no app restart needed.
+- **Live theme switching:** System light/dark changes are applied instantly (WidgetsBindingObserver → `appThemeProvider`) across every screen and dialog — text and object colors included — no app restart needed.
+- **Sticky page titles (iOS):** Dashboard, Tasks and Settings use native large titles that collapse into a fixed navigation bar while scrolling, so the page title stays visible at all times (HIG-compliant).
 
 ### 7. Real rclone Behaviour in the Wizard & Cloud Drive List
 - **Real sign-in:** "Sign In" creates a temporary remote, lists its root, and deletes it again — errors (invalid credentials, unreachable host, bad S3 keys) surface *before* anything is saved. Adding a remote is **locked until sign-in succeeds** (or OAuth authorization completed); editing any credential field re-arms it.
@@ -73,7 +74,7 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 ### 8. Convenience & Integrations (iOS)
 - **Home-screen widgets (3 sizes):** live sync state per task (ok / pending / never / error), last sync time, and a sync-needed indicator. Data flows through an App Group whose ID is resolved at runtime from the signing profile — so widgets keep working with sideload tools that rename app groups. Refreshed on app start/resume, after every task change, and by the 2-hour background run.
 - **Home-screen context menu:** Long-press the app icon → **"Sync Now"** (quick action, SF symbol) starts the sync queue immediately — works from cold start as well.
-- **Open-source licenses:** Settings → Legal shows the full auto-generated license list, including manually registered entries for the statically linked rclone (MIT) and gomobile (BSD-3).
+- **Open-source licenses:** Settings → Legal presents a structured overview — a short classification, the core components (rclone, gomobile, Flutter) with descriptions, and the full list of bundled libraries; each entry opens its complete license text in a dedicated detail view.
 - **Diagnostics log:** Settings → "Sync Log & Diagnostics" shows every action with timestamps and severity (engine, rclone RPCs, remotes, media staging, syncs, offline events) — copyable for support. Everything is also appended to a persistent log file at `Documents/fibu.log` (next to `rclone.conf`, visible in the Files app under "On My iPhone").
 
 ---

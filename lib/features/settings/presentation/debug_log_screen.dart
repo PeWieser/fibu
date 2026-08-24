@@ -79,6 +79,8 @@ class DebugLogScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.
+    ref.watch(appThemeProvider);
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
     final entries = ref.watch(appLogProvider);

@@ -3,9 +3,11 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../localization/app_strings.dart';
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
 import 'rclone_provider.dart';
+import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
 
 /// Ein verbundener Cloud-Speicher aus Fibu-Sicht.
@@ -57,56 +59,19 @@ class RemoteEntry {
         createdAtMs: (json['createdAtMs'] as num?)?.toInt() ?? 0,
       );
 
-  /// Menschenlesbares Provider-Label aus dem rclone-Backend-Typ.
+  /// Menschenlesbares Provider-Label aus dem rclone-Backend-Typ —
+  /// zweisprachig über die Provider-Registry (Deutsch/Englisch).
   static String prettyType(String type) {
-    switch (type.trim().toLowerCase()) {
-      case 'mega':
-        return 'MEGA';
-      case 'drive':
-        return 'Google Drive';
-      case 'google photos':
-      case 'googlephotos':
-        return 'Google Photos';
-      case 'dropbox':
-        return 'Dropbox';
-      case 'onedrive':
-        return 'OneDrive';
-      case 'sharepoint':
-        return 'SharePoint';
-      case 'pcloud':
-        return 'pCloud';
-      case 'box':
-        return 'Box';
-      case 'yandex':
-        return 'Yandex Disk';
-      case 's3':
-        return 'S3-kompatibel';
-      case 'b2':
-        return 'Backblaze B2';
-      case 'webdav':
-        return 'WebDAV';
-      case 'sftp':
-        return 'SFTP';
-      case 'ftp':
-        return 'FTP';
-      case 'protondrive':
-        return 'Proton Drive';
-      case 'jottacloud':
-        return 'Jottacloud';
-      case 'koofr':
-        return 'Koofr';
-      case 'azureblob':
-        return 'Azure Blob';
-      case 'gcs':
-      case 'google cloud storage':
-        return 'Google Cloud Storage';
-      case '':
-        return 'Cloud';
-      default:
-        final t = type.trim();
-        if (t.isEmpty) return 'Cloud';
-        return t[0].toUpperCase() + t.substring(1);
+    final clean = type.trim().toLowerCase();
+    if (clean.isEmpty) return 'Cloud';
+    // Offizielle Schreibweise der Marke.
+    if (clean == 'mega') return 'MEGA';
+    final descriptor = RcloneProviderRegistry.findById(clean);
+    if (descriptor != null) {
+      return descriptor.localizedName(AppStrings.current.locale);
     }
+    final t = type.trim();
+    return t[0].toUpperCase() + t.substring(1);
   }
 }
 

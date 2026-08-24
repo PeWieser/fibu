@@ -1108,17 +1108,25 @@ class IosRcloneService implements RcloneService {
       final f = File('${root.path}/mirror_state.json');
       if (!await f.exists()) return empty;
       final decoded = jsonDecode(await f.readAsString());
-      if (decoded is! Map<String, dynamic>) return empty;
-      final items = (decoded['items'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(VirtualMediaItem.fromJson)
-          .toList();
-      final blocked = (decoded['blocked'] as List<dynamic>? ?? const [])
-          .whereType<String>()
-          .toSet();
-      final adopted = (decoded['adopted'] as List<dynamic>? ?? const [])
-          .whereType<String>()
-          .toSet();
+      if (decoded is! Map) return empty;
+      final map = Map<String, dynamic>.from(decoded);
+      final rawItems = map['items'];
+      final items = <VirtualMediaItem>[];
+      if (rawItems is List) {
+        for (final e in rawItems) {
+          if (e is! Map) continue;
+          final item = VirtualMediaItem.fromJson(Map<String, dynamic>.from(e));
+          if (item.rel.isNotEmpty) items.add(item);
+        }
+      }
+      final blocked = <String>{
+        for (final e in (map['blocked'] as List? ?? const []))
+          if (e is String && e.isNotEmpty) e,
+      };
+      final adopted = <String>{
+        for (final e in (map['adopted'] as List? ?? const []))
+          if (e is String && e.isNotEmpty) e,
+      };
       return (items: items, blocked: blocked, adopted: adopted);
     } catch (_) {
       return empty;
@@ -1233,11 +1241,20 @@ class IosRcloneService implements RcloneService {
     final byRel = <String, AssetEntity>{};
     final selectedSet = selectedAlbums.toSet();
     final allowAll = selectedAlbums.isEmpty;
+    // Ein Asset gehört oft mehreren Alben — pro Asset-ID nur EINMAL zählen
+    // (sonst wachsende rel-Pfade und falsche Upload-Kandidaten).
+    final seenAssetIds = <String>{};
 
     var total = 0;
     var done = 0;
     for (final album in albums) {
-      if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) continue;
+      // „Alle Fotos“ / Recents überspringen, wenn konkrete Alben gewählt sind
+      // ODER wenn hasAll-Alben die Nutzer-Alben nur duplizieren würden.
+      // Bei allowAll: Nutzer-Alben bevorzugen, isAll zuletzt — und per
+      // seenAssetIds deduplizieren.
+      if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) {
+        continue;
+      }
       final albumName = album.name.replaceAll(RegExp(r'[/\\:]'), '_');
       final count = await album.assetCountAsync;
       if (count == 0) continue;
@@ -1254,6 +1271,8 @@ class IosRcloneService implements RcloneService {
           if (done % 25 == 0 || done == total) {
             onStage(AppStrings.current.syncReadAlbum(albumName), done, total);
           }
+          // Bereits in einem anderen Album erfasst → überspringen.
+          if (!seenAssetIds.add(asset.id)) continue;
           // Titel → deterministisch-eindeutiger Zielname (ohne jeglichen Export).
           var base = (asset.title ?? '').trim();
           if (base.isEmpty) {
@@ -1283,7 +1302,8 @@ class IosRcloneService implements RcloneService {
         }
       }
     }
-    AppLog.info('media', 'Virtual-Scan fertig: ${items.length} Medien in $total Assets geprüft');
+    AppLog.info('media',
+        'Virtual-Scan fertig: ${items.length} eindeutige Medien ($done Album-Treffer geprüft)');
     return (items: items, byRel: byRel);
   }
 

@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-08-24 — Fix: Falsches „Sync fällig“ + Schein-Uploads
+
+### Bug
+- Banner „Änderungen gefunden — Sync fällig“ nach wenigen Minuten ohne Änderung.
+- Abschlussmeldung „x hochgeladen“, obwohl die Dateien schon am Ziel waren.
+
+### Ursachen
+1. **Medienzählung** summiert `assetCountAsync` über *alle* Alben (Mehrfachzählung
+   desselben Fotos) → schwankende Zahl → `needsSync=true`.
+2. **Upload-Zähler** zählte jeden `copyFileToRemote`, auch wenn Größe am Ziel
+   identisch war; Modtime-Drift markierte Dateien fälschlich als „neuer“.
+3. Virtual-Scan konnte dasselbe Asset über mehrere Alben mehrfach als rel führen.
+
+### Fix
+- Widget-Count nur über `onlyAll: true` („Alle Fotos“ einmal).
+- `pending` wird zurück auf `ok` gesetzt, wenn der Count wieder stimmt.
+- Upload nur bei fehlender Remote-Datei oder klar neuerer lokaler Version;
+  gleiche Größe → überspringen, **nicht** als uploaded zählen.
+- Virtual-Scan: Deduplizierung pro Asset-ID; Mirror-State Map-cast-sicher.
+
+---
+
 ## 2026-08-24 — Fix: Lokale Löschung im Spiegel-Modus (kein Re-Download)
 
 ### Bug

@@ -172,12 +172,20 @@ class MirrorSyncEngine {
     //    synchronisierende Gerät.
     // =====================================================================
     final toUpload = localFiles.entries
-        .where((entry) =>
-            remoteFiles[entry.key] == null ||
-            _localIsNewer(entry.value, remoteFiles[entry.key]!))
+        .where((entry) {
+          final remote = remoteFiles[entry.key];
+          if (remote == null || remote.isDir) return remote == null;
+          // Größe identisch → schon am Ziel, nicht erneut als Kandidat.
+          try {
+            if (remote.size > 0 && remote.size == entry.value.lengthSync()) {
+              return false;
+            }
+          } catch (_) {}
+          return _localIsNewer(entry.value, remote);
+        })
         .toList();
     if (toUpload.isNotEmpty) {
-      AppLog.info('sync', 'Mirror-Phase Upload: ${toUpload.length} Dateien → $remoteName:$remotePath');
+      AppLog.info('sync', 'Mirror-Phase Upload-Kandidaten: ${toUpload.length} → $remoteName:$remotePath');
     }
     var up = 0;
     for (final entry in toUpload) {
@@ -186,6 +194,12 @@ class MirrorSyncEngine {
       up++;
       onProgress?.call('upload', rel, up, toUpload.length);
       try {
+        final localSize = file.lengthSync();
+        final remote = remoteFiles[rel];
+        if (remote != null && remote.size > 0 && remote.size == localSize) {
+          AppLog.info('sync', 'Übersprungen (bereits am Ziel, ${remote.size} B): $rel');
+          continue;
+        }
         await _rclone.copyFileToRemote(
           file.path,
           remoteName,
@@ -488,14 +502,20 @@ class MirrorSyncEngine {
   /// nicht fälschlich übersprungen werden. Eine kleine Toleranz verhindert
   /// Ping-Pong durch leichte Uhrzeit-Drift zwischen Geräten.
   bool _localIsNewer(File local, RcloneFileInfo remote) {
+    // Gleiche Größe = inhaltlich am Ziel → nicht neu hochladen
+    // (verhindert „5 hochgeladen“-Lüge bei reinem Modtime-Drift).
+    try {
+      final localSize = local.lengthSync();
+      if (remote.size > 0 && remote.size == localSize) return false;
+    } catch (_) {}
     final remoteMod = DateTime.tryParse(remote.modTime);
     if (remoteMod == null) {
-      // Remote-Modtime unbekannt → anhand der Größe entscheiden.
-      return remote.size != local.lengthSync();
+      // Remote-Modtime unbekannt, Größe weicht ab → hochladen.
+      return true;
     }
     final localMod = local.statSync().modified;
-    // Nur als "neuer" gelten, wenn klar neuer (Toleranz ~5s).
-    return localMod.difference(remoteMod).inSeconds > 5;
+    // Nur als "neuer" gelten, wenn klar neuer (Toleranz ~30s gegen Uhrdrift).
+    return localMod.difference(remoteMod).inSeconds > 30;
   }
 
   String _relPath(String path, String root) {

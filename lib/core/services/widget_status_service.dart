@@ -75,8 +75,8 @@ class WidgetStatusData {
         lastError: j['lastError'] as String? ?? '',
         activeTaskCount: (j['activeTaskCount'] as num?)?.toInt() ?? 0,
         tasks: (j['tasks'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map(WidgetTaskState.fromJson)
+            .whereType<Map>()
+            .map((m) => WidgetTaskState.fromJson(Map<String, dynamic>.from(m)))
             .toList(),
       );
 
@@ -133,8 +133,8 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
       final f = await _file();
       if (await f.exists()) {
         final data = jsonDecode(await f.readAsString());
-        if (data is Map<String, dynamic>) {
-          state = WidgetStatusData.fromJson(data);
+        if (data is Map) {
+          state = WidgetStatusData.fromJson(Map<String, dynamic>.from(data));
         }
       }
     } catch (_) {}
@@ -158,20 +158,21 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
     }
   }
 
-  /// Zählt Medien billig (assetCountAsync pro Album — niemals Exporte).
+  /// Zählt Medien EINMAL über das „Alle Fotos“-Album — niemals Summe über
+  /// alle Alben (sonst Mehrfachzählung + schwankende Zahlen → falsches
+  /// „Sync fällig“ alle paar Minuten).
   Future<int> _scanMediaCount() async {
     try {
       final ps = await PhotoManager.requestPermissionExtend();
       if (!ps.isAuth && !ps.hasAccess) return 0;
       final paths = await PhotoManager.getAssetPathList(
-          type: RequestType.common, hasAll: true);
-      var total = 0;
-      for (final p in paths) {
-        try {
-          total += await p.assetCountAsync;
-        } catch (_) {}
-      }
-      return total;
+        type: RequestType.common,
+        hasAll: true,
+        onlyAll: true,
+      );
+      if (paths.isEmpty) return 0;
+      // onlyAll:true → genau ein Eintrag („Recents“ / „Alle Fotos“).
+      return await paths.first.assetCountAsync;
     } catch (_) {
       return 0;
     }
@@ -183,9 +184,13 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
       final tasksFile = await privateAppFile('tasks.json');
       List<Map<String, dynamic>> rawTasks = const [];
       if (await tasksFile.exists()) {
-        final decoded =
-            jsonDecode(await tasksFile.readAsString()) as List<dynamic>;
-        rawTasks = decoded.cast<Map<String, dynamic>>();
+        final decoded = jsonDecode(await tasksFile.readAsString());
+        if (decoded is List) {
+          rawTasks = [
+            for (final e in decoded)
+              if (e is Map) Map<String, dynamic>.from(e),
+          ];
+        }
       }
       final activeTasks =
           rawTasks.where((t) => t['isActive'] as bool? ?? false).toList();
@@ -209,19 +214,17 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
         final existing = state.tasks.where((s) => s.taskId == id);
         if (existing.isNotEmpty) {
           var st = existing.first;
-          // Bereits ausstehend / nie gelaufen / Fehler → Sync-Bedarf bleibt.
-          // Früher wurde needsSync nur beim Übergang ok→pending gesetzt;
-          // sobald der Status schon „pending“ war, fiel das Banner danach
-          // fälschlich auf „Alles synchronisiert“ zurück.
-          if (st.status == 'never' ||
-              st.status == 'pending' ||
-              st.status == 'error') {
+          // Nie gelaufen / Fehler → Sync-Bedarf.
+          // „pending“ allein bleibt NICHT ewig hängen: nur wenn die
+          // Medienzählung sich wirklich geändert hat (sonst bliebe das
+          // Banner nach einem Fehl-Recompute dauerhaft orange).
+          if (st.status == 'never' || st.status == 'error') {
             needsSync = true;
           }
           if (isMedia && st.mediaCountAtLastSync != countNow) {
             // Bibliothek hat sich seit dem letzten erfolgreichen Sync geändert.
             needsSync = true;
-            if (st.status == 'ok') {
+            if (st.status == 'ok' || st.status == 'pending') {
               st = WidgetTaskState(
                 taskId: st.taskId,
                 name: st.name,
@@ -230,6 +233,21 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
                 mediaCountAtLastSync: st.mediaCountAtLastSync,
               );
             }
+          } else if (st.status == 'pending' &&
+              isMedia &&
+              st.mediaCountAtLastSync == countNow &&
+              st.lastSyncIso.isNotEmpty) {
+            // Count wieder stabil und es gab schon einen Lauf → zurück auf ok.
+            st = WidgetTaskState(
+              taskId: st.taskId,
+              name: st.name,
+              status: 'ok',
+              lastSyncIso: st.lastSyncIso,
+              mediaCountAtLastSync: st.mediaCountAtLastSync,
+            );
+          } else if (st.status == 'pending') {
+            // Noch pending und Count unklar/anders → Sync-Bedarf anzeigen.
+            needsSync = true;
           }
           tasks.add(st);
         } else {
@@ -254,7 +272,7 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
       );
       if (!hasError) state = state.copyWith(lastError: '');
       AppLog.info('widget',
-          'Widget-Status: ${state.activeTaskCount} aktive Tasks, needsSync=${state.needsSync}');
+          'Widget-Status: ${state.activeTaskCount} aktive Tasks, needsSync=${state.needsSync}, mediaCount=$countNow');
       await _persist();
       await _pushToWidget();
     } catch (e) {
@@ -285,11 +303,17 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
 
     // needsSync über ALLE Tasks bewerten — ein erfolgreicher Einzel-Lauf
     // darf andere ausstehende Tasks nicht als „alles aktuell“ maskieren.
+    // „pending“ zählt nur, wenn der Count noch abweicht (sonst greift
+    // recomputeAndPush und räumt auf).
     final stillNeeds = error != null ||
-        updated.any((t) =>
-            t.status == 'never' ||
-            t.status == 'pending' ||
-            t.status == 'error');
+        updated.any((t) {
+          if (t.status == 'never' || t.status == 'error') return true;
+          if (t.status == 'pending' &&
+              t.mediaCountAtLastSync != countNow) {
+            return true;
+          }
+          return false;
+        });
 
     state = state.copyWith(
       tasks: updated,

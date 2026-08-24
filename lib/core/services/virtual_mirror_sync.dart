@@ -158,21 +158,29 @@ class VirtualMirrorSyncEngine {
     final remoteDeletedRels =
         remoteDeletedCandidates.map((i) => i.rel).toSet();
 
-    // ---------- 1) Upload: lokal neu/neuer & remote fehlt/älter ----------
+    // ---------- 1) Upload: lokal neu & remote fehlt ODER lokal klar neuer ----
+    // WICHTIG: Wenn die Cloud-Datei schon existiert und eine Größe > 0 hat,
+    // laden wir NUR bei klar neuerer lokaler Modtime hoch — und zählen
+    // „uploaded“ erst, wenn die Größen wirklich abweichen (sonst: „5
+    // hochgeladen“ obwohl schon am Ziel).
     final toUpload = localItems.values
         .where((item) => !blockedRels.contains(item.rel))
         .where((item) => !remoteDeletedRels.contains(item.rel))
         .where((item) {
           final remote = remoteFiles[item.rel];
           if (remote == null) return true;
+          if (remote.isDir) return false;
+          if (remote.size <= 0) return true;
           final rMod = DateTime.tryParse(remote.modTime);
-          if (rMod == null) return remote.size <= 0;
+          // Remote vorhanden mit Inhalt, aber keine brauchbare Modtime:
+          // NICHT erneut hochladen (vermeidet Dauer-Upload bei Zeitdrift).
+          if (rMod == null) return false;
           return DateTime.fromMillisecondsSinceEpoch(item.modifiedMs)
-              .isAfter(rMod.add(const Duration(seconds: 5)));
+              .isAfter(rMod.add(const Duration(seconds: 30)));
         })
         .toList();
     if (toUpload.isNotEmpty) {
-      AppLog.info('sync', 'Virtual-Mirror Upload: ${toUpload.length} Dateien → $remoteName:$remotePath');
+      AppLog.info('sync', 'Virtual-Mirror Upload-Kandidaten: ${toUpload.length} → $remoteName:$remotePath');
     }
     var up = 0;
     for (final item in toUpload) {
@@ -182,6 +190,16 @@ class VirtualMirrorSyncEngine {
       try {
         tmp = await exportForUpload(item);
         if (tmp == null || !await tmp.exists()) continue;
+        final localSize = await tmp.length();
+        if (localSize <= 0) continue;
+        final remote = remoteFiles[item.rel];
+        // Schon identisch am Ziel (gleiche Größe) → kein Transfer, kein Zähler.
+        if (remote != null && remote.size > 0 && remote.size == localSize) {
+          uploadedRels.add(item.rel);
+          AppLog.info('sync',
+              'Übersprungen (bereits am Ziel, ${remote.size} B): ${item.rel}');
+          continue;
+        }
         await _rclone.copyFileToRemote(tmp.path, remoteName, _joinRemote(remotePath, item.rel));
         uploaded++;
         uploadedRels.add(item.rel);

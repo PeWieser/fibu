@@ -96,6 +96,7 @@ class _RemoteTaskImportScreenState
                 ),
               ),
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 children: [
                   for (final task in widget.candidates)
                     cupertino.CupertinoListTile(

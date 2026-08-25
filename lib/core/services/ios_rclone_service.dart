@@ -529,7 +529,8 @@ class IosRcloneService implements RcloneService {
           // die Cloud-Kopie sofort wieder zurück.
           localDeletions: localDeletions,
           trash: trash,
-          onProgress: (phase, item, done, total) {
+          onProgress: (phase, item, done, total,
+              {bytesDone = 0, bytesTotal = 0}) {
             if (progress.isClosed) return;
             final s = AppStrings.current;
             final phaseLabels = {
@@ -540,17 +541,18 @@ class IosRcloneService implements RcloneService {
               'delete-local': s.syncPhaseDeleteLocal,
             };
             final label = phaseLabels[phase] ?? phase;
-            // Während „Überprüfen“: unbestimmter Balken (0/0), kein „x von y“.
-            // „Hochladen“/„Herunterladen“: nur echte Transfers (total oft 0).
-            final showCounters =
-                (phase == 'upload' || phase == 'download') && done > 0;
+            final isTransfer = phase == 'upload' || phase == 'download';
+            final showCounters = isTransfer && done > 0;
+            // Echter Byte-Fortschritt: Der Balken folgt der übertragenen
+            // Datenmenge, nicht der Dateianzahl.
+            final pct = isTransfer && bytesTotal > 0
+                ? (bytesDone / bytesTotal * 100.0).clamp(0.0, 100.0)
+                : 0.0;
             progress.add(RcloneProgressEvent(
               jobId: jobId,
-              bytesTransferred: 0,
-              totalBytes: 0,
-              percentage: showCounters && total > 0
-                  ? (done / total * 100.0).clamp(0.0, 100.0)
-                  : (phase == 'scan' ? 0.0 : 0.0),
+              bytesTransferred: bytesDone,
+              totalBytes: bytesTotal,
+              percentage: pct,
               currentFile: label,
               eta: '',
               speedBytesPerSecond: 0,
@@ -1480,7 +1482,8 @@ class IosRcloneService implements RcloneService {
       persistLocalState: (entries) =>
           _saveVirtualState(stateRoot, entries, blocked, adopted),
       trash: TrashService(this),
-      onProgress: (phase, item, done, total) {
+      onProgress: (phase, item, done, total,
+          {bytesDone = 0, bytesTotal = 0}) {
         if (progress.isClosed) return;
         final s = AppStrings.current;
         final phaseLabels = {
@@ -1491,16 +1494,16 @@ class IosRcloneService implements RcloneService {
           'delete-local': s.syncPhaseDeleteLocal,
         };
         final label = phaseLabels[phase] ?? phase;
-        // „Hochladen“ nur bei echtem Transfer; Prüfen ohne irreführendes „x von y“.
-        final showCounters =
-            (phase == 'upload' || phase == 'download') && done > 0;
+        final isTransfer = phase == 'upload' || phase == 'download';
+        final showCounters = isTransfer && done > 0;
+        final pct = isTransfer && bytesTotal > 0
+            ? (bytesDone / bytesTotal * 100.0).clamp(0.0, 100.0)
+            : 0.0;
         progress.add(RcloneProgressEvent(
           jobId: jobId,
-          bytesTransferred: 0,
-          totalBytes: 0,
-          percentage: showCounters && total > 0
-              ? (done / total * 100.0).clamp(0.0, 100.0)
-              : 0.0,
+          bytesTransferred: bytesDone,
+          totalBytes: bytesTotal,
+          percentage: pct,
           currentFile: label,
           eta: '',
           speedBytesPerSecond: 0,

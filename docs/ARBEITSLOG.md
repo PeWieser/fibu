@@ -2,6 +2,36 @@
 
 ---
 
+## 2026-08-25 — Setup-Tab-Tap, Byte-Fortschritt, Theme-Hintergründe
+
+### Fix: „Aufgabe erstellen" nicht tappbar
+- `CupertinoTabScaffold` mit eigenem `CupertinoTabController` wechselt **nicht**
+  über `currentIndex` — programmatische Navigation (Setup-Zeile im Dashboard)
+  änderte nur `shellIndexProvider`, der sichtbare Tab blieb stehen.
+- `ShellScreen` hört jetzt auf `shellIndexProvider` und zieht `_tabController.index`
+  nach. Tippen auf die Tab-Bar同步isiert den Provider über den Controller-Listener.
+
+### Fix: Fortschrittsbalken zählt Bytes, nicht Dateien
+- `MirrorProgressCallback` um `bytesDone`/`bytesTotal` erweitert.
+- FS-Mirror summiert vorab die lokalen/remote Dateigrößen und meldet pro
+  Transfer-Phase den echten Byte-Fortschritt.
+- Virtueller Mirror kennt die Upload-Größen erst nach dem Asset-Export —
+  `bytesTotal` wächst mit; der Balken spiegelt damit die tatsächliche
+  Übertragungsmenge wider.
+- `RcloneProgressEvent.bytesTransferred/totalBytes` werden vom Service befüllt;
+  `ActiveJobNotifier` bevorzugt den Byte-Prozentsatz, sobald bekannt.
+- Dashboard-Panels (iOS/Android/Windows) zeigen `x MB / y MB` statt
+  Dateianzahl, sobald Bytes vorliegen.
+
+### Fix: Schwarze Flächen im Darkmode hinter List-Elementen
+- Alle `CupertinoListSection.insetGrouped` (Cloud-Laufwerke, Aufgaben,
+  Einstellungen, Task-Detail, Import) nutzen jetzt `theme.surface`.
+- Verbliebene `CupertinoColors.systemBackground`-Container (Setup-Hinweis,
+  Speicherkarte, Liquid-Glass-Fallback, Lizenzen) auf `theme.surface`
+  umgestellt — einheitliches Theme in Hell & Dunkel.
+
+---
+
 ## 2026-08-24 — Inhalts-Diff im Spiegel (Crop/Metadaten) + Fingerprint-BG
 
 ### Sync

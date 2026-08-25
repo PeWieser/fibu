@@ -24,6 +24,12 @@ class ActiveJobState {
   /// Gesamtzahl der Dateien des aktuellen Laufs (0 = unbekannt).
   final int itemsTotal;
 
+  /// Bereits übertragene Bytes der aktuellen Transfer-Phase (0 = keine Info).
+  final int bytesTransferred;
+
+  /// Insgesamt zu übertragende Bytes der aktuellen Transfer-Phase.
+  final int totalBytes;
+
   const ActiveJobState({
     this.jobId,
     this.status = RcloneJobStatus.completed,
@@ -33,6 +39,8 @@ class ActiveJobState {
     this.logs = const [],
     this.itemsDone = 0,
     this.itemsTotal = 0,
+    this.bytesTransferred = 0,
+    this.totalBytes = 0,
   });
 
   ActiveJobState copyWith({
@@ -44,6 +52,8 @@ class ActiveJobState {
     List<String>? logs,
     int? itemsDone,
     int? itemsTotal,
+    int? bytesTransferred,
+    int? totalBytes,
   }) {
     return ActiveJobState(
       jobId: jobId ?? this.jobId,
@@ -54,6 +64,8 @@ class ActiveJobState {
       logs: logs ?? this.logs,
       itemsDone: itemsDone ?? this.itemsDone,
       itemsTotal: itemsTotal ?? this.itemsTotal,
+      bytesTransferred: bytesTransferred ?? this.bytesTransferred,
+      totalBytes: totalBytes ?? this.totalBytes,
     );
   }
 }
@@ -226,6 +238,12 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     final modeLabel = isEcho ? 'Mirror-Sync (2-Wege)' : 'Incremental';
     final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
     state = state.copyWith(
+      percentage: 0.0,
+      itemsDone: 0,
+      itemsTotal: 0,
+      bytesTransferred: 0,
+      totalBytes: 0,
+      currentFile: strings.startingTask(task.name),
       logs: [...state.logs, startMsg],
     );
 
@@ -265,12 +283,23 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
             newLogs[newLogs.length - 1] = logLine;
           }
 
+          // Bevorzuge Byte-Prozentsatz, sobald die Engine echte Bytes
+          // liefert (Upload/Download). Bei Scan/Staging-Phasen ohne
+          // Byte-Info (totalBytes == 0) beim rohen Event-Prozentsatz bleiben.
+          final effectivePct = event.totalBytes > 0
+              ? (event.bytesTransferred / event.totalBytes * 100.0)
+                  .clamp(0.0, 100.0)
+                  .toDouble()
+              : event.percentage;
+
           state = state.copyWith(
-            percentage: event.percentage,
+            percentage: effectivePct,
             currentFile: '[${task.name}] ${event.currentFile}',
             eta: event.eta,
             itemsDone: event.itemsDone,
             itemsTotal: event.itemsTotal,
+            bytesTransferred: event.bytesTransferred,
+            totalBytes: event.totalBytes,
             logs: newLogs,
           );
         }

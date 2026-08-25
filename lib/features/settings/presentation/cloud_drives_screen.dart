@@ -353,6 +353,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
     }
 
     return cupertino.CupertinoListSection.insetGrouped(
+      backgroundColor: theme.surface,
       header: IosTheme.sectionHeader(strings.connectedDrives, theme),
       children: [
         for (final remote in remotes)

@@ -14,6 +14,7 @@ import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
+import '../../../core/utils/format.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
@@ -123,7 +124,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (platform == TargetPlatform.iOS) {
       return Container(
         decoration: BoxDecoration(
-          color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+          color: theme.surface,
           borderRadius: BorderRadius.circular(theme.radiusLg),
           border: Border.all(
             color: cupertino.CupertinoColors.separator.resolveFrom(context),
@@ -368,7 +369,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
-          if (job.itemsTotal > 0) ...[
+          if (job.totalBytes > 0) ...[
+            SizedBox(height: theme.sm),
+            fluent.Text(
+                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}'),
+          ] else if (job.itemsTotal > 0) ...[
             SizedBox(height: theme.sm),
             fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
           ],
@@ -530,7 +535,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Container(
                           padding: EdgeInsets.all(theme.lg),
                           decoration: BoxDecoration(
-                            color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+                            color: theme.surface,
                             borderRadius: BorderRadius.circular(theme.radiusLg),
                             border: Border.all(
                               color: cupertino.CupertinoColors.separator.resolveFrom(context),
@@ -541,7 +546,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             children: [
                               Icon(
                                 cupertino.CupertinoIcons.cloud,
-                                color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                color: theme.textSecondary,
                                 size: 24,
                                 semanticLabel: strings.noDrivesConfigured,
                               ),
@@ -550,7 +555,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 child: Text(
                                   strings.noDrivesConfigured,
                                   style: TextStyle(
-                                    color: cupertino.CupertinoColors.secondaryLabel.resolveFrom(context),
+                                    color: theme.textSecondary,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -768,7 +773,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             ),
-            if (job.itemsTotal > 0) ...[
+            if (job.totalBytes > 0) ...[
+              SizedBox(height: theme.sm),
+              Text(
+                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textSecondary,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ] else if (job.itemsTotal > 0) ...[
               SizedBox(height: theme.sm),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
@@ -991,7 +1006,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
-            if (job.itemsTotal > 0) ...[
+            if (job.totalBytes > 0) ...[
+              SizedBox(height: theme.sm),
+              Text(
+                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}',
+                style: material.Theme.of(context).textTheme.bodySmall,
+              ),
+            ] else if (job.itemsTotal > 0) ...[
               SizedBox(height: theme.sm),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),

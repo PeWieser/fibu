@@ -808,6 +808,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final strings = context.strings;
 
     return cupertino.CupertinoPageScaffold(
+      backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
         // Nav-Titel sind laut HIG einzeilig; lange Namen kürzen wir sauber
         // mit Ellipse, statt sie unkontrolliert abzuschneiden.
@@ -861,6 +862,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 1. Status Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.generalSection, theme),
                 children: [
                   if (_isEditing)
@@ -892,6 +894,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 2. Source & Target Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.sourceAndTargetSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -936,6 +939,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // leere Alben ausgeblendet, vorhandene Auswahl vorgehakt).
               if (_isEditing && _editIsMediaSource)
                 cupertino.CupertinoListSection.insetGrouped(
+                  backgroundColor: theme.surface,
                   header: IosTheme.sectionHeader(strings.albumsSectionTitle, theme),
                   footer: Padding(
                     padding: const EdgeInsets.only(top: 4.0),
@@ -1011,6 +1015,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // (Inkrementell ↔ Spiegelung). Beim Wechsel AUF Spiegelung
               // werden bestehende Cloud-Dateien beim ersten Lauf adoptiert.
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.syncSettingsSection, theme),
                 footer: Padding(
                   padding: const EdgeInsets.only(top: 4.0),
@@ -1070,6 +1075,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 4. Schedule & Network Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.scheduleAndNetworkSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -1093,6 +1099,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
               // 5a. Sync Section (sync ist bewusst NICHT im Löschbereich)
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.syncSection, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -1111,6 +1118,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // 5b. Danger Zone (Lösch-Aktionen existieren nur im Bearbeiten-Modus)
               if (_isEditing)
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.dangerZone, theme),
                 children: [
                   cupertino.CupertinoListTile(

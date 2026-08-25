@@ -31,7 +31,23 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       cupertino.CupertinoTabController();
 
   @override
+  void initState() {
+    super.initState();
+    // Nutzer-Tap auf der Tab-Bar synchronisiert shellIndexProvider → der
+    // Controller steuert selbst den sichtbaren Tab.
+    _tabController.addListener(_onTabControllerChanged);
+  }
+
+  void _onTabControllerChanged() {
+    final i = _tabController.index;
+    if (ref.read(shellIndexProvider) != i) {
+      ref.read(shellIndexProvider.notifier).state = i;
+    }
+  }
+
+  @override
   void dispose() {
+    _tabController.removeListener(_onTabControllerChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -44,6 +60,17 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final platform = defaultTargetPlatform;
     final activeIndex = ref.watch(shellIndexProvider);
     final strings = ref.watch(stringsProvider);
+
+    // Programmatische Navigation (z. B. Setup-Zeile „Aufgabe erstellen" im
+    // Dashboard) ändert nur shellIndexProvider. Solange ein CupertinoTabController
+    // aktiv ist, wechselt CupertinoTabScaffold NICHT über currentIndex – wir
+    // müssen den Controller-Index explizit nachziehen. Der Listener feuert
+    // außerhalb des Builds, sonst gibt es „setState during build".
+    ref.listen<int>(shellIndexProvider, (previous, next) {
+      if (_tabController.index != next) {
+        _tabController.index = next;
+      }
+    });
 
     if (platform == TargetPlatform.windows) {
       return _buildWindows(context, ref, activeIndex, strings, theme);

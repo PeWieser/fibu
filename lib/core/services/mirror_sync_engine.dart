@@ -42,12 +42,20 @@ class Tombstone {
 /// oder `download`; [item] der relative Pfad der aktuellen Datei (kann leer
 /// sein); [done]/[total] der Zählerstand der aktuellen Phase
 /// (0/0 = keine Zähler-Info für diese Phase).
+///
+/// [bytesDone]/[bytesTotal] beschreiben optional die bereits übertragene
+/// bzw. insgesamt zu übertragende Datenmenge der aktuellen Transfer-Phase.
+/// Damit der Fortschrittsbalken in der UI echten Bytes folgt (nicht der
+/// Dateianzahl), werden diese in upload-/download-Phasen befüllt; für
+/// Scan- und Löschphasen bleiben sie 0.
 typedef MirrorProgressCallback = void Function(
   String phase,
   String item,
   int done,
-  int total,
-);
+  int total, {
+  int bytesDone,
+  int bytesTotal,
+});
 
 /// Ergebnis eines Mirror-Sync-Laufs.
 class MirrorSyncResult {
@@ -244,21 +252,43 @@ class MirrorSyncEngine {
     }
 
     final uploadTotal = needUpload.length;
+    final uploadTotalBytes = needUpload.fold<int>(
+      0,
+      (sum, e) => sum + (e.value.lengthSyncSafe()),
+    );
     if (uploadTotal > 0) {
       AppLog.info('sync',
           'Mirror-Phase Upload: $uploadTotal Dateien → $remoteName:$remotePath');
     }
+    var uploadedBytes = 0;
     for (final entry in needUpload) {
       final rel = entry.key;
       final file = entry.value;
       try {
-        onProgress?.call('upload', rel, uploaded + 1, uploadTotal);
+        final size = file.lengthSyncSafe();
+        onProgress?.call(
+          'upload',
+          rel,
+          uploaded + 1,
+          uploadTotal,
+          bytesDone: uploadedBytes,
+          bytesTotal: uploadTotalBytes,
+        );
         await _rclone.copyFileToRemote(
           file.path,
           remoteName,
           _joinRemote(remotePath, rel),
         );
         uploaded++;
+        uploadedBytes += size;
+        onProgress?.call(
+          'upload',
+          rel,
+          uploaded,
+          uploadTotal,
+          bytesDone: uploadedBytes,
+          bytesTotal: uploadTotalBytes,
+        );
       } catch (e) {
         AppLog.warn('sync', 'Upload fehlgeschlagen: $rel → $e');
       }
@@ -359,21 +389,43 @@ class MirrorSyncEngine {
     final seen = <String>{};
     toDownload.retainWhere((e) => seen.add(e.key));
     final downloadTotal = toDownload.length;
+    final downloadTotalBytes = toDownload.fold<int>(
+      0,
+      (sum, e) => sum + (e.value.size > 0 ? e.value.size : 0),
+    );
     if (downloadTotal > 0) {
       AppLog.info('sync',
           'Mirror-Phase Download: $downloadTotal Dateien ← $remoteName:$remotePath');
     }
     var dl = 0;
+    var downloadedBytes = 0;
     for (final entry in toDownload) {
       final rel = entry.key;
       dl++;
-      onProgress?.call('download', rel, dl, downloadTotal);
+      final size = entry.value.size > 0 ? entry.value.size : 0;
+      onProgress?.call(
+        'download',
+        rel,
+        dl - 1,
+        downloadTotal,
+        bytesDone: downloadedBytes,
+        bytesTotal: downloadTotalBytes,
+      );
       final dest = File('$localRoot${Platform.pathSeparator}${_localRel(rel)}');
       try {
         await dest.parent.create(recursive: true);
         await _rclone.downloadFile(remoteName, _joinRemote(remotePath, rel), dest.path);
         downloaded++;
         downloadedPaths.add(rel);
+        downloadedBytes += size;
+        onProgress?.call(
+          'download',
+          rel,
+          dl,
+          downloadTotal,
+          bytesDone: downloadedBytes,
+          bytesTotal: downloadTotalBytes,
+        );
       } catch (e) {
         AppLog.warn('sync', 'Download fehlgeschlagen: $rel ← $e');
       }
@@ -585,5 +637,17 @@ class MirrorSyncEngine {
   String _joinRemote(String remotePath, String rel) {
     if (remotePath.isEmpty) return rel;
     return '$remotePath/$rel';
+  }
+}
+
+/// Robuster Dateigrößen-Zugriff: Liefert 0 statt zu werfen, wenn die Datei
+/// im Moment des Scan verschwindet (z. B. parallele Mediathek-Änderung).
+extension on File {
+  int lengthSyncSafe() {
+    try {
+      return lengthSync();
+    } catch (_) {
+      return 0;
+    }
   }
 }

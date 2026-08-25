@@ -307,7 +307,7 @@ class _LicensesScreenState extends ConsumerState<LicensesScreen> {
           child: Container(
             padding: EdgeInsets.all(theme.md),
             decoration: BoxDecoration(
-              color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+              color: theme.surface,
               borderRadius: BorderRadius.circular(theme.radiusLg),
               border: Border.all(
                 color: cupertino.CupertinoColors.separator.resolveFrom(context),

@@ -170,6 +170,7 @@ class TasksScreen extends ConsumerWidget {
       listContent = Padding(
         padding: EdgeInsets.only(bottom: theme.lg),
         child: cupertino.CupertinoListSection.insetGrouped(
+          backgroundColor: theme.surface,
           children: [
             for (final task in tasks)
               _buildIOSTaskRow(context, ref, task, theme, strings),

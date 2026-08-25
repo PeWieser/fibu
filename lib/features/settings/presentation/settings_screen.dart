@@ -452,6 +452,7 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
               // 1. Cloud Drives Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.cloudStorage, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -477,6 +478,7 @@ class SettingsScreen extends ConsumerWidget {
 
               // 2. Network & Cellular Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.networkSectionTitle, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -496,6 +498,7 @@ class SettingsScreen extends ConsumerWidget {
               Semantics(
                 label: strings.tooltipThemeMode,
                 child: cupertino.CupertinoListSection.insetGrouped(
+                  backgroundColor: theme.surface,
                   header: IosTheme.sectionHeader(strings.themeMode, theme),
                   children: [
                     cupertino.CupertinoListTile(
@@ -566,6 +569,7 @@ class SettingsScreen extends ConsumerWidget {
               Semantics(
                 label: strings.tooltipLanguage,
                 child: cupertino.CupertinoListSection.insetGrouped(
+                  backgroundColor: theme.surface,
                   header: IosTheme.sectionHeader(strings.preferences, theme),
                   children: [
                     cupertino.CupertinoListTile(
@@ -590,6 +594,7 @@ class SettingsScreen extends ConsumerWidget {
 
               // 5. About / Über Fibu Section
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.aboutSectionTitle, theme),
                 children: [
                   cupertino.CupertinoListTile(
@@ -642,6 +647,7 @@ class SettingsScreen extends ConsumerWidget {
 
               // 6. Rechtliches — ganz unten, wie es sich gehört.
               cupertino.CupertinoListSection.insetGrouped(
+                backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.legalSectionTitle, theme),
                 children: [
                   cupertino.CupertinoListTile(

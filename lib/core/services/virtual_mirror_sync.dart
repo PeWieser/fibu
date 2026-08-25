@@ -308,11 +308,16 @@ class VirtualMirrorSyncEngine {
       }
     }
 
-    // Echte Uploads
+    // Echte Uploads. Byte-Total kann erst mit den Export-Größen wachsen
+    // (manifest-only hat die lokalen Bytes noch nicht) — wir melden einen
+    // vorläufigen Stand und aktualisieren bytesTotal, sobald die nächste
+    // Datei vermessen ist.
     final uploadTotal = needUpload.length;
     if (uploadTotal > 0) {
       AppLog.info('sync', 'Virtual-Mirror Upload: $uploadTotal Dateien → $remoteName:$remotePath');
     }
+    var uploadedBytes = 0;
+    var uploadTotalBytes = 0;
     for (final item in needUpload) {
       File? tmp;
       try {
@@ -320,6 +325,7 @@ class VirtualMirrorSyncEngine {
         if (tmp == null || !await tmp.exists()) continue;
         final localSize = await tmp.length();
         if (localSize <= 0) continue;
+        uploadTotalBytes += localSize;
 
         // Nach Export: nochmal gegen remote prüfen (jetzt mit echter Größe).
         final m = matchRemote(item);
@@ -339,10 +345,26 @@ class VirtualMirrorSyncEngine {
           }
         }
 
-        uploaded++;
-        onProgress?.call('upload', item.rel, uploaded, uploadTotal);
+        onProgress?.call(
+          'upload',
+          item.rel,
+          uploaded,
+          uploadTotal,
+          bytesDone: uploadedBytes,
+          bytesTotal: uploadTotalBytes,
+        );
         await _rclone.copyFileToRemote(
             tmp.path, remoteName, _joinRemote(remotePath, item.rel));
+        uploaded++;
+        uploadedBytes += localSize;
+        onProgress?.call(
+          'upload',
+          item.rel,
+          uploaded,
+          uploadTotal,
+          bytesDone: uploadedBytes,
+          bytesTotal: uploadTotalBytes,
+        );
         uploadedRels.add(item.rel);
         sizeUpdates[item.rel] = localSize;
       } catch (e) {
@@ -502,17 +524,30 @@ class VirtualMirrorSyncEngine {
     }
 
     final downloadTotal = toDownload.length;
+    final downloadTotalBytes = toDownload.fold<int>(
+      0,
+      (sum, e) => sum + (e.value.size > 0 ? e.value.size : 0),
+    );
     if (downloadTotal > 0) {
       AppLog.info('sync',
           'Virtual-Mirror Download: $downloadTotal Dateien ← $remoteName:$remotePath');
     }
     var dl = 0;
+    var downloadedBytes = 0;
     final tmpFiles = <File>[];
     final tmpRels = <String>[];
     for (final entry in toDownload) {
       final rel = entry.key;
+      final size = entry.value.size > 0 ? entry.value.size : 0;
       dl++;
-      onProgress?.call('download', rel, dl, downloadTotal);
+      onProgress?.call(
+        'download',
+        rel,
+        dl - 1,
+        downloadTotal,
+        bytesDone: downloadedBytes,
+        bytesTotal: downloadTotalBytes,
+      );
       try {
         final tmpRoot = await Directory.systemTemp.createTemp('fibu_import_');
         final dest = File('${tmpRoot.path}/${entry.value.name}');
@@ -522,9 +557,17 @@ class VirtualMirrorSyncEngine {
           tmpRels.add(rel);
           downloaded++;
           downloadedPaths.add(rel);
-          sizeUpdates[rel] = entry.value.size > 0
-              ? entry.value.size
-              : await dest.length();
+          final actualSize = size > 0 ? size : await dest.length();
+          downloadedBytes += actualSize;
+          sizeUpdates[rel] = actualSize;
+          onProgress?.call(
+            'download',
+            rel,
+            dl,
+            downloadTotal,
+            bytesDone: downloadedBytes,
+            bytesTotal: downloadTotalBytes > 0 ? downloadTotalBytes : downloadedBytes,
+          );
         }
       } catch (e) {
         AppLog.warn('sync', 'Download fehlgeschlagen: $rel ← $e');

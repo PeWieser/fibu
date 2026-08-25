@@ -91,7 +91,7 @@ class StorageCard extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.all(theme.lg),
       decoration: BoxDecoration(
-        color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+        color: theme.surface,
         borderRadius: BorderRadius.circular(theme.radiusLg),
         border: Border.all(
           color: cupertino.CupertinoColors.separator.resolveFrom(context),

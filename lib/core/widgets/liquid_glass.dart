@@ -151,10 +151,10 @@ class LiquidGlassGroupedBox extends ConsumerWidget {
       borderRadius: BorderRadius.circular(theme.radiusLg),
       fallback: Container(
         decoration: BoxDecoration(
-          color: cupertino.CupertinoColors.systemBackground.resolveFrom(context),
+          color: theme.surface,
           borderRadius: BorderRadius.circular(theme.radiusLg),
           border: Border.all(
-            color: cupertino.CupertinoColors.separator.resolveFrom(context),
+            color: theme.textSecondary.withValues(alpha: 0.15),
             width: 0.5,
           ),
         ),

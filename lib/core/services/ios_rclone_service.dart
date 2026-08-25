@@ -1251,12 +1251,16 @@ class IosRcloneService implements RcloneService {
     // Stabilität: bekannter rel aus mirror_state hat Vorrang vor „erstes Album“.
     final seenAssetIds = <String>{};
     final previousRelByAsset = <String, String>{};
+    final previousSizeByAsset = <String, int>{};
+    final previousModByAsset = <String, int>{};
     try {
       final root = await _virtualStateRoot();
       final prev = await _loadVirtualState(root);
       for (final p in prev.items) {
         if (p.assetId.isNotEmpty && p.rel.isNotEmpty) {
           previousRelByAsset[p.assetId] = p.rel;
+          if (p.sizeBytes > 0) previousSizeByAsset[p.assetId] = p.sizeBytes;
+          previousModByAsset[p.assetId] = p.modifiedMs;
         }
       }
     } catch (_) {}
@@ -1287,11 +1291,19 @@ class IosRcloneService implements RcloneService {
 
           // Stabiler Pfad: letzter bekannter rel für diese Asset-ID.
           final knownRel = previousRelByAsset[asset.id];
+          final ms = asset.modifiedDateTime.millisecondsSinceEpoch;
+          // Größe aus letztem Sync behalten, außer mtime hat sich geändert
+          // (dann Inhalt evtl. neu — Größe nach Upload neu setzen).
+          final prevMs = previousModByAsset[asset.id];
+          final keptSize = (prevMs != null && prevMs == ms)
+              ? (previousSizeByAsset[asset.id] ?? 0)
+              : 0;
           if (knownRel != null && knownRel.isNotEmpty) {
             items[knownRel] = VirtualMediaItem(
               rel: knownRel,
               assetId: asset.id,
-              modifiedMs: asset.modifiedDateTime.millisecondsSinceEpoch,
+              modifiedMs: ms,
+              sizeBytes: keptSize,
             );
             byRel[knownRel] = asset;
             continue;
@@ -1319,7 +1331,8 @@ class IosRcloneService implements RcloneService {
           items[rel] = VirtualMediaItem(
             rel: rel,
             assetId: asset.id,
-            modifiedMs: asset.modifiedDateTime.millisecondsSinceEpoch,
+            modifiedMs: ms,
+            sizeBytes: keptSize,
           );
           byRel[rel] = asset;
         }

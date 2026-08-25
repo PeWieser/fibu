@@ -181,6 +181,8 @@ class MirrorSyncEngine {
     }
 
     final candidates = localFiles.entries.toList();
+    final needUpload = <MapEntry<String, File>>[];
+    final needDownloadReplace = <MapEntry<String, RcloneFileInfo>>[];
     if (candidates.isNotEmpty) {
       onProgress?.call('scan', '', 0, candidates.length);
     }
@@ -197,29 +199,54 @@ class MirrorSyncEngine {
         if (localSize <= 0) continue;
 
         RcloneFileInfo? remote = remoteFiles[rel];
+        String? remoteRel = remote != null && !remote.isDir ? rel : null;
         if (remote == null || remote.isDir) {
           final base = rel.split('/').last.toLowerCase();
           final hits = remoteByBase[base];
           if (hits != null) {
             for (final h in hits) {
-              if (!h.value.isDir && h.value.size == localSize) {
-                remote = h.value;
-                break;
-              }
-              remote ??= h.value.isDir ? null : h.value;
+              if (h.value.isDir) continue;
+              remote = h.value;
+              remoteRel = h.key;
+              if (h.key == rel) break;
             }
           }
         }
 
-        if (remote != null && !remote.isDir && remote.size > 0) {
-          if (remote.size == localSize) continue; // am Ziel
-          if (!_localIsNewer(file, remote)) continue;
-        } else if (remote != null && remote.isDir) {
+        if (remote == null || remote.isDir) {
+          needUpload.add(entry); // remote fehlt
           continue;
         }
+        // Inhalts-Diff: Größe + Modtime (lokal neuer → upload, remote neuer → replace).
+        final rMod = DateTime.tryParse(remote.modTime);
+        final lMod = file.statSync().modified;
+        final sizeDiff = remote.size > 0 && remote.size != localSize;
+        if (rMod != null) {
+          final delta = lMod.difference(rMod).inSeconds;
+          if (delta > 30 || (delta.abs() <= 30 && sizeDiff)) {
+            needUpload.add(entry);
+          } else if (delta < -30) {
+            needDownloadReplace.add(MapEntry(remoteRel ?? rel, remote));
+          }
+          // else: gleich
+        } else if (sizeDiff) {
+          needUpload.add(entry);
+        }
+      } catch (e) {
+        AppLog.warn('sync', 'Scan fehlgeschlagen: $rel → $e');
+      }
+    }
 
-        // Echter Upload.
-        onProgress?.call('upload', rel, uploaded + 1, 0);
+    final uploadTotal = needUpload.length;
+    if (uploadTotal > 0) {
+      AppLog.info('sync',
+          'Mirror-Phase Upload: $uploadTotal Dateien → $remoteName:$remotePath');
+    }
+    for (final entry in needUpload) {
+      final rel = entry.key;
+      final file = entry.value;
+      try {
+        onProgress?.call('upload', rel, uploaded + 1, uploadTotal);
         await _rclone.copyFileToRemote(
           file.path,
           remoteName,
@@ -311,22 +338,30 @@ class MirrorSyncEngine {
     // =====================================================================
     // 4. Neue remote-Dateien in die lokalen Alben/Ordner downloaden.
     // =====================================================================
+    final localBases = <String>{
+      for (final rel in localFiles.keys) rel.split('/').last.toLowerCase(),
+    };
     final toDownload = remoteFiles.entries
         .where((entry) =>
             !entry.value.isDir &&
-            // Tombstoned (und nicht lokal wiederbelebt) → nicht erneut laden.
             !merged.containsKey(entry.key) &&
-            !localFiles.containsKey(entry.key))
+            !localFiles.containsKey(entry.key) &&
+            !localBases.contains(entry.key.split('/').last.toLowerCase()))
         .toList();
-    if (toDownload.isNotEmpty) {
-      AppLog.info('sync', 'Mirror-Phase Download: ${toDownload.length} Dateien ← $remoteName:$remotePath');
+    // Remote-Inhalt neuer → ersetzen.
+    toDownload.addAll(needDownloadReplace);
+    final seen = <String>{};
+    toDownload.retainWhere((e) => seen.add(e.key));
+    final downloadTotal = toDownload.length;
+    if (downloadTotal > 0) {
+      AppLog.info('sync',
+          'Mirror-Phase Download: $downloadTotal Dateien ← $remoteName:$remotePath');
     }
     var dl = 0;
     for (final entry in toDownload) {
       final rel = entry.key;
       dl++;
-      // total=0 → UI zeigt „Herunterladen“ ohne irreführendes „x von y“ vorab.
-      onProgress?.call('download', rel, dl, 0);
+      onProgress?.call('download', rel, dl, downloadTotal);
       final dest = File('$localRoot${Platform.pathSeparator}${_localRel(rel)}');
       try {
         await dest.parent.create(recursive: true);
@@ -522,20 +557,15 @@ class MirrorSyncEngine {
   /// nicht fälschlich übersprungen werden. Eine kleine Toleranz verhindert
   /// Ping-Pong durch leichte Uhrzeit-Drift zwischen Geräten.
   bool _localIsNewer(File local, RcloneFileInfo remote) {
-    // Gleiche Größe = inhaltlich am Ziel → nicht neu hochladen
-    // (verhindert „5 hochgeladen“-Lüge bei reinem Modtime-Drift).
-    try {
-      final localSize = local.lengthSync();
-      if (remote.size > 0 && remote.size == localSize) return false;
-    } catch (_) {}
     final remoteMod = DateTime.tryParse(remote.modTime);
-    if (remoteMod == null) {
-      // Remote-Modtime unbekannt, Größe weicht ab → hochladen.
-      return true;
-    }
     final localMod = local.statSync().modified;
-    // Nur als "neuer" gelten, wenn klar neuer (Toleranz ~30s gegen Uhrdrift).
-    return localMod.difference(remoteMod).inSeconds > 30;
+    final localSize = local.lengthSync();
+    final sizeDiff = remote.size > 0 && remote.size != localSize;
+    if (remoteMod == null) return sizeDiff; // nur bei Größen-Diff
+    final delta = localMod.difference(remoteMod).inSeconds;
+    if (delta > 30) return true;
+    if (delta.abs() <= 30 && sizeDiff) return true; // Inhalt geändert
+    return false;
   }
 
   String _relPath(String path, String root) {

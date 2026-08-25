@@ -27,6 +27,13 @@ class WidgetTaskState {
   /// -1 = noch nie gemessen / nicht verfügbar.
   final int remoteCountAtLastSync;
 
+  /// Inhalts-Fingerprint lokal: sortierte „name|size|mtimeMs“-Liste gehasht.
+  /// Erkennt Crop/Metadaten-Änderungen, nicht nur Dateianzahl.
+  final String localFingerprint;
+
+  /// Inhalts-Fingerprint remote (size+modTime der Task-Alben).
+  final String remoteFingerprint;
+
   const WidgetTaskState({
     required this.taskId,
     required this.name,
@@ -34,6 +41,8 @@ class WidgetTaskState {
     required this.lastSyncIso,
     this.mediaCountAtLastSync = 0,
     this.remoteCountAtLastSync = -1,
+    this.localFingerprint = '',
+    this.remoteFingerprint = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +52,8 @@ class WidgetTaskState {
         'lastSyncIso': lastSyncIso,
         'mediaCountAtLastSync': mediaCountAtLastSync,
         'remoteCountAtLastSync': remoteCountAtLastSync,
+        'localFingerprint': localFingerprint,
+        'remoteFingerprint': remoteFingerprint,
       };
 
   factory WidgetTaskState.fromJson(Map<String, dynamic> j) => WidgetTaskState(
@@ -53,6 +64,8 @@ class WidgetTaskState {
         mediaCountAtLastSync: (j['mediaCountAtLastSync'] as num?)?.toInt() ?? 0,
         remoteCountAtLastSync:
             (j['remoteCountAtLastSync'] as num?)?.toInt() ?? -1,
+        localFingerprint: j['localFingerprint'] as String? ?? '',
+        remoteFingerprint: j['remoteFingerprint'] as String? ?? '',
       );
 }
 
@@ -252,53 +265,84 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
   // Lokale Zählung: nur Task-Alben
   // ---------------------------------------------------------------------------
 
-  /// Zählt Medien in den angegebenen Alben. [albums] leer → einmal „Alle“.
-  Future<int> _countLocalAlbums({
+  /// Kompakter, stabiler Fingerprint aus sortierten Tokens (kein Krypto nötig).
+  static String _fp(List<String> tokens) {
+    tokens.sort();
+    // FNV-1a 64-bit light
+    var h = 0xcbf29ce484222325;
+    for (final t in tokens) {
+      for (final c in t.codeUnits) {
+        h ^= c;
+        h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+      }
+      h ^= 0xFF;
+      h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return '${tokens.length}:$h';
+  }
+
+  /// Lokal: Anzahl + Fingerprint aus Asset-ID + modifiedMs (Crop/Edit ändert mtime).
+  Future<({int count, String fingerprint})> _probeLocalAlbums({
     required RequestType type,
     required List<String> albums,
   }) async {
     try {
       final ps = await PhotoManager.requestPermissionExtend();
-      if (!ps.isAuth && !ps.hasAccess) return 0;
+      if (!ps.isAuth && !ps.hasAccess) {
+        return (count: 0, fingerprint: '');
+      }
 
+      final List<AssetPathEntity> paths;
       if (albums.isEmpty) {
-        final paths = await PhotoManager.getAssetPathList(
+        paths = await PhotoManager.getAssetPathList(
           type: type,
           hasAll: true,
           onlyAll: true,
         );
-        if (paths.isEmpty) return 0;
-        return await paths.first.assetCountAsync;
+      } else {
+        final all = await PhotoManager.getAssetPathList(
+          type: type,
+          hasAll: true,
+          onlyAll: false,
+        );
+        final want = albums.map((a) => a.trim().toLowerCase()).toSet();
+        paths = [
+          for (final p in all)
+            if (!p.isAll && want.contains(p.name.trim().toLowerCase())) p,
+        ];
       }
 
-      final paths = await PhotoManager.getAssetPathList(
-        type: type,
-        hasAll: true,
-        onlyAll: false,
-      );
-      final want = albums.map((a) => a.trim().toLowerCase()).toSet();
-      var total = 0;
-      final seenIds = <String>{}; // falls iOS dasselbe Album doppelt liefert
-      for (final p in paths) {
-        if (p.isAll) continue;
-        final key = p.name.trim().toLowerCase();
-        if (!want.contains(key)) continue;
-        if (!seenIds.add(p.id)) continue;
-        try {
-          total += await p.assetCountAsync;
-        } catch (_) {}
+      final tokens = <String>[];
+      final seen = <String>{};
+      var count = 0;
+      for (final album in paths) {
+        final n = await album.assetCountAsync;
+        if (n <= 0) continue;
+        const batch = 80;
+        for (var start = 0; start < n; start += batch) {
+          final assets = await album.getAssetListRange(
+            start: start,
+            end: (start + batch).clamp(0, n),
+          );
+          for (final a in assets) {
+            if (!seen.add(a.id)) continue;
+            count++;
+            final ms = a.modifiedDateTime.millisecondsSinceEpoch;
+            tokens.add('${a.id}|$ms');
+          }
+        }
       }
-      return total;
+      return (count: count, fingerprint: _fp(tokens));
     } catch (_) {
-      return 0;
+      return (count: 0, fingerprint: '');
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Remote-Zählung: nur Photos/<Album>/ Dateien (flach, billig)
+  // Remote: flach Photos/<Album>/ — Fingerprint aus name|size|modTime
   // ---------------------------------------------------------------------------
 
-  Future<int?> _countRemoteAlbums({
+  Future<({int count, String fingerprint})?> _probeRemoteAlbums({
     required String remoteId,
     required String remotePath,
     required List<String> albums,
@@ -308,7 +352,6 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
     try {
       final photosRoot =
           remotePath.isEmpty ? 'Photos' : '$remotePath/Photos';
-      // Album-Liste remote
       final top = await rc.listFiles(remoteId, photosRoot);
       final albumDirs = top.where((f) => f.isDir).toList();
       final want = albums.map((a) => a.trim().toLowerCase()).toSet();
@@ -318,19 +361,22 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
               .where((d) => want.contains(d.name.trim().toLowerCase()))
               .toList();
 
+      final tokens = <String>[];
       var total = 0;
       for (final dir in selected) {
         final path = '$photosRoot/${dir.name}';
         try {
           final files = await rc.listFiles(remoteId, path);
-          total += files.where((f) => !f.isDir).length;
-        } catch (_) {
-          // Album remote fehlt → 0 Dateien dort
-        }
+          for (final f in files) {
+            if (f.isDir) continue;
+            total++;
+            tokens.add('${f.name}|${f.size}|${f.modTime}');
+          }
+        } catch (_) {}
       }
-      return total;
+      return (count: total, fingerprint: _fp(tokens));
     } catch (e) {
-      AppLog.info('widget', 'Remote-Alben-Count übersprungen: $e');
+      AppLog.info('widget', 'Remote-Alben-Probe übersprungen: $e');
       return null;
     }
   }
@@ -380,44 +426,70 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
         }
 
         if (isMedia) {
-          final localNow = await _countLocalAlbums(
+          final localProbe = await _probeLocalAlbums(
             type: _requestTypeFor(src),
             albums: albums,
           );
-          final localChanged = st.mediaCountAtLastSync != localNow;
+          final localChanged = st.localFingerprint.isNotEmpty &&
+              st.localFingerprint != localProbe.fingerprint;
+          final localCountChanged =
+              st.mediaCountAtLastSync != localProbe.count;
 
-          int? remoteNow;
+          ({int count, String fingerprint})? remoteProbe;
           if (includeRemote) {
             final target = _targetForTask(t);
             if (target != null) {
-              remoteNow = await _countRemoteAlbums(
+              remoteProbe = await _probeRemoteAlbums(
                 remoteId: target.remoteId,
                 remotePath: target.remotePath,
                 albums: albums,
               );
             }
           }
-          final remoteChanged = remoteNow != null &&
-              st.remoteCountAtLastSync >= 0 &&
-              st.remoteCountAtLastSync != remoteNow;
+          final remoteChanged = remoteProbe != null &&
+              st.remoteFingerprint.isNotEmpty &&
+              st.remoteFingerprint != remoteProbe.fingerprint;
 
-          if (localChanged || remoteChanged) {
-            needsSync = true;
-            if (st.status == 'ok' || st.status == 'pending') {
+          if (localChanged ||
+              localCountChanged ||
+              remoteChanged ||
+              (st.localFingerprint.isEmpty && st.status == 'ok')) {
+            // Fingerprint leer nach Upgrade: einmalig Baseline setzen ohne Alarm,
+            // außer Count weicht ab.
+            if (st.localFingerprint.isEmpty &&
+                st.status == 'ok' &&
+                !localCountChanged &&
+                !remoteChanged) {
               st = WidgetTaskState(
                 taskId: st.taskId,
                 name: st.name.isNotEmpty ? st.name : name,
-                status: 'pending',
+                status: 'ok',
                 lastSyncIso: st.lastSyncIso,
                 mediaCountAtLastSync: st.mediaCountAtLastSync,
                 remoteCountAtLastSync: st.remoteCountAtLastSync,
+                localFingerprint: localProbe.fingerprint,
+                remoteFingerprint: remoteProbe?.fingerprint ?? st.remoteFingerprint,
               );
+            } else if (localChanged || localCountChanged || remoteChanged) {
+              needsSync = true;
+              if (st.status == 'ok' || st.status == 'pending') {
+                st = WidgetTaskState(
+                  taskId: st.taskId,
+                  name: st.name.isNotEmpty ? st.name : name,
+                  status: 'pending',
+                  lastSyncIso: st.lastSyncIso,
+                  mediaCountAtLastSync: st.mediaCountAtLastSync,
+                  remoteCountAtLastSync: st.remoteCountAtLastSync,
+                  localFingerprint: st.localFingerprint,
+                  remoteFingerprint: st.remoteFingerprint,
+                );
+              }
             }
           } else if (st.status == 'pending' &&
               st.lastSyncIso.isNotEmpty &&
               !localChanged &&
+              !localCountChanged &&
               !remoteChanged) {
-            // Counts wieder wie beim letzten Sync → kein Bedarf.
             st = WidgetTaskState(
               taskId: st.taskId,
               name: st.name.isNotEmpty ? st.name : name,
@@ -425,16 +497,18 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
               lastSyncIso: st.lastSyncIso,
               mediaCountAtLastSync: st.mediaCountAtLastSync,
               remoteCountAtLastSync: st.remoteCountAtLastSync,
+              localFingerprint: st.localFingerprint,
+              remoteFingerprint: st.remoteFingerprint,
             );
           } else if (st.status == 'pending') {
             needsSync = true;
           }
 
-          // Aktuelle Messung nur im Log — Baseline bleibt lastSync-Stand.
           AppLog.info(
             'widget',
-            'Task „$name“: lokal=$localNow (basis=${st.mediaCountAtLastSync})'
-            '${remoteNow != null ? ', remote=$remoteNow (basis=${st.remoteCountAtLastSync})' : ''}'
+            'Task „$name“: lokal=${localProbe.count}/${localProbe.fingerprint} '
+            '(basis=${st.mediaCountAtLastSync}/${st.localFingerprint})'
+            '${remoteProbe != null ? ', remote=${remoteProbe.count}/${remoteProbe.fingerprint}' : ''}'
             ', alben=${albums.isEmpty ? 'alle' : albums.join('|')}',
           );
         } else if (st.status == 'pending') {
@@ -489,30 +563,38 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
 
     var localCount = 0;
     var remoteCount = -1;
+    var localFp = '';
+    var remoteFp = '';
     if (meta != null && error == null) {
       final src = meta['sourcePath'] as String? ?? '';
       if (_isMediaSource(src)) {
         final albums = _albumsForTask(meta);
-        localCount = await _countLocalAlbums(
+        final lp = await _probeLocalAlbums(
           type: _requestTypeFor(src),
           albums: albums,
         );
+        localCount = lp.count;
+        localFp = lp.fingerprint;
         final target = _targetForTask(meta);
         if (target != null) {
-          final r = await _countRemoteAlbums(
+          final r = await _probeRemoteAlbums(
             remoteId: target.remoteId,
             remotePath: target.remotePath,
             albums: albums,
           );
-          if (r != null) remoteCount = r;
+          if (r != null) {
+            remoteCount = r.count;
+            remoteFp = r.fingerprint;
+          }
         }
       }
     } else {
-      // Fallback: alten Stand behalten, falls Task-Meta fehlt.
       final prev = state.tasks.where((t) => t.taskId == taskId);
       if (prev.isNotEmpty) {
         localCount = prev.first.mediaCountAtLastSync;
         remoteCount = prev.first.remoteCountAtLastSync;
+        localFp = prev.first.localFingerprint;
+        remoteFp = prev.first.remoteFingerprint;
       }
     }
 
@@ -525,6 +607,8 @@ class WidgetStatusNotifier extends StateNotifier<WidgetStatusData> {
       lastSyncIso: now,
       mediaCountAtLastSync: localCount,
       remoteCountAtLastSync: remoteCount,
+      localFingerprint: localFp,
+      remoteFingerprint: remoteFp,
     );
     if (idx >= 0) {
       updated[idx] = item;

@@ -19,16 +19,22 @@ class VirtualMediaItem {
   /// letzte Änderung (Millisekunden seit Epoch) – Konflikt-/Neuigkeitsvergleich.
   final int modifiedMs;
 
+  /// Bekannte Dateigröße in Bytes (0 = unbekannt, z. B. vor erstem Export).
+  /// Nach Upload/Download gesetzt — ermöglicht Inhalts-Diff ohne Full-Hash.
+  final int sizeBytes;
+
   const VirtualMediaItem({
     required this.rel,
     required this.assetId,
     required this.modifiedMs,
+    this.sizeBytes = 0,
   });
 
   Map<String, dynamic> toJson() => {
         'rel': rel,
         'assetId': assetId,
         'modifiedMs': modifiedMs,
+        'sizeBytes': sizeBytes,
       };
 
   factory VirtualMediaItem.fromJson(Map<String, dynamic> json) =>
@@ -36,7 +42,19 @@ class VirtualMediaItem {
         rel: json['rel'] as String? ?? '',
         assetId: json['assetId'] as String? ?? '',
         modifiedMs: (json['modifiedMs'] as num?)?.toInt() ?? 0,
+        sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
       );
+
+  VirtualMediaItem copyWith({int? modifiedMs, int? sizeBytes, String? rel}) =>
+      VirtualMediaItem(
+        rel: rel ?? this.rel,
+        assetId: assetId,
+        modifiedMs: modifiedMs ?? this.modifiedMs,
+        sizeBytes: sizeBytes ?? this.sizeBytes,
+      );
+
+  /// Kompakter Fingerprint für Hintergrund-Vergleich (kein Datei-Inhalt).
+  String get contentKey => '$rel|$sizeBytes|$modifiedMs';
 }
 
 /// Virtueller 2-Wege-Mirror („manifest-only"): Die lokale Seite ist nur eine
@@ -168,12 +186,59 @@ class VirtualMirrorSyncEngine {
       (remoteByBase[base] ??= []).add(e);
     }
 
-    // ---------- 1) Upload: nur wenn remote wirklich fehlt / lokal neuer ----
-    // UI: Phase „upload“ erst beim echten Transfer — Prüfung bleibt „scan“.
+    /// Findet den besten Remote-Treffer zu einem lokalen Item.
+    ({String rel, RcloneFileInfo info})? matchRemote(VirtualMediaItem item) {
+      final exact = remoteFiles[item.rel];
+      if (exact != null && !exact.isDir) {
+        return (rel: item.rel, info: exact);
+      }
+      final base = item.rel.split('/').last.toLowerCase();
+      final hits = remoteByBase[base];
+      if (hits == null || hits.isEmpty) return null;
+      MapEntry<String, RcloneFileInfo>? best;
+      for (final h in hits) {
+        if (h.value.isDir) continue;
+        best ??= h;
+        if (h.key == item.rel) return (rel: h.key, info: h.value);
+      }
+      return best == null ? null : (rel: best.key, info: best.value);
+    }
+
+    /// Inhalts-Diff ohne Full-Hash: Größe und/oder Modtime (Toleranz 30s).
+    ///  <0 remote neuer, 0 gleich, >0 lokal neuer, null = remote fehlt.
+    int? contentCmp(VirtualMediaItem local, RcloneFileInfo remote, int localSize) {
+      final rMod = DateTime.tryParse(remote.modTime);
+      final lMod = DateTime.fromMillisecondsSinceEpoch(local.modifiedMs);
+      final sizeDiffers = remote.size > 0 && localSize > 0 && remote.size != localSize;
+      if (rMod == null) {
+        // Keine Remote-Zeit: Größe entscheidet.
+        if (remote.size <= 0) return 1;
+        if (localSize <= 0) return 0;
+        return remote.size == localSize ? 0 : 1; // bei Diff: lokal pushen (lokal Vorrang)
+      }
+      final delta = lMod.difference(rMod).inSeconds;
+      if (delta > 30) return 1; // lokal klar neuer (Crop/Edit)
+      if (delta < -30) return -1; // remote klar neuer
+      // Zeiten nah: Größe als Tie-Breaker (Metadaten/Crop oft gleiche mtime-Nähe)
+      if (sizeDiffers) {
+        // Ohne klare Zeit: lokal gewinnt (lokal hat Vorrang im Mirror).
+        return 1;
+      }
+      return 0;
+    }
+
+    // Größen nach erfolgreichem Transfer in localItems schreiben.
+    final sizeUpdates = <String, int>{};
+
+    // ---------- 1) Upload: fehlt remote ODER lokal-Inhalt neuer --------------
+    // UI: „upload“ erst beim echten Transfer; Abgleich bleibt „scan“.
     final candidates = localItems.values
         .where((item) => !blockedRels.contains(item.rel))
         .where((item) => !remoteDeletedRels.contains(item.rel))
         .toList();
+    // Zuerst billig entscheiden, welche wirklich hoch müssen (ohne Export).
+    final needUpload = <VirtualMediaItem>[];
+    final needDownloadReplace = <({VirtualMediaItem local, String remoteRel, RcloneFileInfo remote})>[];
     if (candidates.isNotEmpty) {
       onProgress?.call('scan', AppStrings.current.syncPhaseScan, 0, candidates.length);
     }
@@ -184,49 +249,33 @@ class VirtualMirrorSyncEngine {
         onProgress?.call(
             'scan', AppStrings.current.syncPhaseScan, checked, candidates.length);
       }
-
-      // Exakter Pfad zuerst, sonst gleicher Dateiname irgendwo unter remote.
-      RcloneFileInfo? remote = remoteFiles[item.rel];
-      String? matchedRemoteRel;
-      if (remote != null && !remote.isDir) {
-        matchedRemoteRel = item.rel;
+      final m = matchRemote(item);
+      if (m == null) {
+        needUpload.add(item); // remote fehlt
+        continue;
+      }
+      // Bekannte Größe aus State, sonst 0 → nach Export nachmessen.
+      final knownSize = item.sizeBytes;
+      final cmp = contentCmp(item, m.info, knownSize);
+      if (cmp == null || cmp == 0) {
+        uploadedRels.add(item.rel);
+        continue;
+      }
+      if (cmp > 0) {
+        needUpload.add(item);
       } else {
-        final base = item.rel.split('/').last.toLowerCase();
-        final hits = remoteByBase[base];
-        if (hits != null && hits.isNotEmpty) {
-          // Bevorzuge Treffer mit gleichem relativen Parent, sonst ersten.
-          MapEntry<String, RcloneFileInfo>? best;
-          for (final h in hits) {
-            best ??= h;
-            if (h.key == item.rel) {
-              best = h;
-              break;
-            }
-          }
-          if (best != null) {
-            matchedRemoteRel = best.key;
-            remote = best.value;
-          }
-        }
+        // Remote neuer → später ersetzen (Download + Import).
+        needDownloadReplace.add((local: item, remoteRel: m.rel, remote: m.info));
+        uploadedRels.add(item.rel); // gilt als „paired“, kein Neu-Upload
       }
+    }
 
-      // Remote vorhanden → nur bei klar neuerer lokaler Version hochladen.
-      // Gleiche/unbekannte Größe am Ziel: als gesynct werten, KEIN Upload.
-      if (remote != null && !remote.isDir && remote.size > 0) {
-        final rMod = DateTime.tryParse(remote.modTime);
-        final localMod = DateTime.fromMillisecondsSinceEpoch(item.modifiedMs);
-        final clearlyNewer = rMod != null &&
-            localMod.isAfter(rMod.add(const Duration(seconds: 30)));
-        if (!clearlyNewer) {
-          uploadedRels.add(item.rel);
-          // Pfad-Mismatch heilen: lokalen Stand am remote-Pfad „kennen“.
-          if (matchedRemoteRel != null && matchedRemoteRel != item.rel) {
-            uploadedRels.add(matchedRemoteRel);
-          }
-          continue;
-        }
-      }
-
+    // Echte Uploads
+    final uploadTotal = needUpload.length;
+    if (uploadTotal > 0) {
+      AppLog.info('sync', 'Virtual-Mirror Upload: $uploadTotal Dateien → $remoteName:$remotePath');
+    }
+    for (final item in needUpload) {
       File? tmp;
       try {
         tmp = await exportForUpload(item);
@@ -234,31 +283,30 @@ class VirtualMirrorSyncEngine {
         final localSize = await tmp.length();
         if (localSize <= 0) continue;
 
-        // Nach Export: Größen-Match gegen remote (auch per Basename).
-        if (remote != null && remote.size > 0 && remote.size == localSize) {
-          uploadedRels.add(item.rel);
-          continue;
-        }
-        final base = item.rel.split('/').last.toLowerCase();
-        final hits = remoteByBase[base];
-        if (hits != null) {
-          var sizeMatch = false;
-          for (final h in hits) {
-            if (!h.value.isDir && h.value.size == localSize) {
-              sizeMatch = true;
-              uploadedRels.add(item.rel);
-              break;
-            }
+        // Nach Export: nochmal gegen remote prüfen (jetzt mit echter Größe).
+        final m = matchRemote(item);
+        if (m != null) {
+          final cmp = contentCmp(item, m.info, localSize);
+          if (cmp == null || cmp == 0) {
+            sizeUpdates[item.rel] = localSize;
+            uploadedRels.add(item.rel);
+            continue;
           }
-          if (sizeMatch) continue;
+          if (cmp < 0) {
+            // Remote doch neuer → Download-Replace statt Upload.
+            needDownloadReplace.add((local: item, remoteRel: m.rel, remote: m.info));
+            sizeUpdates[item.rel] = localSize;
+            uploadedRels.add(item.rel);
+            continue;
+          }
         }
 
-        // ECHTER Upload — erst jetzt „Hochladen“ in der UI.
-        onProgress?.call('upload', item.rel, uploaded + 1, 0);
+        uploaded++;
+        onProgress?.call('upload', item.rel, uploaded, uploadTotal);
         await _rclone.copyFileToRemote(
             tmp.path, remoteName, _joinRemote(remotePath, item.rel));
-        uploaded++;
         uploadedRels.add(item.rel);
+        sizeUpdates[item.rel] = localSize;
       } catch (e) {
         AppLog.warn('sync', 'Upload fehlgeschlagen: ${item.rel} → $e');
       } finally {
@@ -355,56 +403,78 @@ class VirtualMirrorSyncEngine {
       }
     }
 
-    // ---------- 4) Cloud-only-Dateien herunterladen --------------------------
+    // ---------- 4) Downloads: Cloud-only + Remote-neuer (Inhalt) -------------
     final toDownload = <MapEntry<String, RcloneFileInfo>>[];
     var adoptedNow = 0;
+    final localBases = <String>{
+      for (final rel in localItems.keys) rel.split('/').last.toLowerCase(),
+    };
     for (final entry in remoteFiles.entries) {
       final rel = entry.key;
       if (entry.value.isDir) continue;
       if (rel.startsWith('.fibu') || rel.startsWith("$remotePath/.fibu")) continue;
-      // Tombstone (lokal oder remote) → niemals erneut herunterladen.
       if (merged.containsKey(rel)) continue;
-      if (localItems.containsKey(rel)) continue;
-      // Explizit geblockte Pfade (z. B. abgelehnte Cloud→lokal-Löschung).
       if (blockedRels.contains(rel)) continue;
-      // Adoptierte Dateien: nur-remote ist OK — nie laden, nie anfassen.
       if (adoptedRels != null && adoptedRels.contains(rel)) continue;
       if (adoptOrphans && adoptedRels != null) {
-        adoptedRels.add(rel);
-        adoptedNow++;
+        // Nur adoptieren, wenn lokal kein Basename-Pendant existiert.
+        final base = rel.split('/').last.toLowerCase();
+        if (!localBases.contains(base)) {
+          adoptedRels.add(rel);
+          adoptedNow++;
+        }
         continue;
       }
+      // Lokal vorhanden (exakt oder Basename) → nur via needDownloadReplace.
+      if (localItems.containsKey(rel)) continue;
+      final base = rel.split('/').last.toLowerCase();
+      if (localBases.contains(base)) continue;
       toDownload.add(entry);
+    }
+    // Remote-Inhalt neuer als lokal → ersetzen (Download + Import).
+    for (final r in needDownloadReplace) {
+      toDownload.add(MapEntry(r.remoteRel, r.remote));
     }
     if (adoptedNow > 0) {
       AppLog.info('sync',
           'Adoption (Moduswechsel): $adoptedNow bestehende Cloud-Dateien übernommen — kein Download in die Mediathek');
     }
-    // Adoptionsliste aufräumen: verschwundene, tombstonierte oder inzwischen
-    // lokal vorhandene Einträge verlassen die Liste wieder.
     adoptedRels?.removeWhere((rel) =>
         !remoteFiles.containsKey(rel) ||
         merged.containsKey(rel) ||
         localItems.containsKey(rel));
-    if (toDownload.isNotEmpty) {
-      AppLog.info('sync', 'Virtual-Mirror Download: ${toDownload.length} Dateien ← $remoteName:$remotePath');
+    // Dedup remote rels
+    final seenDl = <String>{};
+    toDownload.retainWhere((e) => seenDl.add(e.key));
+    // Remote-neuer: lokale Version zuerst entfernen (Replace), sonst Duplikate.
+    if (needDownloadReplace.isNotEmpty && deleteLocalAssets != null) {
+      final toReplace = needDownloadReplace.map((r) => r.local).toList();
+      onProgress?.call('delete-local', '', 0, toReplace.length);
+      try {
+        final gone = await deleteLocalAssets(toReplace);
+        for (final rel in gone) {
+          localItems.remove(rel);
+          deletedLocal++;
+        }
+        AppLog.info('sync',
+            'Replace: ${gone.length}/${toReplace.length} lokale Versionen entfernt vor Download');
+      } catch (e) {
+        AppLog.warn('sync', 'Replace-Löschung fehlgeschlagen: $e');
+      }
+    }
+
+    final downloadTotal = toDownload.length;
+    if (downloadTotal > 0) {
+      AppLog.info('sync',
+          'Virtual-Mirror Download: $downloadTotal Dateien ← $remoteName:$remotePath');
     }
     var dl = 0;
     final tmpFiles = <File>[];
     final tmpRels = <String>[];
-    // Basename der lokalen Items — Remote-Datei mit gleichem Namen gilt als lokal.
-    final localBases = <String>{
-      for (final rel in localItems.keys) rel.split('/').last.toLowerCase(),
-    };
-    // Download-Liste nach Basename filtern (Pfad-Mismatch).
-    toDownload.removeWhere((entry) {
-      final base = entry.key.split('/').last.toLowerCase();
-      return localBases.contains(base);
-    });
     for (final entry in toDownload) {
       final rel = entry.key;
       dl++;
-      onProgress?.call('download', rel, dl, 0);
+      onProgress?.call('download', rel, dl, downloadTotal);
       try {
         final tmpRoot = await Directory.systemTemp.createTemp('fibu_import_');
         final dest = File('${tmpRoot.path}/${entry.value.name}');
@@ -414,6 +484,9 @@ class VirtualMirrorSyncEngine {
           tmpRels.add(rel);
           downloaded++;
           downloadedPaths.add(rel);
+          sizeUpdates[rel] = entry.value.size > 0
+              ? entry.value.size
+              : await dest.length();
         }
       } catch (e) {
         AppLog.warn('sync', 'Download fehlgeschlagen: $rel ← $e');
@@ -450,11 +523,27 @@ class VirtualMirrorSyncEngine {
     final syncedNow = <String>{
       ...uploadedRels,
       for (final rel in localItems.keys)
-        if (remoteFiles.containsKey(rel)) rel,
+        if (remoteFiles.containsKey(rel) ||
+            localBases.contains(rel.split('/').last.toLowerCase()))
+          rel,
     };
+    // Größen aus Transfers in den persistierten State schreiben.
+    for (final e in sizeUpdates.entries) {
+      final cur = localItems[e.key];
+      if (cur != null) {
+        localItems[e.key] = cur.copyWith(sizeBytes: e.value);
+      }
+    }
     await persistLocalState(localItems.values
         .where((i) => syncedNow.contains(i.rel))
-        .map((i) => i.toJson())
+        .map((i) {
+          // Remote-Größe als Baseline, falls wir sie kennen (Inhalt synced).
+          final m = remoteFiles[i.rel];
+          if (m != null && !m.isDir && m.size > 0 && i.sizeBytes <= 0) {
+            return i.copyWith(sizeBytes: m.size).toJson();
+          }
+          return i.toJson();
+        })
         .toList());
 
     return MirrorSyncResult(

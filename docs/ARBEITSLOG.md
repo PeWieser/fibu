@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-08-24 — Inhalts-Diff im Spiegel (Crop/Metadaten) + Fingerprint-BG
+
+### Sync
+- Bidirektionaler Inhalts-Abgleich: **Größe + Modtime** (30s Toleranz).
+  - lokal neuer → Upload
+  - remote neuer → lokales Asset ersetzen (löschen + Download/Import)
+- Kein Full-Hash (zu teuer); Fingerprints aus Metadaten.
+- UI: Prüfen / Hochladen x von y / Herunterladen x von y / Löschen nur bei echten Aktionen.
+
+### Hintergrund
+- Widget/Auto-Refresh speichert **localFingerprint** (Asset-ID+mtime) und
+  **remoteFingerprint** (name|size|modTime der Task-Alben).
+- Crop/Edit ändert mtime → needsSync, auch bei gleicher Dateianzahl.
+
+---
+
 ## 2026-08-24 — Ehrliche Sync-UI: „Hochladen“ nur bei Transfer
 
 ### UX

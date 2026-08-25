@@ -56,13 +56,17 @@ class LiquidGlassPanel extends ConsumerWidget {
       );
     }
 
+    // Glass-View mit IgnorePointer: Platform-Views gewinnen sonst Hit-Tests
+    // und blockieren Buttons/Zeilen im Child (Dashboard-Setup etc.).
     return ClipRRect(
       borderRadius: radius,
       clipBehavior: clipBehavior,
       child: Stack(
         children: [
           Positioned.fill(
-            child: _NativeGlassView(cornerRadius: radius.topLeft.x),
+            child: IgnorePointer(
+              child: _NativeGlassView(cornerRadius: radius.topLeft.x),
+            ),
           ),
           content,
         ],

@@ -204,27 +204,65 @@ class VirtualMirrorSyncEngine {
       return best == null ? null : (rel: best.key, info: best.value);
     }
 
-    /// Inhalts-Diff ohne Full-Hash: Größe und/oder Modtime (Toleranz 30s).
-    ///  <0 remote neuer, 0 gleich, >0 lokal neuer, null = remote fehlt.
-    int? contentCmp(VirtualMediaItem local, RcloneFileInfo remote, int localSize) {
+    /// Inhalts-Diff ohne Full-Hash.
+    ///
+    /// WICHTIG (iOS-Fotos): `AssetEntity.modifiedDateTime` ist oft die
+    /// **Aufnahmezeit**, während die Cloud die **Upload-Zeit** speichert.
+    /// Deshalb darf „remote mtime neuer“ allein NIEMALS einen Replace
+    /// (löschen + neu laden) auslösen — das erzeugte die Endlos-Schleife
+    /// „alles löschen und neu herunterladen“.
+    ///
+    /// Regeln:
+    ///  * Größe gleich (und bekannt) → gleich (0), mtime ignorieren
+    ///  * Größe anders + lokal mtime klar neuer → Upload (1)
+    ///  * Größe anders + remote mtime klar neuer + lokale Größe bekannt → Replace (-1)
+    ///  * Größe anders, Zeiten unklar → lokal Vorrang Upload (1)
+    ///  * lokale Größe unbekannt (0) → nach Export nochmal prüfen (hier 0/1 vorsichtig)
+    ///
+    /// Rückgabe: <0 remote neuer, 0 gleich, >0 lokal neuer.
+    int contentCmp(VirtualMediaItem local, RcloneFileInfo remote, int localSize) {
+      final rSize = remote.size;
+      final sizeKnown = rSize > 0 && localSize > 0;
+      final sizeSame = sizeKnown && rSize == localSize;
+      final sizeDiffers = sizeKnown && rSize != localSize;
+
+      // Gleiche Bytes → inhaltlich am Ziel, fertig (mtime von iOS vs Cloud lügen).
+      if (sizeSame) return 0;
+
       final rMod = DateTime.tryParse(remote.modTime);
       final lMod = DateTime.fromMillisecondsSinceEpoch(local.modifiedMs);
-      final sizeDiffers = remote.size > 0 && localSize > 0 && remote.size != localSize;
-      if (rMod == null) {
-        // Keine Remote-Zeit: Größe entscheidet.
-        if (remote.size <= 0) return 1;
-        if (localSize <= 0) return 0;
-        return remote.size == localSize ? 0 : 1; // bei Diff: lokal pushen (lokal Vorrang)
+
+      // Lokale Größe noch unbekannt: nur bei klar neuerer lokaler mtime pushen,
+      // sonst als „vermutlich ok“ werten und nach Export nachmessen.
+      if (localSize <= 0) {
+        if (rMod != null &&
+            lMod.isAfter(rMod.add(const Duration(seconds: 60)))) {
+          return 1;
+        }
+        return 0;
       }
-      final delta = lMod.difference(rMod).inSeconds;
-      if (delta > 30) return 1; // lokal klar neuer (Crop/Edit)
-      if (delta < -30) return -1; // remote klar neuer
-      // Zeiten nah: Größe als Tie-Breaker (Metadaten/Crop oft gleiche mtime-Nähe)
-      if (sizeDiffers) {
-        // Ohne klare Zeit: lokal gewinnt (lokal hat Vorrang im Mirror).
+
+      // Remote-Größe unbekannt: nur hochladen wenn lokal klar neuer.
+      if (rSize <= 0) {
+        if (rMod != null &&
+            lMod.isAfter(rMod.add(const Duration(seconds: 60)))) {
+          return 1;
+        }
+        return 0;
+      }
+
+      // Ab hier: Größen differieren → echter Inhalts-Unterschied möglich.
+      if (!sizeDiffers) return 0;
+
+      if (rMod == null) {
+        // Keine Remote-Zeit: lokal hat Vorrang (Upload).
         return 1;
       }
-      return 0;
+      final delta = lMod.difference(rMod).inSeconds;
+      if (delta > 60) return 1; // lokal klar neuer (Crop/Edit)
+      if (delta < -60) return -1; // remote klar neuer + andere Größe
+      // Zeiten nah, Größe anders: lokal Vorrang (kein aggressives Replace).
+      return 1;
     }
 
     // Größen nach erfolgreichem Transfer in localItems schreiben.
@@ -257,14 +295,14 @@ class VirtualMirrorSyncEngine {
       // Bekannte Größe aus State, sonst 0 → nach Export nachmessen.
       final knownSize = item.sizeBytes;
       final cmp = contentCmp(item, m.info, knownSize);
-      if (cmp == null || cmp == 0) {
+      if (cmp == 0) {
         uploadedRels.add(item.rel);
         continue;
       }
       if (cmp > 0) {
         needUpload.add(item);
       } else {
-        // Remote neuer → später ersetzen (Download + Import).
+        // Remote neuer + andere Größe → später ersetzen (Download + Import).
         needDownloadReplace.add((local: item, remoteRel: m.rel, remote: m.info));
         uploadedRels.add(item.rel); // gilt als „paired“, kein Neu-Upload
       }
@@ -287,13 +325,13 @@ class VirtualMirrorSyncEngine {
         final m = matchRemote(item);
         if (m != null) {
           final cmp = contentCmp(item, m.info, localSize);
-          if (cmp == null || cmp == 0) {
+          if (cmp == 0) {
             sizeUpdates[item.rel] = localSize;
             uploadedRels.add(item.rel);
             continue;
           }
           if (cmp < 0) {
-            // Remote doch neuer → Download-Replace statt Upload.
+            // Remote doch neuer + andere Größe → Download-Replace statt Upload.
             needDownloadReplace.add((local: item, remoteRel: m.rel, remote: m.info));
             sizeUpdates[item.rel] = localSize;
             uploadedRels.add(item.rel);

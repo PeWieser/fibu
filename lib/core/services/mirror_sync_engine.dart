@@ -217,19 +217,25 @@ class MirrorSyncEngine {
           needUpload.add(entry); // remote fehlt
           continue;
         }
-        // Inhalts-Diff: Größe + Modtime (lokal neuer → upload, remote neuer → replace).
+        // Inhalts-Diff: NUR bei Größenänderung Replace/Upload.
+        // mtime allein lügt (lokal Dateisystem vs. Cloud-Upload-Zeit).
         final rMod = DateTime.tryParse(remote.modTime);
         final lMod = file.statSync().modified;
         final sizeDiff = remote.size > 0 && remote.size != localSize;
+        if (!sizeDiff) {
+          // gleiche Bytes → fertig
+          continue;
+        }
         if (rMod != null) {
           final delta = lMod.difference(rMod).inSeconds;
-          if (delta > 30 || (delta.abs() <= 30 && sizeDiff)) {
-            needUpload.add(entry);
-          } else if (delta < -30) {
+          if (delta < -60) {
+            // Remote klar neuer + andere Größe → ersetzen
             needDownloadReplace.add(MapEntry(remoteRel ?? rel, remote));
+          } else {
+            // lokal neuer oder unklar → Upload (lokal Vorrang)
+            needUpload.add(entry);
           }
-          // else: gleich
-        } else if (sizeDiff) {
+        } else {
           needUpload.add(entry);
         }
       } catch (e) {
@@ -557,15 +563,15 @@ class MirrorSyncEngine {
   /// nicht fälschlich übersprungen werden. Eine kleine Toleranz verhindert
   /// Ping-Pong durch leichte Uhrzeit-Drift zwischen Geräten.
   bool _localIsNewer(File local, RcloneFileInfo remote) {
-    final remoteMod = DateTime.tryParse(remote.modTime);
-    final localMod = local.statSync().modified;
+    // Nur bei Größen-Diff und nicht klar remote-neuer.
     final localSize = local.lengthSync();
-    final sizeDiff = remote.size > 0 && remote.size != localSize;
-    if (remoteMod == null) return sizeDiff; // nur bei Größen-Diff
-    final delta = localMod.difference(remoteMod).inSeconds;
-    if (delta > 30) return true;
-    if (delta.abs() <= 30 && sizeDiff) return true; // Inhalt geändert
-    return false;
+    if (remote.size <= 0 || remote.size == localSize) return false;
+    final remoteMod = DateTime.tryParse(remote.modTime);
+    if (remoteMod == null) return true;
+    final localMod = local.statSync().modified;
+    // Remote klar neuer → nicht „lokal neuer“
+    if (localMod.difference(remoteMod).inSeconds < -60) return false;
+    return true;
   }
 
   String _relPath(String path, String root) {

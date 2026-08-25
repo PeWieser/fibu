@@ -178,11 +178,12 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
     if (!glass) return scaffold;
 
-    // Glass ZUERST (hinten), Scaffold darüber. Der opake Seiten-Inhalt deckt
-    // Glass ab; die transparente Tab-Bar lässt es durchscheinen — Icons bleiben
-    // scharf über dem Glass.
+    // Glass nur optisch über der Tab-Bar; IgnorePointer zwingend — UiKitView
+    // schluckt sonst Touches auch in transparenten Content-Bereichen darüber
+    // (Setup-Zeile „Aufgabe erstellen“ war nicht tappbar).
     return Stack(
       children: [
+        scaffold,
         Positioned(
           left: 0,
           right: 0,
@@ -191,7 +192,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             child: LiquidGlassTabBarBackdrop(height: glassHeight),
           ),
         ),
-        scaffold,
       ],
     );
   }

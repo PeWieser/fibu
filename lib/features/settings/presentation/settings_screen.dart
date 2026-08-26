@@ -911,9 +911,7 @@ class SettingsScreen extends ConsumerWidget {
     final theme = context.theme;
     final platform = defaultTargetPlatform;
 
-    final palettes = isDarkRow
-        ? [null, ...SanzoWadaPalette.darkPalettes]
-        : [null, ...SanzoWadaPalette.lightPalettes];
+    final palettes = [null, ...SanzoWadaPalette.values];
 
     return SizedBox(
       height: 100,
@@ -926,16 +924,21 @@ class SettingsScreen extends ConsumerWidget {
               ? config.selectedDarkPalette == palette
               : config.selectedLightPalette == palette;
 
+          // Modusgerechtes Farb-Set: Die Hell-Reihe zeigt das Light-Set,
+          // die Dunkel-Reihe das Dark-Set — so ist sofort sichtbar, wie die
+          // Palette im jeweiligen Modus aussieht (grün bleibt grün).
           final cardColor = palette != null
-              ? palette.surface
-              : (isDarkRow ? const Color(0xff18181b) : const Color(0xffffffff));
+              ? (isDarkRow ? palette.darkSurface : palette.lightSurface)
+              : (isDarkRow ? AppThemeData.dark.surface : AppThemeData.light.surface);
           final textPrimaryColor = palette != null
-              ? palette.textPrimary
-              : (isDarkRow ? const Color(0xffffffff) : const Color(0xff1c1a17));
+              ? (isDarkRow ? palette.darkTextPrimary : palette.lightTextPrimary)
+              : (isDarkRow ? AppThemeData.dark.textPrimary : AppThemeData.light.textPrimary);
 
           final dot1Color = palette?.primary ?? (isDarkRow ? const Color(0xff0a84ff) : const Color(0xff007aff));
           final dot2Color = palette?.accent ?? (isDarkRow ? const Color(0xff30d158) : const Color(0xff34c759));
-          final dot3Color = palette?.background ?? (isDarkRow ? const Color(0xff0c0c0e) : const Color(0xfffcfbfa));
+          final dot3Color = palette != null
+              ? (isDarkRow ? palette.darkBackground : palette.lightBackground)
+              : (isDarkRow ? AppThemeData.dark.canvas : AppThemeData.light.canvas);
 
           final paletteLabel = palette?.name ?? (isDarkRow ? strings.useDarkMode : strings.syncWithSystem);
 

@@ -1095,9 +1095,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
   // --- iOS (Cupertino Design) ---
   Widget _buildIOS(BuildContext context, List<String> remotes, AppThemeData theme, AppStrings strings) {
     return cupertino.CupertinoPageScaffold(
+      backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
         middle: Text(strings.cloudExplorerTitle),
         previousPageTitle: strings.back,
+        backgroundColor: theme.surface,
       ),
       child: SafeArea(
         child: Padding(
@@ -1820,9 +1822,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       );
     } else if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoPageScaffold(
+        backgroundColor: theme.canvas,
         navigationBar: cupertino.CupertinoNavigationBar(
           middle: Text(strings.cloudExplorerTitle),
           previousPageTitle: strings.back,
+          backgroundColor: theme.surface,
         ),
         child: SafeArea(child: widgetBody),
       );
@@ -1916,9 +1920,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
       );
     } else if (platform == TargetPlatform.iOS) {
       return cupertino.CupertinoPageScaffold(
+        backgroundColor: theme.canvas,
         navigationBar: cupertino.CupertinoNavigationBar(
           middle: Text(strings.cloudExplorerTitle),
           previousPageTitle: strings.back,
+          backgroundColor: theme.surface,
         ),
         child: SafeArea(child: widgetBody),
       );

@@ -171,6 +171,7 @@ class DebugLogScreen extends ConsumerWidget {
       return cupertino.CupertinoPageScaffold(
         backgroundColor: theme.canvas,
         navigationBar: cupertino.CupertinoNavigationBar(
+          backgroundColor: theme.surface,
           middle: Text(strings.debugLogTitle),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

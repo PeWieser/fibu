@@ -303,14 +303,39 @@ class IosRcloneService implements RcloneService {
     String remotePath,
   ) async {
     await _ensureEngine();
+    final dest = _copyDest(localFilePath, remoteName, remotePath);
+    await _rc.rpc('operations/copyfile', {
+      'srcFs': dest.srcDir,
+      'srcRemote': dest.fileName,
+      'dstFs': dest.dstFs,
+      'dstRemote': dest.dstRemote,
+      '_config': _transferConfig,
+    }, const Duration(minutes: 10));
+    AppLog.info('remote',
+        'Upload → ${_normalizeRemoteName(remoteName)}:${dest.dstRemote} (${dest.fileName})');
+  }
+
+  /// Zerlegt einen lokalen Dateipfad + Remote-Ziel in die `operations/copyfile`-
+  /// Felder (srcFs/srcRemote/dstFs/dstRemote) — von [copyFileToRemote] und der
+  /// Progress-Variante gemeinsam genutzt.
+  ///
+  /// remotePath kann ein reiner Ordner (copyFileToRemote general) oder ein
+  /// voller Dateipfad inkl. Dateiname sein (z.B. writeConfigToRemote).
+  ({String srcDir, String fileName, String dstFs, String dstRemote}) _copyDest(
+    String localFilePath,
+    String remoteName,
+    String remotePath,
+  ) {
     final remote = _normalizeRemoteName(remoteName);
     final fileName = localFilePath.split(Platform.pathSeparator).last;
-    final srcDir = localFilePath.substring(0, localFilePath.length - fileName.length - 1);
+    final srcDir = localFilePath.substring(
+        0, localFilePath.length - fileName.length - 1);
 
-    // remotePath kann ein reiner Ordner (copyFileToRemote general) oder ein
-    // voller Dateipfad inkl. Dateiname sein (z.B. writeConfigToRemote).
-    final remoteClean = remotePath.endsWith('/') ? remotePath.substring(0, remotePath.length - 1) : remotePath;
-    final remoteSegments = remoteClean.split('/').where((s) => s.isNotEmpty).toList();
+    final remoteClean = remotePath.endsWith('/')
+        ? remotePath.substring(0, remotePath.length - 1)
+        : remotePath;
+    final remoteSegments =
+        remoteClean.split('/').where((s) => s.isNotEmpty).toList();
     final String dstFs;
     final String dstRemote;
     if (remoteSegments.isNotEmpty && remoteSegments.last.contains('.')) {
@@ -324,15 +349,46 @@ class IosRcloneService implements RcloneService {
       dstRemote = fileName;
       dstFs = remoteClean.isEmpty ? '$remote:' : '$remote:$remoteClean';
     }
+    return (srcDir: srcDir, fileName: fileName, dstFs: dstFs, dstRemote: dstRemote);
+  }
 
-    await _rc.rpc('operations/copyfile', {
-      'srcFs': srcDir,
-      'srcRemote': fileName,
-      'dstFs': dstFs,
-      'dstRemote': dstRemote,
-      '_config': _transferConfig,
-    }, const Duration(minutes: 10));
-    AppLog.info('remote', 'Upload → $remote:$dstRemote ($fileName)');
+  @override
+  Future<void> copyFileToRemoteWithProgress(
+    String localFilePath,
+    String remoteName,
+    String remotePath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    await _ensureEngine();
+    final dest = _copyDest(localFilePath, remoteName, remotePath);
+    final group = 'mirror_${DateTime.now().microsecondsSinceEpoch}';
+    Map<String, dynamic> startRes;
+    try {
+      startRes = await _rc.rpc('operations/copyfile', {
+        'srcFs': dest.srcDir,
+        'srcRemote': dest.fileName,
+        'dstFs': dest.dstFs,
+        'dstRemote': dest.dstRemote,
+        '_config': _transferConfig,
+        '_async': true,
+        '_group': group,
+      }, const Duration(minutes: 10));
+    } catch (e) {
+      // Fallback: synchron (ohne Live-Bytes) — der Mirror zählt die Datei
+      // nach Abschluss trotzdem korrekt.
+      AppLog.warn('remote', 'Async-Upload nicht möglich, Fallback: $e');
+      await _rc.rpc('operations/copyfile', {
+        'srcFs': dest.srcDir,
+        'srcRemote': dest.fileName,
+        'dstFs': dest.dstFs,
+        'dstRemote': dest.dstRemote,
+        '_config': _transferConfig,
+      }, const Duration(minutes: 10));
+      return;
+    }
+    final rcJobId = (startRes['jobid'] as num?)?.toInt();
+    if (rcJobId == null) return;
+    await _pollSingleTransfer(rcJobId, group, onBytes);
   }
 
   @override
@@ -367,6 +423,81 @@ class IosRcloneService implements RcloneService {
       'dstRemote': fileName,
       '_config': _transferConfig,
     }, const Duration(minutes: 10));
+  }
+
+  @override
+  Future<void> downloadFileWithProgress(
+    String remoteName,
+    String remotePath,
+    String localPath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
+    final fileName = remotePath.split('/').last;
+    final srcDir = remotePath.contains('/')
+        ? remotePath.substring(0, remotePath.lastIndexOf('/'))
+        : '';
+    final dstDir = localPath.substring(0, localPath.lastIndexOf('/'));
+    final group = 'mirror_${DateTime.now().microsecondsSinceEpoch}';
+    Map<String, dynamic> startRes;
+    try {
+      startRes = await _rc.rpc('operations/copyfile', {
+        'srcFs': '$remote:$srcDir',
+        'srcRemote': fileName,
+        'dstFs': dstDir,
+        'dstRemote': fileName,
+        '_config': _transferConfig,
+        '_async': true,
+        '_group': group,
+      }, const Duration(minutes: 10));
+    } catch (e) {
+      AppLog.warn('remote', 'Async-Download nicht möglich, Fallback: $e');
+      await _rc.rpc('operations/copyfile', {
+        'srcFs': '$remote:$srcDir',
+        'srcRemote': fileName,
+        'dstFs': dstDir,
+        'dstRemote': fileName,
+        '_config': _transferConfig,
+      }, const Duration(minutes: 10));
+      return;
+    }
+    final rcJobId = (startRes['jobid'] as num?)?.toInt();
+    if (rcJobId == null) return;
+    await _pollSingleTransfer(rcJobId, group, onBytes);
+  }
+
+  /// Kopiert eine Datei innerhalb EINES Remotes (Server-seitig, falls das
+  /// Backend es unterstützt) — für den Remote-Papierkorb, damit Tombstones
+  /// nicht per Download+Upload über das Gerät wandern.
+  @override
+  Future<bool> copyRemoteFile(
+    String remoteName,
+    String srcPath,
+    String dstPath,
+  ) async {
+    await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
+    try {
+      final srcDir = srcPath.contains('/')
+          ? srcPath.substring(0, srcPath.lastIndexOf('/'))
+          : '';
+      final srcName = srcPath.split('/').last;
+      final dstDir = dstPath.contains('/')
+          ? dstPath.substring(0, dstPath.lastIndexOf('/'))
+          : '';
+      final dstName = dstPath.split('/').last;
+      await _rc.rpc('operations/copyfile', {
+        'srcFs': '$remote:$srcDir',
+        'srcRemote': srcName,
+        'dstFs': '$remote:$dstDir',
+        'dstRemote': dstName,
+        '_config': _transferConfig,
+      }, const Duration(minutes: 10));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -701,6 +832,53 @@ class IosRcloneService implements RcloneService {
       } else {
         final err = status['error'] as String? ?? AppStrings.current.errUnknown;
         _fail(jobId, err);
+      }
+      return;
+    }
+  }
+
+  /// Pollt einen einzelnen Async-Transfer (genau eine Datei) und meldet live
+  /// die bereits übertragenen Bytes via [onBytes] (alle ~300 ms).
+  ///
+  /// Wirft bei Fehlschlag — wie die synchrone Variante —, damit der Mirror
+  /// die Datei nicht fälschlich als übertragen zählt.
+  Future<void> _pollSingleTransfer(
+    int rcJobId,
+    String group,
+    void Function(int bytesTransferred)? onBytes,
+  ) async {
+    var consecutiveErrors = 0;
+    while (true) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      try {
+        final stats =
+            await _rc.rpc('core/stats', {'group': group}, const Duration(seconds: 30));
+        consecutiveErrors = 0;
+        final transferred = (stats['bytes'] as num?)?.toInt() ?? 0;
+        if (transferred > 0 && onBytes != null) onBytes(transferred);
+      } catch (_) {
+        // Stats können während des Transfers kurz weg sein — nicht fatal.
+        consecutiveErrors++;
+      }
+      Map<String, dynamic> status;
+      try {
+        status = await _rc.rpc('job/status', {'jobid': rcJobId}, const Duration(seconds: 30));
+        consecutiveErrors = 0;
+      } catch (_) {
+        consecutiveErrors++;
+        // Job/Status dauerhaft nicht erreichbar → nicht endlos hängen
+        // bleiben; der Mirror zählt die Datei dann nicht als übertragen
+        // und wiederholt sie beim nächsten Lauf.
+        if (consecutiveErrors > 30) {
+          throw Exception('Transfer-Fortschritt nicht erreichbar (Job $rcJobId)');
+        }
+        continue;
+      }
+      final finished = status['finished'] as bool? ?? false;
+      if (!finished) continue;
+      final success = status['success'] as bool? ?? false;
+      if (!success) {
+        throw Exception(status['error'] as String? ?? 'Transfer fehlgeschlagen');
       }
       return;
     }
@@ -1478,6 +1656,19 @@ class IosRcloneService implements RcloneService {
       previouslySyncedRels: previousRels,
       deleteLocalAssets: deleteLocalAssets,
       exportForUpload: exportForUpload,
+      // Billige Vorab-Vermessung: asset.file direkt (ohne Temp-Kopie), damit
+      // die Upload-Gesamtgröße VOR dem ersten Transfer feststeht.
+      measureForUpload: (item) async {
+        final asset = byRel[item.rel];
+        if (asset == null) return 0;
+        try {
+          final f = await asset.file;
+          if (f == null) return 0;
+          return await f.length();
+        } catch (_) {
+          return 0;
+        }
+      },
       importDownloaded: importDownloaded,
       persistLocalState: (entries) =>
           _saveVirtualState(stateRoot, entries, blocked, adopted),

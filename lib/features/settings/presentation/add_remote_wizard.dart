@@ -786,7 +786,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
   Widget _buildIOS(AppThemeData theme, AppStrings strings) {
     return cupertino.CupertinoPageScaffold(
+      backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
+        backgroundColor: theme.surface,
         middle: Text(_currentStep == 0
             ? strings.wizardStep1Title
             : strings.wizardStep2Title),

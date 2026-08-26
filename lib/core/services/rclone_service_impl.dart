@@ -406,6 +406,18 @@ class WindowsRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> copyFileToRemoteWithProgress(
+    String localFilePath,
+    String remoteName,
+    String remotePath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    // Desktop-Prozess-Variante liefert keine Live-Bytes — gleiche Semantik
+    // wie die synchrone Methode.
+    await copyFileToRemote(localFilePath, remoteName, remotePath);
+  }
+
+  @override
   Future<void> downloadDirectory(String remoteName, String remotePath, String localPath) async {
     try {
       final target = remotePath.isEmpty ? '$remoteName:' : '$remoteName:$remotePath';
@@ -428,6 +440,28 @@ class WindowsRcloneService implements RcloneService {
       }
     } catch (e) {
       throw Exception('Failed to download file: $e');
+    }
+  }
+
+  @override
+  Future<void> downloadFileWithProgress(
+    String remoteName,
+    String remotePath,
+    String localPath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    await downloadFile(remoteName, remotePath, localPath);
+  }
+
+  @override
+  Future<bool> copyRemoteFile(String remoteName, String srcPath, String dstPath) async {
+    try {
+      final src = srcPath.isEmpty ? '$remoteName:' : '$remoteName:$srcPath';
+      final dst = dstPath.isEmpty ? '$remoteName:' : '$remoteName:$dstPath';
+      final result = await Process.run(_executablePath, ['copyto', src, dst]);
+      return result.exitCode == 0;
+    } catch (_) {
+      return false;
     }
   }
 }

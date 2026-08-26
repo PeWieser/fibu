@@ -1,4 +1,52 @@
 # Fibu — Arbeits-Log (Session)
+---
+
+## 2026-08-26 — Feste 100%-Basis + Live-Bytes, schnelles Aufräumen, Palette in Hell & Dunkel
+
+### Fix: Fortschrittsbalken — Gesamtgröße vorab, Live-Bytes, „x von y" darunter
+- **Gesamtgröße wird VOR dem ersten Transfer berechnet** und ist damit die
+  feste 100%-Basis: Kein „Gesamt-MB wächst nach", kein Zurückspringen kurz
+  vor 100%.
+  - FS-Mirror: Summe der lokalen Dateigrößen (Upload) bzw. Remote-Größen
+    (Download) — war bereits vorab, bleibt stabil.
+  - Virtueller Mirror: neuer `measureForUpload`-Callback (iOS: `asset.file`
+    ohne Temp-Kopie) vermisst alle Upload-Assets in einem Scan-Durchlauf,
+    bevor irgendetwas übertragen wird; Fallback über `exportForUpload`.
+- **Live-Balken:** Upload/Download laufen jetzt als async-rclone-Jobs
+  (`operations/copyfile` mit `_async`/`_group`); `core/stats` wird alle
+  ~300 ms gepollt (`_pollSingleTransfer`) und meldet die tatsächlich
+  übertragenen Bytes — der Balken bewegt sich kontinuierlich, auch innerhalb
+  großer Videos (vorher: nur Datei-Sprünge).
+  - Neue Interface-Methoden `copyFileToRemoteWithProgress` /
+    `downloadFileWithProgress` (iOS: async+Polling, Mock/Desktop: Sync-Fallback).
+- **Zahlen darunter:** Dashboard-Panels zeigen bei Transfer jetzt ZWEI Zeilen —
+  echte MB (`12,3 MB / 45,6 MB`) und darunter die Datei-Zähler („x von y Bilder“).
+
+### Fix: „Aufräumen" (Tombstone-Phase) deutlich schneller
+- Remote-Listung läuft mit 6 parallelen Workern statt sequenziell pro Album.
+- Tombstone-Verarbeitung (lokale Löschungen → Cloud) mit 5 parallelen
+  Workern statt einer langen sequenziellen Kette.
+- `TrashService.moveToRemoteTrash` versucht zuerst die **Server-seitige
+  Kopie** in den Papierkorb (neue Methode `copyRemoteFile`; 1 Call, keine
+  Geräte-Bandbreite bei Drive/MEGA/S3 u.a.) und fällt nur bei Fehlern auf
+  Download+Upload+Delete zurück.
+
+### Fix: Seitenhintergrund „drumherum" in Theme-Farbe (Hell + Dunkel)
+- Sanzo-Wada-Paletten haben jetzt **echte Hell- und Dunkel-Sets**: Vorher
+  waren die Light-Canvases fast weiß (`#f7f5f0`–`#fafcf6`) und die Dark-
+  Canvases fast grau/schwarz — der Bereich zwischen den Karten wirkte daher
+  „weiß/grau", obwohl eine (grüne) Palette aktiv war.
+- **Mori (Forest)** ist jetzt in beiden Modi sichtbar grün
+  (Hell: `#e9f2ea`/`#d6e6da`, Dunkel: `#0f2b1d`/`#204737`); alle anderen
+  Paletten analog farblich getönt.
+- Beide Paletten-Reihen (Hell/Dunkel) zeigen jetzt ALLE 8 Paletten mit dem
+  modusgerechten Farb-Set — Grün ist damit auch im Light-Modus wählbar.
+  Gespeicherte Auswahl bleibt per Name erhalten.
+- Restliche Scaffolds/Nav-Bars explizit auf `theme.canvas`/`theme.surface`
+  gesetzt (Cloud-Explorer, Wizard, Datei-Vorschau, Debug-Log).
+- Graue `systemGrey5`-Fortschritts-Tracks durch Theme-Token ersetzt.
+
+
 
 ---
 

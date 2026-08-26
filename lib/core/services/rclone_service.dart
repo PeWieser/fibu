@@ -198,10 +198,34 @@ abstract class RcloneService {
   /// Uploads a single file to the remote destination.
   Future<void> copyFileToRemote(String localFilePath, String remoteName, String remotePath);
 
+  /// Uploads a single file and reports live transferred bytes via [onBytes].
+  ///
+  /// Wird von den Mirror-Engines genutzt, damit der Fortschrittsbalken in
+  /// Echtzeit den übertragenen Bytes folgt (nicht nur Datei-Sprüngen).
+  Future<void> copyFileToRemoteWithProgress(
+    String localFilePath,
+    String remoteName,
+    String remotePath, {
+    void Function(int bytesTransferred)? onBytes,
+  });
+
   /// Downloads files from a remote path to a local directory.
   Future<void> downloadDirectory(String remoteName, String remotePath, String localPath);
 
   /// Downloads a single remote file to a local path (including file name).
   Future<void> downloadFile(String remoteName, String remotePath, String localPath);
+
+  /// Downloads a single remote file and reports live transferred bytes.
+  Future<void> downloadFileWithProgress(
+    String remoteName,
+    String remotePath,
+    String localPath, {
+    void Function(int bytesTransferred)? onBytes,
+  });
+
+  /// Copies a file within one remote (server-side where the backend supports
+  /// it, e.g. Drive/MEGA/S3). Returns false on failure so callers can fall
+  /// back to download+upload (used for the remote trash).
+  Future<bool> copyRemoteFile(String remoteName, String srcPath, String dstPath);
 }
 

@@ -115,7 +115,7 @@ class StorageCard extends ConsumerWidget {
               height: 6,
               child: Stack(
                 children: [
-                  Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
+                  Container(color: theme.textSecondary.withValues(alpha: 0.15)),
                   FractionallySizedBox(
                     widthFactor: percentage / 100,
                     child: Container(color: theme.accent),

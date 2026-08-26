@@ -369,12 +369,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
+          // Echte Datenmenge (Balken = übertragene MB) …
           if (job.totalBytes > 0) ...[
             SizedBox(height: theme.sm),
             fluent.Text(
                 '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}'),
-          ] else if (job.itemsTotal > 0) ...[
-            SizedBox(height: theme.sm),
+          ],
+          // … und darunter die Datei-Zähler („x von y Bilder“).
+          if (job.itemsTotal > 0) ...[
+            SizedBox(height: theme.xs),
             fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
           ],
           SizedBox(height: theme.sm),
@@ -764,7 +767,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 height: 6,
                 child: Stack(
                   children: [
-                    Container(color: cupertino.CupertinoColors.systemGrey5.resolveFrom(context)),
+                    Container(
+                        color: theme.textSecondary.withValues(alpha: 0.15)),
                     FractionallySizedBox(
                       widthFactor: job.percentage / 100,
                       child: Container(color: theme.accent),
@@ -773,6 +777,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             ),
+            // Echte Datenmenge (Balken = übertragene MB) …
             if (job.totalBytes > 0) ...[
               SizedBox(height: theme.sm),
               Text(
@@ -783,8 +788,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
-            ] else if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.sm),
+            ],
+            // … und darunter die Datei-Zähler („x von y Bilder“).
+            if (job.itemsTotal > 0) ...[
+              SizedBox(height: theme.xs),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
                 style: TextStyle(fontSize: 13, color: theme.textSecondary),
@@ -1006,14 +1013,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
+            // Echte Datenmenge (Balken = übertragene MB) …
             if (job.totalBytes > 0) ...[
               SizedBox(height: theme.sm),
               Text(
                 '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}',
                 style: material.Theme.of(context).textTheme.bodySmall,
               ),
-            ] else if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.sm),
+            ],
+            // … und darunter die Datei-Zähler („x von y Bilder“).
+            if (job.itemsTotal > 0) ...[
+              SizedBox(height: theme.xs),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
                 style: material.Theme.of(context).textTheme.bodySmall,

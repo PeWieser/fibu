@@ -80,8 +80,14 @@ class TrashService {
       final remoteSrc = remotePath.isEmpty ? rel : '$remotePath/$rel';
       final remoteDst = '$trashDir/$rel';
 
-      await _rclone.downloadFile(remoteName, remoteSrc, tmpFile.path);
-      await _rclone.copyFileToRemote(tmpFile.path, remoteName, remoteDst);
+      // Bevorzugt Server-seitig kopieren (1 Call; Drive/MEGA/S3 u.a.
+      // unterstützen das ohne Geräte-Bandbreite) — hält die „Aufräumen"-
+      // Phase auch bei vielen Tombstones schnell. Fallback: Download+Upload.
+      var copied = await _rclone.copyRemoteFile(remoteName, remoteSrc, remoteDst);
+      if (!copied) {
+        await _rclone.downloadFile(remoteName, remoteSrc, tmpFile.path);
+        await _rclone.copyFileToRemote(tmpFile.path, remoteName, remoteDst);
+      }
       await _rclone.deleteFile(remoteName, remoteSrc);
       if (await tmpFile.exists()) await tmpFile.delete();
       return true;

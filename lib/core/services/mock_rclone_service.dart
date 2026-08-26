@@ -266,6 +266,16 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> copyFileToRemoteWithProgress(
+    String localFilePath,
+    String remoteName,
+    String remotePath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    await copyFileToRemote(localFilePath, remoteName, remotePath);
+  }
+
+  @override
   Future<void> downloadDirectory(String remoteName, String remotePath, String localPath) async {
     await Future.delayed(const Duration(milliseconds: 100));
   }
@@ -273,6 +283,21 @@ class MockRcloneService implements RcloneService {
   @override
   Future<void> downloadFile(String remoteName, String remotePath, String localPath) async {
     await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<void> downloadFileWithProgress(
+    String remoteName,
+    String remotePath,
+    String localPath, {
+    void Function(int bytesTransferred)? onBytes,
+  }) async {
+    await downloadFile(remoteName, remotePath, localPath);
+  }
+
+  @override
+  Future<bool> copyRemoteFile(String remoteName, String srcPath, String dstPath) async {
+    return true;
   }
 
   /// Helper to clear mock states in tests

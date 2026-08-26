@@ -72,12 +72,16 @@ class AppThemeData {
   );
 
   /// Create a theme from a Sanzo Wada palette
+  ///
+  /// Jede Palette hat ein eigenes Hell- und Dunkel-Set, damit der Canvas
+  /// (Hintergrund zwischen den Karten) in beiden Modi sichtbar im
+  /// Paletten-Farbton liegt statt „fast weiß" bzw. „grau/schwarz".
   factory AppThemeData.fromWadaPalette(SanzoWadaPalette palette, {bool isDark = false}) {
     return AppThemeData(
-      canvas: palette.background,
-      surface: palette.surface,
-      textPrimary: palette.textPrimary,
-      textSecondary: palette.textSecondary,
+      canvas: isDark ? palette.darkBackground : palette.lightBackground,
+      surface: isDark ? palette.darkSurface : palette.lightSurface,
+      textPrimary: isDark ? palette.darkTextPrimary : palette.lightTextPrimary,
+      textSecondary: isDark ? palette.darkTextSecondary : palette.lightTextSecondary,
       accent: palette.accent,
       success: isDark ? const Color(0xff30d158) : const Color(0xff34c759),
       warning: isDark ? const Color(0xffffd60a) : const Color(0xffffcc00),

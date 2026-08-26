@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -104,6 +105,11 @@ class VirtualMirrorSyncEngine {
     required Future<void> Function(List<Map<String, dynamic>> state) persistLocalState,
     TrashService? trash,
     MirrorProgressCallback? onProgress,
+
+    /// Billiger Größen-Mess-Callback für die Upload-Vorabvermessung
+    /// (z. B. `asset.file` ohne Temp-Kopie). Fehlt er, wird über
+    /// [exportForUpload] gemessen (teurer).
+    Future<int> Function(VirtualMediaItem item)? measureForUpload,
   }) async {
     onProgress?.call('scan', AppStrings.current.syncStartAnalysis, 0, 0);
     // Die Mengen werden direkt mutiert (blockedRels.add / adoptedRels.add …) und
@@ -308,16 +314,48 @@ class VirtualMirrorSyncEngine {
       }
     }
 
-    // Echte Uploads. Byte-Total kann erst mit den Export-Größen wachsen
-    // (manifest-only hat die lokalen Bytes noch nicht) — wir melden einen
-    // vorläufigen Stand und aktualisieren bytesTotal, sobald die nächste
-    // Datei vermessen ist.
+    // Echte Uploads. Die Gesamtgröße wird VOR dem ersten Transfer einmal
+    // vermessen (billiger asset.file-Callback bzw. Export-Fallback), damit
+    // die 100%-Basis von Anfang an feststeht — kein „Gesamt-MB wächst nach"
+    // und kein Zurückspringen des Balkens mehr.
     final uploadTotal = needUpload.length;
+    var uploadTotalBytes = 0;
     if (uploadTotal > 0) {
       AppLog.info('sync', 'Virtual-Mirror Upload: $uploadTotal Dateien → $remoteName:$remotePath');
+      onProgress?.call('scan', AppStrings.current.syncPhaseScan, 0, uploadTotal);
+      var measured = 0;
+      for (final item in needUpload) {
+        measured++;
+        if (measured == 1 || measured == uploadTotal || measured % 10 == 0) {
+          onProgress?.call(
+              'scan', AppStrings.current.syncPhaseScan, measured, uploadTotal);
+        }
+        var size = 0;
+        try {
+          if (measureForUpload != null) {
+            size = await measureForUpload(item);
+          } else {
+            final f = await exportForUpload(item);
+            if (f != null && await f.exists()) size = await f.length();
+            try {
+              if (f != null && await f.exists()) await f.delete();
+              final parent = f?.parent;
+              if (parent != null &&
+                  await parent.exists() &&
+                  parent.path.contains('fibu_export_')) {
+                await parent.delete(recursive: true);
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+        if (size < 0) size = 0;
+        uploadTotalBytes += size;
+      }
+      AppLog.info('sync',
+          'Upload-Vermessung fertig: $uploadTotal Dateien / $uploadTotalBytes Bytes');
     }
+
     var uploadedBytes = 0;
-    var uploadTotalBytes = 0;
     for (final item in needUpload) {
       File? tmp;
       try {
@@ -325,7 +363,6 @@ class VirtualMirrorSyncEngine {
         if (tmp == null || !await tmp.exists()) continue;
         final localSize = await tmp.length();
         if (localSize <= 0) continue;
-        uploadTotalBytes += localSize;
 
         // Nach Export: nochmal gegen remote prüfen (jetzt mit echter Größe).
         final m = matchRemote(item);
@@ -353,8 +390,22 @@ class VirtualMirrorSyncEngine {
           bytesDone: uploadedBytes,
           bytesTotal: uploadTotalBytes,
         );
-        await _rclone.copyFileToRemote(
-            tmp.path, remoteName, _joinRemote(remotePath, item.rel));
+        // Live-Bytes: Der Balken folgt in Echtzeit den übertragenen Bytes.
+        await _rclone.copyFileToRemoteWithProgress(
+          tmp.path,
+          remoteName,
+          _joinRemote(remotePath, item.rel),
+          onBytes: (bytes) {
+            onProgress?.call(
+              'upload',
+              item.rel,
+              uploaded,
+              uploadTotal,
+              bytesDone: uploadedBytes + bytes,
+              bytesTotal: uploadTotalBytes,
+            );
+          },
+        );
         uploaded++;
         uploadedBytes += localSize;
         onProgress?.call(
@@ -384,34 +435,43 @@ class VirtualMirrorSyncEngine {
     }
 
     // ---------- 2) Lokale Tombstones remote ausführen (Lokal hat Vorrang) ----
+    // Parallel mit begrenzter Nebenläufigkeit: pro Tombstone laufen sonst
+    // 2-3 sequenzielle Netzwerk-Calls (Server-Kopie + Delete bzw. Fallback
+    // Download+Upload+Delete) — bei vielen Löschungen sehr langsam.
+    final tombQueue = Queue<Tombstone>.of(localTombs);
     var tb = 0;
-    for (final tomb in localTombs) {
-      tb++;
-      onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
-      if (remoteFiles.containsKey(tomb.path)) {
-        var ok = false;
-        if (trash != null) {
-          ok = await trash.moveToRemoteTrash(
-            remoteName: remoteName, remotePath: remotePath, rel: tomb.path);
-          if (ok) trashedRemote++;
-        }
-        if (!ok) {
-          try {
-            await _rclone.deleteFile(remoteName, _joinRemote(remotePath, tomb.path));
-            deletedRemote++;
-            ok = true;
-          } catch (e) {
-            AppLog.warn('sync', 'Remote-Löschung fehlgeschlagen: ${tomb.path} → $e');
+    const tombWorkers = 5;
+    Future<void> tombWorker() async {
+      while (tombQueue.isNotEmpty) {
+        final tomb = tombQueue.removeFirst();
+        tb++;
+        onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
+        if (remoteFiles.containsKey(tomb.path)) {
+          var ok = false;
+          if (trash != null) {
+            ok = await trash.moveToRemoteTrash(
+              remoteName: remoteName, remotePath: remotePath, rel: tomb.path);
+            if (ok) trashedRemote++;
           }
+          if (!ok) {
+            try {
+              await _rclone.deleteFile(remoteName, _joinRemote(remotePath, tomb.path));
+              deletedRemote++;
+              ok = true;
+            } catch (e) {
+              AppLog.warn('sync', 'Remote-Löschung fehlgeschlagen: ${tomb.path} → $e');
+            }
+          }
+          // Auch bei Erfolg aus der In-Memory-Liste nehmen, damit Phase 4
+          // (Download) die Datei nicht aus dem Scan-Stand von Laufbeginn holt.
+          if (ok) remoteFiles.remove(tomb.path);
         }
-        // Auch bei Erfolg aus der In-Memory-Liste nehmen, damit Phase 4
-        // (Download) die Datei nicht aus dem Scan-Stand von Laufbeginn holt.
-        if (ok) remoteFiles.remove(tomb.path);
+        // Tombstone gilt IMMER — blockiert Re-Download, auch wenn Delete noch
+        // scheitert (nächster Lauf versucht erneut, holt aber nichts zurück).
+        merged[tomb.path] = tomb;
       }
-      // Tombstone gilt IMMER — blockiert Re-Download, auch wenn Delete noch
-      // scheitert (nächster Lauf versucht erneut, holt aber nichts zurück).
-      merged[tomb.path] = tomb;
     }
+    await Future.wait(List.generate(tombWorkers, (_) => tombWorker()));
 
     // ---------- 3) Remote-Tombstones: lokale Mediathekeninhalte NIE löschen --
     for (final tomb in remoteTombs) {
@@ -551,7 +611,22 @@ class VirtualMirrorSyncEngine {
       try {
         final tmpRoot = await Directory.systemTemp.createTemp('fibu_import_');
         final dest = File('${tmpRoot.path}/${entry.value.name}');
-        await _rclone.downloadFile(remoteName, _joinRemote(remotePath, rel), dest.path);
+        // Live-Bytes: Fortschritt folgt den tatsächlich geladenen Bytes.
+        await _rclone.downloadFileWithProgress(
+          remoteName,
+          _joinRemote(remotePath, rel),
+          dest.path,
+          onBytes: (bytes) {
+            onProgress?.call(
+              'download',
+              rel,
+              dl - 1,
+              downloadTotal,
+              bytesDone: downloadedBytes + bytes,
+              bytesTotal: downloadTotalBytes,
+            );
+          },
+        );
         if (await dest.exists() && await dest.length() > 0) {
           tmpFiles.add(dest);
           tmpRels.add(rel);
@@ -644,46 +719,61 @@ class VirtualMirrorSyncEngine {
   Future<Map<String, RcloneFileInfo>> _listRemoteRecursive(
       String remoteName, String remotePath,
       {MirrorProgressCallback? onProgress}) async {
-        final result = <String, RcloneFileInfo>{};
+    final result = <String, RcloneFileInfo>{};
     var dirsScanned = 0;
     final prefix = remotePath.isEmpty ? '' : '$remotePath/';
 
-    Future<void> walk(String dir) async {
-      final items = await _rclone.listFiles(remoteName, dir);
-      dirsScanned++;
-      onProgress?.call('scan', dir, dirsScanned, 0);
-      for (final item in items) {
-        final fullRel = dir.isEmpty ? item.name : '$dir/${item.name}';
-        // WICHTIG: rel muss RELATIV zu remotePath sein (wird später wieder mit
-        // _joinRemote geprefixt) — sonst entsteht „fibu-backup/fibu-backup/…"
-        // und Downloads schlagen mit 404 fehl (im echten Log beobachtet).
-        final rel = prefix.isNotEmpty && fullRel.startsWith(prefix)
-            ? fullRel.substring(prefix.length)
-            : fullRel;
-        // Meta-Ordner (Löschprotokoll, Remote-Papierkorb) nie als Inhalt
-        // behandeln — sonst würden sie lokal neu heruntergeladen.
-        if (item.isDir && (item.name == '.fibu' || item.name == '.fibu-trash')) {
-          continue;
+    // Ordner parallel mit kleiner Nebenläufigkeit listen (Alben nacheinander
+    // war bei vielen Ordnern sehr langsam).
+    final queue = Queue<String>([remotePath]);
+    Object? firstError;
+    const workers = 6;
+
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        final dir = queue.removeFirst();
+        List<RcloneFileInfo> items;
+        try {
+          items = await _rclone.listFiles(remoteName, dir);
+        } catch (e) {
+          firstError ??= e;
+          return;
         }
-        result[rel] = item;
-        if (item.isDir) {
-          await walk(fullRel);
+        dirsScanned++;
+        onProgress?.call('scan', dir, dirsScanned, 0);
+        for (final item in items) {
+          final fullRel = dir.isEmpty ? item.name : '$dir/${item.name}';
+          // WICHTIG: rel muss RELATIV zu remotePath sein (wird später wieder
+          // mit _joinRemote geprefixt) — sonst entsteht „fibu-backup/fibu-backup/…"
+          // und Downloads schlagen mit 404 fehl (im echten Log beobachtet).
+          final rel = prefix.isNotEmpty && fullRel.startsWith(prefix)
+              ? fullRel.substring(prefix.length)
+              : fullRel;
+          // Meta-Ordner (Löschprotokoll, Remote-Papierkorb) nie als Inhalt
+          // behandeln — sonst würden sie lokal neu heruntergeladen.
+          if (item.isDir && (item.name == '.fibu' || item.name == '.fibu-trash')) {
+            continue;
+          }
+          result[rel] = item;
+          if (item.isDir) {
+            queue.add(fullRel);
+          }
         }
       }
     }
 
-    try {
-      await walk(remotePath);
-    } catch (e) {
+    await Future.wait(List.generate(workers, (_) => worker()));
+
+    if (firstError != null) {
       // Erster Lauf: Der Zielordner existiert remote noch nicht → das ist
       // KEIN Fehler, sondern eine leere Cloud-Seite. Alles andere bleibt laut.
-      if (_isDirNotFound(e)) {
+      if (_isDirNotFound(firstError!)) {
         AppLog.info('sync',
             'Zielordner $remoteName:$remotePath existiert noch nicht → Cloud-Seite leer (wird beim Upload angelegt)');
         return result;
       }
-      AppLog.error('sync', 'Cloud-Scan fehlgeschlagen ($remoteName:$remotePath): $e');
-      rethrow;
+      AppLog.error('sync', 'Cloud-Scan fehlgeschlagen ($remoteName:$remotePath): $firstError');
+      throw firstError!;
     }
     return result;
   }

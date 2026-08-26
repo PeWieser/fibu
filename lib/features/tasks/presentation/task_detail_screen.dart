@@ -212,7 +212,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           height: 6,
           child: Stack(
             children: [
-              Container(color: cupertino.CupertinoColors.systemGrey5),
+              Container(color: theme.textSecondary.withValues(alpha: 0.15)),
               FractionallySizedBox(
                 widthFactor: pct,
                 child: Container(color: theme.accent),

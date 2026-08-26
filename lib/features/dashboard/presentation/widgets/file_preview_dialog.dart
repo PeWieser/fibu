@@ -188,6 +188,7 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
     return cupertino.CupertinoPageScaffold(
       backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
+        backgroundColor: theme.surface,
         middle: Text(widget.fileName, overflow: TextOverflow.ellipsis),
         leading: SizedBox(
           width: 60,

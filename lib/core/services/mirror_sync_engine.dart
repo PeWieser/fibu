@@ -515,7 +515,7 @@ class MirrorSyncEngine {
     var dirsScanned = 0;
     final prefix = remotePath.isEmpty ? '' : '$remotePath/';
 
-    final queue = Queue<String>([remotePath]);
+    final queue = Queue<String>.of([remotePath]);
     Object? firstError;
     const workers = 6;
 

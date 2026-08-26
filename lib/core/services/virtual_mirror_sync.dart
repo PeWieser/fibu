@@ -725,7 +725,7 @@ class VirtualMirrorSyncEngine {
 
     // Ordner parallel mit kleiner Nebenläufigkeit listen (Alben nacheinander
     // war bei vielen Ordnern sehr langsam).
-    final queue = Queue<String>([remotePath]);
+    final queue = Queue<String>.of([remotePath]);
     Object? firstError;
     const workers = 6;
 

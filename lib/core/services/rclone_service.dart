@@ -71,6 +71,10 @@ class RcloneProgressEvent {
   /// Gesamtzahl der zu übertragenden Dateien dieses Laufs (0 = unbekannt).
   final int itemsTotal;
 
+  /// Nicht-blockierende Warnung des Laufs (z. B. „Cloud voll“ / „Gerät voll“);
+  /// leer = keine Warnung.
+  final String warning;
+
   const RcloneProgressEvent({
     required this.jobId,
     required this.percentage,
@@ -81,6 +85,7 @@ class RcloneProgressEvent {
     required this.currentFile,
     this.itemsDone = 0,
     this.itemsTotal = 0,
+    this.warning = '',
   });
 }
 

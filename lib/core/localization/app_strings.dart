@@ -563,6 +563,12 @@ class AppStrings {
   String get syncQuotaError => isGerman
       ? 'Nicht genügend Speicherplatz im Cloud-Laufwerk verfügbar.'
       : 'Not enough storage space available on the cloud drive.';
+  String get syncRemoteFullWarning => isGerman
+      ? 'Nicht genug Speicherplatz in der Cloud für den Upload'
+      : 'Not enough cloud storage space for the upload';
+  String get syncLocalFullWarning => isGerman
+      ? 'Nicht genug freier Speicher auf dem Gerät für den Download'
+      : 'Not enough free device storage for the download';
   String syncItemsProgress(int done, int total) =>
       isGerman ? '$done von $total Dateien' : '$done of $total files';
   String get mirrorUpToDate => isGerman

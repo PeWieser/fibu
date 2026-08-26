@@ -702,24 +702,28 @@ class IosRcloneService implements RcloneService {
         }
 
         if (!progress.isClosed) {
+          final warn = result.warnings.isNotEmpty ? result.warnings.first : '';
           progress.add(RcloneProgressEvent(
             jobId: jobId,
             bytesTransferred: 0,
             totalBytes: 0,
             percentage: 100,
-            currentFile: result.hasChanges
-                ? AppStrings.current
-                    .syncDoneCounts(result.uploaded, result.downloaded)
-                : AppStrings.current.syncAllUpToDate,
+            currentFile: warn.isNotEmpty
+                ? warn
+                : (result.hasChanges
+                    ? AppStrings.current
+                        .syncDoneCounts(result.uploaded, result.downloaded)
+                    : AppStrings.current.syncAllUpToDate),
             eta: '0s',
             speedBytesPerSecond: 0,
             itemsDone: result.uploaded + result.downloaded,
             itemsTotal: result.uploaded + result.downloaded,
+            warning: warn,
           ));
         }
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
         AppLog.info('sync',
-            'Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}');
+            'Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}${result.warnings.isNotEmpty ? ' — Warnungen: ${result.warnings.join('; ')}' : ''}');
         return;
       }
 
@@ -1705,21 +1709,25 @@ class IosRcloneService implements RcloneService {
     );
 
     AppLog.info('sync',
-        'Virtual-Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}');
+        'Virtual-Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}${result.warnings.isNotEmpty ? ' — Warnungen: ${result.warnings.join('; ')}' : ''}');
     if (!progress.isClosed) {
+      final warn = result.warnings.isNotEmpty ? result.warnings.first : '';
       progress.add(RcloneProgressEvent(
         jobId: jobId,
         bytesTransferred: 0,
         totalBytes: 0,
         percentage: 100,
-        currentFile: result.hasChanges
-            ? AppStrings.current
-                .syncDoneCounts(result.uploaded, result.downloaded)
-            : AppStrings.current.syncAllUpToDate,
+        currentFile: warn.isNotEmpty
+            ? warn
+            : (result.hasChanges
+                ? AppStrings.current
+                    .syncDoneCounts(result.uploaded, result.downloaded)
+                : AppStrings.current.syncAllUpToDate),
         eta: '0s',
         speedBytesPerSecond: 0,
         itemsDone: result.uploaded + result.downloaded,
         itemsTotal: result.uploaded + result.downloaded,
+        warning: warn,
       ));
     }
     _statusController.add(

@@ -90,6 +90,20 @@ final class SystemInfoChannel: NSObject {
       switch call.method {
       case "lowPowerMode":
         result(ProcessInfo.processInfo.isLowPowerModeEnabled)
+      case "freeDiskSpace":
+        // Freier Gerätespeicher in Bytes — Grundlage für die Download-Vorab-
+        // prüfung („lokal zu wenig Platz“), damit Syncs nicht mittendrin an
+        // vollen Laufwerken scheitern.
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+        let keys: [URLResourceKey] = [.volumeAvailableCapacityForImportantUsageKey]
+        if let values = try? home.resourceValues(forKeys: Set(keys)),
+           let free = values.volumeAvailableCapacityForImportantUsage {
+          result(NSNumber(value: free))
+        } else {
+          result(FlutterError(code: "no_capacity",
+                              message: "free disk space unavailable",
+                              details: nil))
+        }
       default:
         result(FlutterMethodNotImplemented)
       }

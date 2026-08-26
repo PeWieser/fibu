@@ -30,6 +30,9 @@ class ActiveJobState {
   /// Insgesamt zu übertragende Bytes der aktuellen Transfer-Phase.
   final int totalBytes;
 
+  /// Nicht-blockierende Warnung des Laufs (z. B. Cloud/Gerät voll), leer = keine.
+  final String warning;
+
   const ActiveJobState({
     this.jobId,
     this.status = RcloneJobStatus.completed,
@@ -41,6 +44,7 @@ class ActiveJobState {
     this.itemsTotal = 0,
     this.bytesTransferred = 0,
     this.totalBytes = 0,
+    this.warning = '',
   });
 
   ActiveJobState copyWith({
@@ -54,6 +58,7 @@ class ActiveJobState {
     int? itemsTotal,
     int? bytesTransferred,
     int? totalBytes,
+    String? warning,
   }) {
     return ActiveJobState(
       jobId: jobId ?? this.jobId,
@@ -66,6 +71,7 @@ class ActiveJobState {
       itemsTotal: itemsTotal ?? this.itemsTotal,
       bytesTransferred: bytesTransferred ?? this.bytesTransferred,
       totalBytes: totalBytes ?? this.totalBytes,
+      warning: warning ?? this.warning,
     );
   }
 }
@@ -243,6 +249,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       itemsTotal: 0,
       bytesTransferred: 0,
       totalBytes: 0,
+      warning: '',
       currentFile: strings.startingTask(task.name),
       logs: [...state.logs, startMsg],
     );
@@ -300,6 +307,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
             itemsTotal: event.itemsTotal,
             bytesTransferred: event.bytesTransferred,
             totalBytes: event.totalBytes,
+            warning: event.warning,
             logs: newLogs,
           );
         }

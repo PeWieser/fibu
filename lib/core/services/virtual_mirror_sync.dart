@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../localization/app_strings.dart';
+import '../utils/format.dart';
 import 'app_log_service.dart';
+import 'device_storage.dart';
 import 'mirror_sync_engine.dart';
 import 'rclone_service.dart';
 import 'trash_service.dart';
@@ -355,8 +357,31 @@ class VirtualMirrorSyncEngine {
           'Upload-Vermessung fertig: $uploadTotal Dateien / $uploadTotalBytes Bytes');
     }
 
+    final warnings = <String>[];
+    // Vorab-Prüfung: Reicht der freie Cloud-Speicher für den Upload? (Nur
+    // wenn der Provider eine Quota kennt — freeBytes > 0.) Sonst werden die
+    // Uploads übersprungen, statt einzeln mit Quota-Fehlern zu scheitern.
+    var skipUploads = false;
+    if (uploadTotalBytes > 0) {
+      try {
+        final quota = await _rclone.getQuota(remoteName);
+        final free = quota.freeBytes;
+        if (free > 0 && uploadTotalBytes > free) {
+          skipUploads = true;
+          final msg = '${AppStrings.current.syncRemoteFullWarning} '
+              '(${formatBytes(uploadTotalBytes)} benötigt, '
+              '${formatBytes(free)} frei).';
+          warnings.add(msg);
+          AppLog.warn('sync', msg);
+        }
+      } catch (e) {
+        AppLog.warn('sync', 'Quota-Vorabprüfung nicht möglich: $e');
+      }
+    }
+
     var uploadedBytes = 0;
     for (final item in needUpload) {
+      if (skipUploads) break; // Cloud voll → keine Upload-Versuche
       File? tmp;
       try {
         tmp = await exportForUpload(item);
@@ -588,15 +613,30 @@ class VirtualMirrorSyncEngine {
       0,
       (sum, e) => sum + (e.value.size > 0 ? e.value.size : 0),
     );
+    // Vorab-Prüfung: Reicht der freie Gerätespeicher für den Download?
+    // (Nur wenn messbar — iOS; sonst 0 = unbekannt → keine Prüfung.)
+    var skipDownloads = false;
+    if (downloadTotalBytes > 0) {
+      final freeLocal = await DeviceStorage.freeBytes();
+      if (freeLocal > 0 && downloadTotalBytes > freeLocal) {
+        skipDownloads = true;
+        final msg = '${AppStrings.current.syncLocalFullWarning} '
+            '(${formatBytes(downloadTotalBytes)} benötigt, '
+            '${formatBytes(freeLocal)} frei).';
+        warnings.add(msg);
+        AppLog.warn('sync', msg);
+      }
+    }
     if (downloadTotal > 0) {
       AppLog.info('sync',
-          'Virtual-Mirror Download: $downloadTotal Dateien ← $remoteName:$remotePath');
+          'Virtual-Mirror Download: $downloadTotal Dateien ← $remoteName:$remotePath${skipDownloads ? ' (ÜBERSPRUNGEN: Gerät voll)' : ''}');
     }
     var dl = 0;
     var downloadedBytes = 0;
     final tmpFiles = <File>[];
     final tmpRels = <String>[];
     for (final entry in toDownload) {
+      if (skipDownloads) break; // Gerät voll → keine Download-Versuche
       final rel = entry.key;
       final size = entry.value.size > 0 ? entry.value.size : 0;
       dl++;
@@ -710,6 +750,7 @@ class VirtualMirrorSyncEngine {
       trashedLocal: trashedLocal,
       trashedRemote: trashedRemote,
       downloadedPaths: downloadedPaths,
+      warnings: warnings,
     );
   }
 

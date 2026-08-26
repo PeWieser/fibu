@@ -1,4 +1,34 @@
-# Fibu — Arbeits-Log (Session)
+# Fibu — Arbeits-Log (Session)---
+
+## 2026-08-26 — MB-Zeile entfernt, Platz-Warnungen (Cloud voll / Gerät voll)
+
+### Fix: Fortschrittsbalken zeigt nur noch die Medien-Anzahl
+- Die „x MB / y MB“-Zeile ist aus allen drei Dashboard-Panels (iOS/Android/
+  Windows) entfernt — der Balken selbst folgt weiterhin den echten Bytes,
+  darunter steht nur noch „x von y Dateien“ (die Medien-Anzahl).
+
+### Neu: Vorab-Erkennung „Cloud voll“ (Upload) + „Gerät voll“ (Download)
+- **Vorher:** Keine aktive Erkennung — rclone scheiterte pro Datei mit
+  Quota-/Platz-Fehlern, der Mirror übersprang die Datei einzeln und meldete
+  am Ende trotzdem „Fertig“.
+- **Jetzt (beide Mirror-Engines, FS + virtuell):**
+  - Vor dem Upload wird `getQuota(remoteName)` geprüft; ist der freie
+    Cloud-Speicher bekannt (freeBytes > 0) und kleiner als die vorab
+    vermessene Upload-Gesamtgröße, werden ALLE Uploads übersprungen und
+    eine Warnung erzeugt („Nicht genug Speicherplatz in der Cloud … —
+    X benötigt, Y frei“).
+  - Vor dem Download wird der freie Gerätespeicher geprüft (neuer nativer
+    iOS-Call `freeDiskSpace` im `fibu/system`-Kanal + `DeviceStorage`
+    Helper); reicht er nicht für die Download-Gesamtgröße, werden alle
+    Downloads übersprungen („Nicht genug freier Speicher auf dem Gerät …“).
+  - Aufräumen/Löschungen laufen trotzdem (geben Platz frei).
+- **Hinweis in der UI:** `MirrorSyncResult.warnings` → `RcloneProgressEvent.
+  warning` → `ActiveJobState.warning` → gelbes Warn-Banner im Fortschritts-
+  Panel (iOS/Android/Windows), Text bleibt auch nach „Fertig“ sichtbar.
+- Incremental-Uploads (sync/copy): rclone bricht dort selbst mit Quota-Fehler
+  ab → vorhandene freundliche Fehlerübersetzung (`syncQuotaError`).
+
+
 ---
 
 ## 2026-08-26 — Feste 100%-Basis + Live-Bytes, schnelles Aufräumen, Palette in Hell & Dunkel

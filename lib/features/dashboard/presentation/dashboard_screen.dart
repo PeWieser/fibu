@@ -14,7 +14,6 @@ import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
-import '../../../core/utils/format.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
@@ -358,6 +357,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (job.warning.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.all(theme.sm),
+              decoration: BoxDecoration(
+                color: theme.warning.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(theme.radiusSm),
+              ),
+              child: Row(
+                children: [
+                  const Icon(fluent.FluentIcons.warning,
+                      size: 16, semanticLabel: 'Warning'),
+                  SizedBox(width: theme.xs),
+                  Expanded(
+                    child: Text(job.warning,
+                        style: TextStyle(
+                            color: theme.warning,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: theme.sm),
+          ],
           fluent.Text(
             strings.activeTaskProgress,
             style: fluent.FluentTheme.of(context).typography.subtitle,
@@ -369,15 +392,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
-          // Echte Datenmenge (Balken = übertragene MB) …
-          if (job.totalBytes > 0) ...[
-            SizedBox(height: theme.sm),
-            fluent.Text(
-                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}'),
-          ],
-          // … und darunter die Datei-Zähler („x von y Bilder“).
+          // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
           if (job.itemsTotal > 0) ...[
-            SizedBox(height: theme.xs),
+            SizedBox(height: theme.sm),
             fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
           ],
           SizedBox(height: theme.sm),
@@ -757,6 +774,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (job.warning.isNotEmpty) ...[
+              Container(
+                padding: EdgeInsets.all(theme.sm),
+                decoration: BoxDecoration(
+                  color: theme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(theme.radiusSm),
+                ),
+                child: Row(
+                  children: [
+                    Icon(cupertino.CupertinoIcons.exclamationmark_triangle,
+                        color: theme.warning, size: 16, semanticLabel: 'Warning'),
+                    SizedBox(width: theme.xs),
+                    Expanded(
+                      child: Text(job.warning,
+                          style: TextStyle(
+                              color: theme.warning,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: theme.sm),
+            ],
             Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: theme.sm),
             Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -777,21 +818,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             ),
-            // Echte Datenmenge (Balken = übertragene MB) …
-            if (job.totalBytes > 0) ...[
-              SizedBox(height: theme.sm),
-              Text(
-                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.textSecondary,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-            // … und darunter die Datei-Zähler („x von y Bilder“).
+            // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
             if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.xs),
+              SizedBox(height: theme.sm),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
                 style: TextStyle(fontSize: 13, color: theme.textSecondary),
@@ -1003,6 +1032,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (job.warning.isNotEmpty) ...[
+              Container(
+                padding: EdgeInsets.all(theme.sm),
+                decoration: BoxDecoration(
+                  color: theme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(theme.radiusSm),
+                ),
+                child: Row(
+                  children: [
+                    Icon(material.Icons.warning_amber_rounded,
+                        color: theme.warning, size: 18, semanticLabel: 'Warning'),
+                    SizedBox(width: theme.xs),
+                    Expanded(
+                      child: Text(job.warning,
+                          style: TextStyle(
+                              color: theme.warning,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: theme.sm),
+            ],
             Text(strings.activeTaskProgress, style: material.Theme.of(context).textTheme.titleSmall),
             SizedBox(height: theme.sm),
             Text(
@@ -1013,17 +1066,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
-            // Echte Datenmenge (Balken = übertragene MB) …
-            if (job.totalBytes > 0) ...[
-              SizedBox(height: theme.sm),
-              Text(
-                '${formatBytes(job.bytesTransferred)} / ${formatBytes(job.totalBytes)}',
-                style: material.Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            // … und darunter die Datei-Zähler („x von y Bilder“).
+            // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
             if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.xs),
+              SizedBox(height: theme.sm),
               Text(
                 strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
                 style: material.Theme.of(context).textTheme.bodySmall,

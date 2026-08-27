@@ -101,7 +101,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
             onPressed: () => Navigator.pop(context),
             child: Text(
               'OK',
-              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
+              // context.theme: `theme` aus buildContent() ist hier außer Scope.
+              style: TextStyle(
+                  color: context.theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -136,7 +138,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
             onPressed: () => Navigator.pop(context),
             child: Text(
               'OK',
-              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
+              // context.theme: `theme` aus buildContent() ist hier außer Scope.
+              style: TextStyle(
+                  color: context.theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -221,7 +225,9 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
             onPressed: () => Navigator.pop(context),
             child: Text(
               'OK',
-              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
+              // context.theme: `theme` aus buildContent() ist hier außer Scope.
+              style: TextStyle(
+                  color: context.theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -262,7 +268,9 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
             onPressed: () => Navigator.pop(context),
             child: Text(
               'OK',
-              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
+              // context.theme: `theme` aus buildContent() ist hier außer Scope.
+              style: TextStyle(
+                  color: context.theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],

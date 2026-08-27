@@ -99,9 +99,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         actions: [
           fluent.FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'OK',
-              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -134,9 +134,9 @@ void showStorageBreakdownDialog(BuildContext context, QuotaInfo quota) {
         actions: [
           material.FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'OK',
-              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -219,9 +219,9 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
         actions: [
           fluent.FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'OK',
-              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -260,9 +260,9 @@ void showSyncLogsDialog(BuildContext context, List<String> logs, RcloneJobStatus
         actions: [
           material.FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'OK',
-              style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+              style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
             ),
           ),
         ],

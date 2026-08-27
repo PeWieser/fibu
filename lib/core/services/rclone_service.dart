@@ -152,6 +152,13 @@ abstract class RcloneService {
   /// Queries storage quota for a specific remote.
   Future<QuotaInfo> getQuota(String remoteName);
 
+  /// Ob aktuell ein Sync läuft.
+  ///
+  /// Nur EIN Lauf zurzeit: Der Mirror-Zustand (Tombstones, abgeglichene
+  /// Pfade) und die rclone-Statistiken sind prozessglobal — überlappende
+  /// Läufe würden sich gegenseitig falsche Löschungen/Downloads erzeugen.
+  bool get isSyncRunning;
+
   /// Starts a sync/copy backup process and returns a unique Job ID.
   Future<String> startBackupJob({
     required String localPath,

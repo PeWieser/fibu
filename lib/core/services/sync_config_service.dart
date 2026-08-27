@@ -58,6 +58,13 @@ class FibuRemoteTaskConfig {
   final List<String> linkedProviders;
   final String targetFolder;
 
+  /// Gewählte Alben bzw. Ordner. Ohne sie geht beim Re-Import die
+  /// Album-Auswahl verloren: `sourcePath` kodiert sie zwar als `all:A|B`,
+  /// die Bearbeitungs-UI liest aber `selectedAlbums` — und zeigte dann
+  /// nichts als vorausgewählt an.
+  final List<String> selectedAlbums;
+  final List<String> selectedFolders;
+
   const FibuRemoteTaskConfig({
     required this.taskId,
     required this.name,
@@ -67,6 +74,8 @@ class FibuRemoteTaskConfig {
     required this.linkedRemotes,
     this.linkedProviders = const [],
     required this.targetFolder,
+    this.selectedAlbums = const [],
+    this.selectedFolders = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -78,6 +87,8 @@ class FibuRemoteTaskConfig {
     'linkedRemotes': linkedRemotes,
     'linkedProviders': linkedProviders,
     'targetFolder': targetFolder,
+    'selectedAlbums': selectedAlbums,
+    'selectedFolders': selectedFolders,
   };
 
   factory FibuRemoteTaskConfig.fromJson(Map<String, dynamic> json) {
@@ -96,6 +107,14 @@ class FibuRemoteTaskConfig {
               .toList() ??
           const [],
       targetFolder: json['targetFolder'] as String? ?? 'fibu-backup',
+      selectedAlbums: (json['selectedAlbums'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      selectedFolders: (json['selectedFolders'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 }
@@ -253,6 +272,8 @@ class SyncConfigService {
         distributionStrategy: dist,
         targetFolderMode: TargetFolderMode.newFolder,
         targetFolderName: t.targetFolder.isNotEmpty ? t.targetFolder : defaultRemoteFolder,
+        selectedAlbums: t.selectedAlbums,
+        selectedFolders: t.selectedFolders,
       );
     }).toList();
   }
@@ -340,6 +361,8 @@ class SyncConfigService {
               .map((id) => providerTypes[id] ?? '')
               .toList(),
           targetFolder: t.targetFolderName,
+          selectedAlbums: t.selectedAlbums,
+          selectedFolders: t.selectedFolders,
         )).toList(),
       );
 

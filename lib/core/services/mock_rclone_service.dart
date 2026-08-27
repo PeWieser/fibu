@@ -88,6 +88,10 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  @override
+  bool get isSyncRunning => false;
+
+  @override
   Future<String> startBackupJob({
     required String localPath,
     required String remoteName,

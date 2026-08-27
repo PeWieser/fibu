@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../utils/app_paths.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'app_log_service.dart';
 import 'ios_rclone_service.dart';
 import 'rclone_service.dart';
 import 'settings_service.dart';
@@ -105,6 +106,15 @@ class SchedulerService {
 
       final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';
       final isEcho = task['syncMode'] == 'mirror';
+
+      // Kein Start, solange ein anderer Lauf aktiv ist (manuell ausgelöst
+      // oder eine frühere Aufgabe dieser Runde) — sonst überlappen sich
+      // zwei Syncs auf demselben Mirror-Zustand.
+      if (engine.isSyncRunning) {
+        AppLog.info('scheduler',
+            'Aufgabe „${task['name']}“ übersprungen: Es läuft bereits ein Sync');
+        continue;
+      }
 
       try {
         await engine.startBackupJob(

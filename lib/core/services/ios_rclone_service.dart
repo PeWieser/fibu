@@ -539,6 +539,12 @@ class IosRcloneService implements RcloneService {
   // Backup jobs (real transfer + real progress)
   // ---------------------------------------------------------------------------
 
+  /// Job-IDs laufender Syncs. Leer = kein Lauf aktiv.
+  final Set<String> _runningJobIds = <String>{};
+
+  @override
+  bool get isSyncRunning => _runningJobIds.isNotEmpty;
+
   @override
   Future<String> startBackupJob({
     required String localPath,
@@ -546,12 +552,24 @@ class IosRcloneService implements RcloneService {
     required String remotePath,
     required SyncOptions options,
   }) async {
+    // Parallel-Sperre: Gilt für ALLE Einstiegspunkte (Dashboard, Task-Detail,
+    // Scheduler, Quick Actions). Ohne sie könnte ein geplanter Lauf mitten in
+    // einen manuellen starten — beide teilen sich Mirror-Zustand und
+    // rclone-Statistiken und würden sich gegenseitig korrumpieren.
+    if (_runningJobIds.isNotEmpty) {
+      AppLog.warn('sync',
+          'Sync-Anfrage abgelehnen: Lauf ${_runningJobIds.first} ist noch aktiv');
+      throw StateError(AppStrings.current.syncAlreadyRunning);
+    }
+
     final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
     final progressController = StreamController<RcloneProgressEvent>.broadcast();
     _progressControllers[jobId] = progressController;
+    _runningJobIds.add(jobId);
 
     _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.syncing));
-    unawaited(_runJob(jobId, localPath, remoteName, remotePath, options, progressController));
+    unawaited(_runJob(jobId, localPath, remoteName, remotePath, options, progressController)
+        .whenComplete(() => _runningJobIds.remove(jobId)));
     return jobId;
   }
 
@@ -1266,16 +1284,155 @@ class IosRcloneService implements RcloneService {
     }
   }
 
+  /// Geräteweite Liste lokaler Medien: Dateiname → bekannte Bytegrößen.
+  ///
+  /// Ersatz für einen Vollscan der Mediathek: Der Index wird aus Daten
+  /// gepflegt, die beim Syncen OHNEHIN anfallen (Größe nach Export/Download)
+  /// und kostet damit beim Prüfen nur einen kleinen JSON-Read statt eines
+  /// Metadaten-Durchlaufs über die gesamte Bibliothek.
+  ///
+  /// Liegt im BASIS-Ordner (nicht im Task-Scope), weil er die Mediathek des
+  /// Geräts beschreibt und Aufgaben-übergreifend gilt.
+  static const String libraryIndexFileName = 'library_index.json';
+
+  Future<File> _libraryIndexFile() async {
+    final Directory dir = await getApplicationSupportDirectory();
+    final Directory base = Directory('${dir.path}/fibu_state');
+    if (!await base.exists()) await base.create(recursive: true);
+    return File('${base.path}/$libraryIndexFileName');
+  }
+
+  /// Liest den Index: Dateiname (klein) → Menge bekannter Größen.
+  Future<Map<String, Set<int>>> _readLibrarySizes() async {
+    final Map<String, Set<int>> out = <String, Set<int>>{};
+    try {
+      final File f = await _libraryIndexFile();
+      if (!await f.exists()) return out;
+      final dynamic decoded = jsonDecode(await f.readAsString());
+      if (decoded is! Map<String, dynamic>) return out;
+      decoded.forEach((String key, dynamic value) {
+        final int sep = key.lastIndexOf('|');
+        if (sep <= 0) return;
+        final String name = key.substring(0, sep);
+        final int size = int.tryParse(key.substring(sep + 1)) ?? 0;
+        if (name.isEmpty || size <= 0) return;
+        (out[name] ??= <int>{}).add(size);
+      });
+    } catch (e) {
+      AppLog.warn('media', 'Mediathek-Index nicht lesbar (ignoriert): $e');
+    }
+    return out;
+  }
+
+  /// Ergänzt den Index um Einträge mit BEKANNTER Größe. Unbekannte Größen
+  /// (0) werden nicht gespeichert — sie würden keine Aussage erlauben.
+  Future<void> _rememberLibrarySizes(Iterable<Map<String, dynamic>> entries) async {
+    final Map<String, Set<int>> merged = await _readLibrarySizes();
+    var added = 0;
+    for (final Map<String, dynamic> e in entries) {
+      final String rel = (e['rel'] as String? ?? '');
+      final int size = (e['sizeBytes'] as num?)?.toInt() ?? 0;
+      if (rel.isEmpty || size <= 0) continue;
+      final String name = rel.split('/').last.toLowerCase();
+      if (name.isEmpty) continue;
+      if ((merged[name] ??= <int>{}).add(size)) added++;
+    }
+    if (added == 0) return;
+    try {
+      final File f = await _libraryIndexFile();
+      final Map<String, int> flat = <String, int>{
+        for (final MapEntry<String, Set<int>> e in merged.entries)
+          for (final int size in e.value) '${e.key}|$size': 1,
+      };
+      await f.writeAsString(jsonEncode(flat));
+    } catch (e) {
+      AppLog.warn('media', 'Mediathek-Index nicht schreibbar: $e');
+    }
+  }
+
+  /// Stabiler Scope-Schlüssel je Aufgabe (Laufwerk + Zielpfad + Quelle).
+  ///
+  /// Dateisystemsicherer FNV-1a-Hash statt Klartext, weil Remote-Pfade und
+  /// Quellangaben Zeichen enthalten können, die als Ordnername unerwünscht
+  /// sind (Schrägstriche, Doppelpunkte, Leerzeichen).
+  static String stateScopeKey({
+    required String remoteName,
+    required String remotePath,
+    required String localPath,
+  }) {
+    final String raw =
+        '${remoteName.trim()}|${remotePath.trim()}|${localPath.trim()}'.toLowerCase();
+    int hash = 0x811c9dc5;
+    for (final int unit in raw.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
   /// Ort für den Mirror-Zustand: iOS `Library/Application Support` –
   /// absichtlich NICHT in Dokumente, damit Nutzer darauf keinen Zugriff haben
   /// (via UIFileSharingEnabled zur Files-App) und nichts sichtbar löschen.
-  Future<Directory> _virtualStateRoot() async {
+  ///
+  /// EIGENER Unterordner je Aufgabe.
+  ///
+  /// Vorher teilten sich alle Aufgaben eine einzige `mirror_state.json`.
+  /// Folge: Lief Aufgabe B (Album „Reisen"), galten sämtliche Pfade aus
+  /// Aufgabe A (Album „Urlaub") als „lokal gelöscht" → Tombstones →
+  /// Cloud-Löschung der Dateien von A. Getrennte Scopes verhindern das.
+  Future<Directory> _virtualStateRoot({
+    String remoteName = '',
+    String remotePath = '',
+    String localPath = '',
+  }) async {
     final dir = await getApplicationSupportDirectory();
-    final root = Directory('${dir.path}/fibu_state');
+    final base = Directory('${dir.path}/fibu_state');
+    if (!await base.exists()) await base.create(recursive: true);
+
+    final bool hasScope = remoteName.isNotEmpty ||
+        remotePath.isNotEmpty ||
+        localPath.isNotEmpty;
+    final Directory root = hasScope
+        ? Directory(
+            '${base.path}/${stateScopeKey(remoteName: remoteName, remotePath: remotePath, localPath: localPath)}')
+        : base;
     if (!await root.exists()) await root.create(recursive: true);
+
     final meta = Directory('${root.path}/.fibu');
     if (!await meta.exists()) await meta.create(recursive: true);
+
+    if (hasScope) await _adoptLegacyGuards(base, root);
     return root;
+  }
+
+  /// Übernimmt aus dem alten, aufgabenübergreifenden Zustand NUR die
+  /// Schutz-Mengen (blocked/adopted) in den neuen Aufgaben-Scope.
+  ///
+  /// `items` und Tombstones werden bewusst NICHT migriert: Sie sind
+  /// aufgaben-spezifisch. Ein geerbter „gesyncter" Pfad, den diese Aufgabe
+  /// gar nicht kennt, würde sonst als lokale Löschung interpretiert und
+  /// remote gelöscht — genau der Fehler, den die Scopes verhindern sollen.
+  Future<void> _adoptLegacyGuards(Directory legacy, Directory scoped) async {
+    final File target = File('${scoped.path}/mirror_state.json');
+    if (await target.exists()) return;
+    final File source = File('${legacy.path}/mirror_state.json');
+    if (!await source.exists()) return;
+    try {
+      final dynamic decoded = jsonDecode(await source.readAsString());
+      if (decoded is! Map<String, dynamic>) return;
+      final List<dynamic> blocked = decoded['blocked'] as List<dynamic>? ?? const [];
+      final List<dynamic> adopted = decoded['adopted'] as List<dynamic>? ?? const [];
+      if (blocked.isEmpty && adopted.isEmpty) return;
+      await target.writeAsString(jsonEncode(<String, dynamic>{
+        'items': <Map<String, dynamic>>[],
+        'blocked': blocked,
+        'adopted': adopted,
+      }));
+      AppLog.info('sync',
+          'Mirror-Scope neu angelegt: Schutz-Mengen übernommen (blocked=${blocked.length}, adopted=${adopted.length})');
+    } catch (e) {
+      AppLog.warn('sync', 'Übernahme der Schutz-Mengen fehlgeschlagen: $e');
+    }
   }
 
   /// Liest den persistierten Mirror-Zustand (rel → Metadaten, geblockte
@@ -1384,8 +1541,10 @@ class IosRcloneService implements RcloneService {
       _scanVirtualMedia(
     String localPath,
     SyncOptions options,
-    void Function(String label, int done, int total) onStage,
-  ) async {
+    void Function(String label, int done, int total) onStage, {
+    String remoteName = '',
+    String remotePath = '',
+  }) async {
     AppLog.info('media', 'Virtual-Scan der Mediathek startet (Quelle: $localPath)');
     final ps = await PhotoManager.requestPermissionExtend();
     if (!ps.isAuth && !ps.hasAccess) {
@@ -1438,7 +1597,8 @@ class IosRcloneService implements RcloneService {
     final previousSizeByAsset = <String, int>{};
     final previousModByAsset = <String, int>{};
     try {
-      final root = await _virtualStateRoot();
+      final root = await _virtualStateRoot(
+          remoteName: remoteName, remotePath: remotePath, localPath: localPath);
       final prev = await _loadVirtualState(root);
       for (final p in prev.items) {
         if (p.assetId.isNotEmpty && p.rel.isNotEmpty) {
@@ -1554,13 +1714,17 @@ class IosRcloneService implements RcloneService {
       ));
     }
 
-    final scan =
-        await _scanVirtualMedia(localPath, options, stage);
+    final scan = await _scanVirtualMedia(localPath, options, stage,
+        remoteName: remoteName, remotePath: remotePath);
     final items = scan.items;
     final byRel = scan.byRel;
 
-    final stateRoot = await _virtualStateRoot();
+    final stateRoot = await _virtualStateRoot(
+        remoteName: remoteName, remotePath: remotePath, localPath: localPath);
     final state = await _loadVirtualState(stateRoot);
+    // Geräteweite „liegt lokal vor"-Liste (Name + Größe) — billig gelesen
+    // statt die ganze Mediathek zu scannen.
+    final Map<String, Set<int>> librarySizes = await _readLibrarySizes();
     final blocked = state.blocked;
     final adopted = state.adopted;
 
@@ -1568,10 +1732,14 @@ class IosRcloneService implements RcloneService {
     // Cloud-only-Dateien ADOPTIEREN statt sie alle in die Mediathek zu laden.
     var adoptOrphans = false;
     try {
+      // Der Marker kann aus dem UI ohne Aufgaben-Kontext gesetzt worden
+      // sein (dann liegt er im Basisordner) — beide Orte prüfen.
       final flag = File('${stateRoot.path}/adopt_orphans.flag');
-      if (await flag.exists()) {
+      final legacyFlag = File('${stateRoot.parent.path}/adopt_orphans.flag');
+      if (await flag.exists() || await legacyFlag.exists()) {
         adoptOrphans = true;
-        await flag.delete();
+        if (await flag.exists()) await flag.delete();
+        if (await legacyFlag.exists()) await legacyFlag.delete();
         AppLog.info('sync',
             'Adoption aktiv: vorhandene Cloud-Dateien werden übernommen (kein erneuter Download, kein Löschen)');
       }
@@ -1658,6 +1826,7 @@ class IosRcloneService implements RcloneService {
       adoptedRels: adopted,
       adoptOrphans: adoptOrphans,
       previouslySyncedRels: previousRels,
+      librarySizes: librarySizes,
       deleteLocalAssets: deleteLocalAssets,
       exportForUpload: exportForUpload,
       // Billige Vorab-Vermessung: asset.file direkt (ohne Temp-Kopie), damit
@@ -1674,8 +1843,12 @@ class IosRcloneService implements RcloneService {
         }
       },
       importDownloaded: importDownloaded,
-      persistLocalState: (entries) =>
-          _saveVirtualState(stateRoot, entries, blocked, adopted),
+      persistLocalState: (entries) async {
+        await _saveVirtualState(stateRoot, entries, blocked, adopted);
+        // Nebenbei den geräteweiten Index pflegen — die Größen liegen hier
+        // ohnehin vor, der Sync wird dadurch nicht langsamer.
+        await _rememberLibrarySizes(entries);
+      },
       trash: TrashService(this),
       onProgress: (phase, item, done, total,
           {bytesDone = 0, bytesTotal = 0}) {

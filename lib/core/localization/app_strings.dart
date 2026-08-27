@@ -696,6 +696,12 @@ class AppStrings {
       : 'Task synchronized successfully.';
 
   // --- Sync-Fortschritt: EINFACHE Verben, keine Technik-Sätze ---
+  /// Ein Sync läuft bereits — parallele Läufe sind bewusst gesperrt, weil
+  /// sich Mirror-Zustand und Transfers sonst gegenseitig korrumpieren.
+  String get syncAlreadyRunning => isGerman
+      ? 'Es läuft bereits eine Synchronisierung.'
+      : 'A synchronization is already running.';
+
   String get syncOfflineNoNetwork => isGerman
       ? 'Offline — keine Internetverbindung'
       : 'Offline — no internet connection';

@@ -517,11 +517,14 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: cupertino.CupertinoColors.white),
+            Icon(icon, size: 18, color: theme.accentText),
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(color: cupertino.CupertinoColors.white, fontWeight: FontWeight.w600, fontSize: 15),
+              // accentText statt hartem Weiß: auf hellen Akzenten (z. B.
+              // Pfirsich im Dark Mode) wäre Weiß nur ~1.7:1 → unlesbar.
+              style: TextStyle(
+                  color: theme.accentText, fontWeight: FontWeight.w600, fontSize: 15),
             ),
           ],
         ),
@@ -755,16 +758,16 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       fluent.FluentIcons.open_in_new_window,
                       size: 16,
-                      color: Color(0xFFFFFFFF),
+                      color: theme.accentText,
                       semanticLabel: 'Open',
                     ),
                     const SizedBox(width: 8),
                     Text(
                       strings.openInDefaultApp,
-                      style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                      style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -919,11 +922,11 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(fluent.FluentIcons.open_in_new_window, size: 16, color: Color(0xFFFFFFFF), semanticLabel: 'Open'),
+                      Icon(fluent.FluentIcons.open_in_new_window, size: 16, color: theme.accentText, semanticLabel: 'Open'),
                       SizedBox(width: theme.sm),
                       Text(
                         strings.openInDefaultApp,
-                        style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                        style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -992,11 +995,11 @@ class _FilePreviewDialogState extends ConsumerState<FilePreviewDialog> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(fluent.FluentIcons.open_in_new_window, size: 14, color: Color(0xFFFFFFFF), semanticLabel: 'Open'),
+                        Icon(fluent.FluentIcons.open_in_new_window, size: 14, color: theme.accentText, semanticLabel: 'Open'),
                         SizedBox(width: theme.xs),
                         Text(
                           strings.openInDefaultApp,
-                          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ],
                     ),

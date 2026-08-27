@@ -426,16 +426,34 @@ class MirrorSyncEngine {
     // =====================================================================
     // 4. Neue remote-Dateien in die lokalen Alben/Ordner downloaden.
     // =====================================================================
-    final localBases = <String>{
-      for (final rel in localFiles.keys) rel.split('/').last.toLowerCase(),
-    };
-    final toDownload = remoteFiles.entries
-        .where((entry) =>
-            !entry.value.isDir &&
-            !merged.containsKey(entry.key) &&
-            !localFiles.containsKey(entry.key) &&
-            !localBases.contains(entry.key.split('/').last.toLowerCase()))
-        .toList();
+    // Namens-Pendants MIT Größe: gleicher Name + gleiche Größe = dieselbe
+    // Datei (überspringen), gleicher Name + andere Größe = andere Datei
+    // (laden). Reine Namensgleicheit würde gleichnamige Dateien von einem
+    // zweiten Gerät fälschlich für identisch halten.
+    final Map<String, Set<int>> localSizesByBase = <String, Set<int>>{};
+    for (final MapEntry<String, File> e in localFiles.entries) {
+      final String base = e.key.split('/').last.toLowerCase();
+      if (base.isEmpty) continue;
+      final int size = e.value.lengthSyncSafe();
+      final Set<int> sizes = localSizesByBase[base] ??= <int>{};
+      if (size > 0) sizes.add(size);
+    }
+    final List<MapEntry<String, RcloneFileInfo>> toDownload =
+        <MapEntry<String, RcloneFileInfo>>[];
+    for (final MapEntry<String, RcloneFileInfo> entry in remoteFiles.entries) {
+      if (entry.value.isDir) continue;
+      if (merged.containsKey(entry.key)) continue;
+      if (localFiles.containsKey(entry.key)) continue;
+      final String base = entry.key.split('/').last.toLowerCase();
+      final Set<int>? knownSizes = localSizesByBase[base];
+      if (knownSizes != null &&
+          (knownSizes.isEmpty ||
+              entry.value.size <= 0 ||
+              knownSizes.contains(entry.value.size))) {
+        continue;
+      }
+      toDownload.add(entry);
+    }
     // Remote-Inhalt neuer → ersetzen.
     toDownload.addAll(needDownloadReplace);
     final seen = <String>{};

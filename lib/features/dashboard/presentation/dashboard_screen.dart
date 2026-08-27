@@ -392,20 +392,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
-          // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
-          if (job.itemsTotal > 0) ...[
-            SizedBox(height: theme.sm),
-            fluent.Text(strings.syncItemsProgress(job.itemsDone, job.itemsTotal)),
-          ],
+          // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
+          // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
           SizedBox(height: theme.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (job.eta.isNotEmpty) fluent.Text('ETA: ${job.eta}') else fluent.Text(''),
+              Expanded(
+                child: fluent.Text(
+                  job.itemsTotal > 0
+                      ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
+                      : strings.syncPhaseScan,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               fluent.Text('${job.percentage.toStringAsFixed(1)}%',
                   style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
             ],
           ),
+          if (job.eta.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            fluent.Text('ETA: ${job.eta}'),
+          ],
         ],
       ),
     );
@@ -660,13 +670,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               // sonst wirkt der graue Button wie ein Fehler.
                               if (!tasksLoaded)
                                 cupertino.CupertinoActivityIndicator(
-                                  color: cupertino.CupertinoColors.white
+                                  color: theme.accentText
                                       .withValues(alpha: canSync ? 1 : 0.7),
                                 )
                               else
                                 Icon(
                                   cupertino.CupertinoIcons.arrow_2_circlepath,
-                                  color: cupertino.CupertinoColors.white
+                                  color: theme.accentText
                                       .withValues(alpha: canSync ? 1 : 0.7),
                                   size: 20,
                                   semanticLabel: 'Sync',
@@ -675,7 +685,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Text(
                                 tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
                                 style: TextStyle(
-                                  color: cupertino.CupertinoColors.white
+                                  color: theme.accentText
                                       .withValues(alpha: canSync ? 1 : 0.7),
                                 ),
                               ),
@@ -818,26 +828,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             ),
-            // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
-            if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.sm),
-              Text(
-                strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
-                style: TextStyle(fontSize: 13, color: theme.textSecondary),
-              ),
-            ],
+            // Zähler UND Prozentzahl in EINER Zeile. Der Zähler ist immer
+            // sichtbar — vor dem ersten Transfer steht dort „Überprüfen"
+            // statt nichts, damit die Zeile nicht erst mitten im Sync
+            // „hineinploppt" und der Balken nicht springt.
             SizedBox(height: theme.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (job.eta.isNotEmpty)
-                  Text('ETA: ${job.eta}', style: TextStyle(fontSize: 12, color: theme.textSecondary))
-                else
-                  const SizedBox.shrink(),
+                Expanded(
+                  child: Text(
+                    job.itemsTotal > 0
+                        ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
+                        : strings.syncPhaseScan,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: theme.textSecondary),
+                  ),
+                ),
+                SizedBox(width: theme.sm),
                 Text('${job.percentage.toStringAsFixed(1)}%',
                     style: TextStyle(fontSize: 12, color: theme.textSecondary, fontFeatures: const [FontFeature.tabularFigures()])),
               ],
             ),
+            if (job.eta.isNotEmpty) ...[
+              SizedBox(height: theme.xs),
+              Text('ETA: ${job.eta}',
+                  style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+            ],
           ],
         ),
       ),
@@ -1066,26 +1084,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
-            // Nur die Datei-Zähler („x von y“) — die MB-Zeile ist bewusst weg.
-            if (job.itemsTotal > 0) ...[
-              SizedBox(height: theme.sm),
-              Text(
-                strings.syncItemsProgress(job.itemsDone, job.itemsTotal),
-                style: material.Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+            // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
+            // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
             SizedBox(height: theme.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (job.eta.isNotEmpty) Text('ETA: ${job.eta}', style: material.Theme.of(context).textTheme.bodySmall) else const SizedBox.shrink(),
+                Expanded(
+                  child: Text(
+                    job.itemsTotal > 0
+                        ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
+                        : strings.syncPhaseScan,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: material.Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                SizedBox(width: theme.sm),
                 Text('${job.percentage.toStringAsFixed(1)}%',
                     style: material.Theme.of(context)
                         .textTheme
                         .bodySmall
                         ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
               ],
-            )
+            ),
+            if (job.eta.isNotEmpty) ...[
+              SizedBox(height: theme.xs),
+              Text('ETA: ${job.eta}',
+                  style: material.Theme.of(context).textTheme.bodySmall),
+            ]
           ],
         ),
       ),

@@ -112,6 +112,19 @@ class VirtualMirrorSyncEngine {
     /// (z. B. `asset.file` ohne Temp-Kopie). Fehlt er, wird über
     /// [exportForUpload] gemessen (teurer).
     Future<int> Function(VirtualMediaItem item)? measureForUpload,
+
+    /// Geräteweite Liste lokaler Medien: Dateiname (klein) → bekannte
+    /// Bytegrößen.
+    ///
+    /// Der lokale Scan ist auf die im Task gewählten Alben begrenzt, die
+    /// Cloud-Liste enthält aber ggf. Dateien aus anderen Alben bzw. aus
+    /// früheren Task-Konfigurationen. Ohne diese Prüfung gelten bereits
+    /// lokal vorhandene Medien als „neu“ und werden erneut geladen.
+    ///
+    /// Der Vergleich läuft über Name UND Größe: gleicher Name mit anderer
+    /// Größe ist eine ANDERE Datei (z. B. `IMG_0001.HEIC` von einem zweiten
+    /// Gerät) und wird korrekt geladen statt fälschlich übersprungen.
+    Map<String, Set<int>>? librarySizes,
   }) async {
     onProgress?.call('scan', AppStrings.current.syncStartAnalysis, 0, 0);
     // Die Mengen werden direkt mutiert (blockedRels.add / adoptedRels.add …) und
@@ -551,9 +564,19 @@ class VirtualMirrorSyncEngine {
     // ---------- 4) Downloads: Cloud-only + Remote-neuer (Inhalt) -------------
     final toDownload = <MapEntry<String, RcloneFileInfo>>[];
     var adoptedNow = 0;
-    final localBases = <String>{
-      for (final rel in localItems.keys) rel.split('/').last.toLowerCase(),
-    };
+    // Bekannt lokal = Task-Scan PLUS geräteweiter Index, jeweils als
+    // Dateiname → bekannte Größen (leere Menge = Größe unbekannt).
+    final Map<String, Set<int>> localSizesByBase = <String, Set<int>>{};
+    for (final VirtualMediaItem item in localItems.values) {
+      final String base = item.rel.split('/').last.toLowerCase();
+      if (base.isEmpty) continue;
+      final Set<int> sizes = localSizesByBase[base] ??= <int>{};
+      if (item.sizeBytes > 0) sizes.add(item.sizeBytes);
+    }
+    librarySizes?.forEach((String base, Set<int> sizes) {
+      (localSizesByBase[base] ??= <int>{}).addAll(sizes);
+    });
+    var skippedAlreadyLocal = 0;
     for (final entry in remoteFiles.entries) {
       final rel = entry.key;
       if (entry.value.isDir) continue;
@@ -561,20 +584,47 @@ class VirtualMirrorSyncEngine {
       if (merged.containsKey(rel)) continue;
       if (blockedRels.contains(rel)) continue;
       if (adoptedRels != null && adoptedRels.contains(rel)) continue;
+      // Bereits im letzten Lauf abgeglichen (hoch- ODER heruntergeladen und
+      // importiert) → liegt lokal vor. Ohne diese Prüfung werden importierte
+      // Medien erneut geladen, sobald ihr Album nicht zum Task-Filter passt.
+      if (previouslySyncedRels?.contains(rel) ?? false) {
+        skippedAlreadyLocal++;
+        continue;
+      }
       if (adoptOrphans && adoptedRels != null) {
-        // Nur adoptieren, wenn lokal kein Basename-Pendant existiert.
-        final base = rel.split('/').last.toLowerCase();
-        if (!localBases.contains(base)) {
+        // Nur adoptieren, wenn lokal kein Namens-Pendant existiert.
+        if (!localSizesByBase.containsKey(rel.split('/').last.toLowerCase())) {
           adoptedRels.add(rel);
           adoptedNow++;
         }
         continue;
       }
-      // Lokal vorhanden (exakt oder Basename) → nur via needDownloadReplace.
+      // Exakt dieser Pfad liegt lokal vor → nur via needDownloadReplace.
       if (localItems.containsKey(rel)) continue;
-      final base = rel.split('/').last.toLowerCase();
-      if (localBases.contains(base)) continue;
+      // Namens-Pendant prüfen — MIT Größe, damit gleichnamige, aber
+      // unterschiedliche Dateien nicht fälschlich übersprungen werden.
+      final String base = rel.split('/').last.toLowerCase();
+      final Set<int>? knownSizes = localSizesByBase[base];
+      if (knownSizes != null) {
+        final int remoteSize = entry.value.size;
+        if (knownSizes.isEmpty || remoteSize <= 0) {
+          // Größe auf einer Seite unbekannt → kein Vergleich möglich.
+          // Konservativ überspringen (Dublette in der Mediathek vermeiden).
+          skippedAlreadyLocal++;
+          continue;
+        }
+        if (knownSizes.contains(remoteSize)) {
+          skippedAlreadyLocal++;
+          continue;
+        }
+        AppLog.info('sync',
+            'Gleicher Name, andere Größe → als eigene Datei geladen: $rel');
+      }
       toDownload.add(entry);
+    }
+    if (skippedAlreadyLocal > 0) {
+      AppLog.info('sync',
+          '$skippedAlreadyLocal Cloud-Dateien übersprungen — bereits lokal vorhanden (kein erneuter Download)');
     }
     // Remote-Inhalt neuer als lokal → ersetzen (Download + Import).
     for (final r in needDownloadReplace) {
@@ -720,7 +770,7 @@ class VirtualMirrorSyncEngine {
       ...uploadedRels,
       for (final rel in localItems.keys)
         if (remoteFiles.containsKey(rel) ||
-            localBases.contains(rel.split('/').last.toLowerCase()))
+            localSizesByBase.containsKey(rel.split('/').last.toLowerCase()))
           rel,
     };
     // Größen aus Transfers in den persistierten State schreiben.

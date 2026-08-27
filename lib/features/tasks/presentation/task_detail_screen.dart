@@ -58,7 +58,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     _editSyncMode = task.syncMode;
     _editAlbumSelection
       ..clear()
-      ..addAll(task.selectedAlbums);
+      ..addAll(task.effectiveAlbums);
   }
 
   /// Dateien-Quellen (`files:`/`folders:`) sind im Inline-Edit bewusst

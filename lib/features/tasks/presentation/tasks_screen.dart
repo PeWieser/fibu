@@ -896,7 +896,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         // Codierte Album-Auswahl aus der Persistenz wiederherstellen.
         _sourceTab = 'media';
         _selectedSourceCategory = task.sourcePath.split(':').first;
-        _selectedAlbums.addAll(task.selectedAlbums);
+        _selectedAlbums.addAll(task.effectiveAlbums);
       } else if (task.sourcePath.startsWith('files:')) {
         _sourceTab = 'files';
         _selectedSourceCategory = 'folders';
@@ -965,7 +965,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     for (final album in List.of(_albums)) {
       try {
         final count = await album.entity.assetCountAsync;
-        if (!mounted || !_albums.contains(album)) return;
+        if (!mounted) return;
+        if (!_albums.contains(album)) continue;
         setState(() {
           album.count = count;
           if (count == 0) {

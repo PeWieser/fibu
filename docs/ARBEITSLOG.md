@@ -1,4 +1,116 @@
-# Fibu — Arbeits-Log (Session)---
+# Fibu — Arbeits-Log (Session)
+
+## 2026-08-26 — Fortschrittszeile, Re-Download-Schutz, Task-Isolation, WCAG-AA-Themes
+
+### Fix: „x von y“ ploppte verspätet und stand nicht bei der Prozentzahl
+- **Vorher:** Die Zählerzeile hing an `if (job.itemsTotal > 0)` — sie erschien
+  erst, wenn die erste Transferphase startete (wahrnehmbar „mit Verzögerung“),
+  und die Prozentzahl stand in einer eigenen Zeile darunter.
+- **Jetzt:** Zähler und Prozentzahl teilen sich in allen drei Panels
+  (iOS/Android/Windows) EINE Zeile (`spaceBetween`). Der Zähler ist immer
+  sichtbar; solange noch keine Zielanzahl bekannt ist, steht dort „Überprüfen“
+  statt nichts. Die ETA wanderte in eine eigene, optionale Zeile.
+
+### Fix: Bereits lokal vorhandene Bilder wurden erneut heruntergeladen
+- **Ursache:** Der lokale Scan ist auf die im Task gewählten Alben begrenzt,
+  die Download-Entscheidung verglich aber gegen die KOMPLETTE Cloud-Liste.
+  Lag ein Medium lokal in einem anderen Album (oder aus einer früheren
+  Task-Konfiguration), galt es als „neu“ → erneuter Download → Duplikat.
+- **Fix 1 (billig):** Pfade aus `previouslySyncedRels` (im letzten Lauf
+  hoch- ODER heruntergeladen und importiert) werden übersprungen.
+- **Fix 2 (gründlich, ohne Vollscan):** Geräteweiter Index
+  `library_index.json` (Dateiname → bekannte Bytegrößen). Er wird aus Daten
+  gepflegt, die beim Syncen ohnehin anfallen (Größe nach Export/Download) und
+  kostet beim Prüfen nur einen kleinen JSON-Read.
+  - **Verworfen:** ein Metadaten-Durchlauf über die gesamte Mediathek bei
+    jedem Lauf. Er war korrekt, aber unnötig teuer — die Prüfung soll so
+    schnell wie möglich sein, und nur ein Album ist ausgewählt.
+- **Name UND Größe statt nur Name:** Gleicher Name mit anderer Größe ist eine
+  ANDERE Datei (z. B. `IMG_0001.HEIC` von einem zweiten Gerät) und wird
+  geladen. Gleicher Name mit gleicher Größe → übersprungen. Ist eine Größe
+  unbekannt, wird konservativ übersprungen (Dublette vermeiden).
+- Dieselbe Name+Größe-Logik wurde in den Datei-Mirror übernommen
+  (`mirror_sync_engine.dart`); dort sind lokale Größen immer bekannt.
+- Treffer werden gezählt und geloggt („… übersprungen — bereits lokal
+  vorhanden“ bzw. „Gleicher Name, andere Größe → als eigene Datei geladen“).
+
+### Reihenfolge: erst Upload, dann Download
+- Beide Engines liefen bereits korrekt (Upload → Löschprotokoll → Download).
+  Abgesichert ist das jetzt durch den Test
+  `test/unit/virtual_mirror_sync_test.dart` → „Upload läuft immer vor
+  Download“ (letzter Upload-Call muss vor dem ersten Download-Call liegen).
+
+### Fix: Mehrere Tasks konnten sich überschneiden
+- **Parallel-Sperre:** `startBackupJob` lehnt einen Start ab, solange ein Lauf
+  aktiv ist (`isSyncRunning`, neues Interface-Mitglied). Nötig, weil der
+  Scheduler `startBackupJob` DIREKT aufruft und den Duplikat-Schutz des
+  Dashboards damit umging — ein geplanter Lauf konnte mitten in einen
+  manuellen starten.
+- **Task-Isolation (datenverlustkritisch):** Alle Tasks teilten sich EINE
+  `mirror_state.json`. Lief Task B (Album „Reisen“), galten sämtliche Pfade
+  aus Task A (Album „Urlaub“) als „lokal gelöscht“ → Tombstones →
+  **Cloud-Löschung der Dateien von A**. Jetzt bekommt jede Aufgabe einen
+  eigenen Scope-Ordner (`stateScopeKey` = FNV-1a über Laufwerk + Zielpfad +
+  Quelle).
+- **Migration:** Aus dem alten Globalzustand werden NUR die Schutz-Mengen
+  (`blocked`/`adopted`) übernommen — `items` und Tombstones bewusst nicht,
+  weil geerbte „gesyncte“ Pfade sonst sofort als lokale Löschung gälten.
+- Der Adoptions-Marker wird jetzt an beiden Orten erkannt (Scope + Basis),
+  weil er aus dem UI ohne Task-Kontext gesetzt wird.
+
+### Fix: Album-Vorauswahl im Bearbeiten-Modus war leer
+- **Ursache 1 (Hauptgrund):** `.fibu/config.json` auf dem Cloud-Laufwerk
+  speicherte `selectedAlbums`/`selectedFolders` nicht. Nach einem Re-Import
+  war das Feld leer, obwohl `sourcePath` die Alben als `all:A|B` enthält —
+  die UI las aber nur `selectedAlbums` → nichts vorausgewählt.
+  → Beide Felder werden jetzt exportiert und beim Import wiederhergestellt.
+- **Ursache 2 (Robustheit):** Neuer Getter `BackupTask.effectiveAlbums` leitet
+  die Alben aus `sourcePath` ab, wenn `selectedAlbums` leer ist (deckt alte
+  und importierte Aufgaben ab). Beide Album-Picker (Task-Detail + Wizard)
+  nutzen ihn.
+- **Nebenfix:** `_loadAlbumCounts` beendete mit `return` die gesamte
+  Zählschleife, sobald ein Album entfernt wurde → jetzt `continue`.
+
+### Accessibility: Themes auf WCAG AA geprüft und korrigiert
+- **Prüfung:** Alle 8 Paletten × 2 Modi × 7 Kombinationen (Text/Hintergrund,
+  Akzent/Fläche, Text auf Akzent) gegen ≥ 4.5:1 gerechnet.
+- **Befund:** 42 Verstöße. Kernproblem: EINE Akzentfarbe pro Palette für Hell
+  UND Dunkel — auf hellem Grund lagen helle Akzente bei **1.35:1** (Haru),
+  1.54:1 (Mori), 1.72:1 (Fuyu). Weißer Text auf hellem Akzent: bis 1.69:1.
+- **Fix:** Akzent ist jetzt modusabhängig (`lightAccent`/`darkAccent`, je
+  ≥ 4.6:1 auf Canvas und Surface). Neues Token `accentText` wählt automatisch
+  Weiß oder Schwarz (`ColorContrast.bestOn`), damit Beschriftungen auf
+  Akzentflächen immer lesbar sind — auch bei hellem Akzent im Dark Mode.
+- **Fix:** `winterFuyu.lightTextSecondary` abgedunkelt (4.34:1 → 5.53:1).
+- **Neu:** `lib/core/utils/contrast.dart` (WCAG-Berechnung) und
+  `test/unit/theme_contrast_test.dart` als dauerhafter Wächter.
+- Akzent-Buttons nutzen jetzt `accentText` statt hartem Weiß (iOS, Material,
+  Fluent).
+
+### Einheitlicher Hintergrund (Freifläche = Elementfläche)
+- Wunsch: Die freie Fläche um Listen/Karten herum soll dieselbe
+  Theme-Hintergrundfarbe haben wie die Aufgaben-/Laufwerks-Elemente.
+- `AppThemeData.canvas` ist jetzt identisch zu `surface` (Standard-Themes und
+  alle Paletten). Struktur entsteht über Einzüge und Hairline-Rahmen statt
+  über einen Farbversatz. Abgesichert durch den Test „canvas entspricht
+  surface in allen Themes“.
+
+### CI: Analyse und Tests fehlen weiterhin (blockiert)
+- Der Workflow baut nur (`flutter build ios`) — Analyzer-Fehler und kaputte
+  Tests laufen damit nirgends. Geplant waren `flutter analyze` und
+  `flutter test` vor dem teuren librclone-Build.
+- **Blockiert:** Die GitHub-App darf `.github/workflows/*` nicht ändern
+  (`refusing to allow a GitHub App to create or update workflow ... without
+  workflows permission`). Die Änderung muss manuell übernommen werden:
+  nach `Install Flutter Dependencies` die Schritte `flutter analyze` und
+  `flutter test` einfügen.
+
+### Offene Punkte (bewusst nicht angefasst)
+- Per-File-Byte-Fortschritt bleibt rclone-bedingt grob bei sehr großen
+  Einzeldateien (Stats-Intervall ~500 ms).
+- Die iOS-Mediathek erlaubt kein stillschweigendes Löschen: Remote-Löschungen
+  zeigen weiterhin den Systemdialog.
+---
 
 ## 2026-08-26 — MB-Zeile entfernt, Platz-Warnungen (Cloud voll / Gerät voll)
 

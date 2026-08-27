@@ -67,6 +67,29 @@ class BackupTask {
   })  : _targetRemotes = targetRemotes,
         _targetRemote = targetRemote;
 
+  /// Wirksam gewählte Alben — [selectedAlbums], sonst aus [sourcePath].
+  ///
+  /// `sourcePath` ist die maßgebliche Kodierung (`all:A|B`, `photos:A|B`).
+  /// Ältere Aufgaben und remote importierte Konfigurationen haben das
+  /// `selectedAlbums`-Feld teilweise nicht gefüllt; ohne diesen Fallback
+  /// zeigt die Bearbeitungsansicht keine Vorauswahl, obwohl der Sync die
+  /// Alben korrekt filtert.
+  List<String> get effectiveAlbums {
+    if (selectedAlbums.isNotEmpty) return selectedAlbums;
+    final String lower = sourcePath.toLowerCase();
+    for (final String prefix in const ['all:', 'photos:', 'videos:']) {
+      if (lower.startsWith(prefix)) {
+        return sourcePath
+            .substring(prefix.length)
+            .split('|')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+    }
+    return const [];
+  }
+
   /// Kurze, menschenlesbare Beschreibung der Quelle für die Liste/Detail-Ansicht.
   String get sourceDescription {
     if (sourcePath.startsWith('files:')) {

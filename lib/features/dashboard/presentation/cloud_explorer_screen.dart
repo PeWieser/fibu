@@ -583,11 +583,11 @@ class _CloudExplorerScreenState extends ConsumerState<CloudExplorerScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(fluent.FluentIcons.view, size: 16, color: Color(0xFFFFFFFF), semanticLabel: 'Preview'),
+                          Icon(fluent.FluentIcons.view, size: 16, color: theme.accentText, semanticLabel: 'Preview'),
                           SizedBox(width: theme.sm),
                           Text(
                             strings.previewFile,
-                            style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+                            style: TextStyle(color: theme.accentText, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),

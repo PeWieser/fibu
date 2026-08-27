@@ -934,11 +934,13 @@ class SettingsScreen extends ConsumerWidget {
               ? (isDarkRow ? palette.darkTextPrimary : palette.lightTextPrimary)
               : (isDarkRow ? AppThemeData.dark.textPrimary : AppThemeData.light.textPrimary);
 
-          final dot1Color = palette?.primary ?? (isDarkRow ? const Color(0xff0a84ff) : const Color(0xff007aff));
-          final dot2Color = palette?.accent ?? (isDarkRow ? const Color(0xff30d158) : const Color(0xff34c759));
+          final dot1Color = palette?.accentFor(isDarkRow) ??
+              (isDarkRow ? AppThemeData.dark.accent : AppThemeData.light.accent);
+          final dot2Color = palette?.secondary ??
+              (isDarkRow ? AppThemeData.dark.success : AppThemeData.light.success);
           final dot3Color = palette != null
-              ? (isDarkRow ? palette.darkBackground : palette.lightBackground)
-              : (isDarkRow ? AppThemeData.dark.canvas : AppThemeData.light.canvas);
+              ? (isDarkRow ? palette.darkTextSecondary : palette.lightTextSecondary)
+              : (isDarkRow ? AppThemeData.dark.textSecondary : AppThemeData.light.textSecondary);
 
           final paletteLabel = palette?.name ?? (isDarkRow ? strings.useDarkMode : strings.syncWithSystem);
 

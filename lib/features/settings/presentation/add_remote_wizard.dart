@@ -634,7 +634,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     if (widget.platform == TargetPlatform.windows) {
       return fluent.FilledButton(
         onPressed: _isOAuthWorking ? null : _handleOAuthAuthorize,
-        child: Text(label, style: const TextStyle(color: Color(0xFFFFFFFF))),
+        child: Text(label, style: TextStyle(color: theme.accentText)),
       );
     }
     return material.FilledButton.icon(
@@ -667,7 +667,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             ? const SizedBox(
                 width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
             : Text(label,
-                style: const TextStyle(color: Color(0xFFFFFFFF))),
+                style: TextStyle(color: theme.accentText)),
       );
     }
     return material.FilledButton(
@@ -677,7 +677,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
               width: 16,
               height: 16,
               child: material.CircularProgressIndicator(
-                  strokeWidth: 2, color: Color(0xFFFFFFFF)))
+                  strokeWidth: 2, color: theme.accentText))
           : Text(label),
     );
   }
@@ -975,7 +975,8 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         child: busy
             ? const SizedBox(
                 width: 14, height: 14, child: fluent.ProgressRing(strokeWidth: 2))
-            : Text(label, style: const TextStyle(color: Color(0xFFFFFFFF))),
+            : Text(label,
+                style: TextStyle(color: context.theme.accentText)),
       );
     }
     return material.FilledButton(onPressed: onPressed, child: child);

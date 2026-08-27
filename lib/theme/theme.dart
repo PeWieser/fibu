@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/utils/contrast.dart';
 import 'sanzo_wada_palettes.dart';
 
 /// Semantic token-based theme design system for the Fibu application.
@@ -23,7 +24,15 @@ class AppThemeData {
   final double radiusLg = 12.0;
 
   // --- Semantic Color Tokens ---
+  /// Hintergrund der „freien Fläche" (Scaffold, Bereich um Listen/Karten).
+  ///
+  /// Bewusst identisch zu [surface]: Freifläche und Elemente (Aufgaben,
+  /// Laufwerke, Karten) teilen sich EINE Theme-Hintergrundfarbe, damit kein
+  /// zweiter, abweichender Farbton im Layout auftaucht. Struktur entsteht
+  /// über Einzüge und Hairline-Rahmen, nicht über einen Farbversatz.
   final Color canvas;
+
+  /// Fläche eines Elements (Karte, Listen-Sektion, Laufwerks-/Aufgabenzeile).
   final Color surface;
   final Color textPrimary;
   final Color textSecondary;
@@ -45,13 +54,21 @@ class AppThemeData {
     required this.offline,
   });
 
+  /// Text-/Icon-Farbe auf [accent]-Flächen (Buttons, Chips, Badges).
+  ///
+  /// Wird aus dem Akzent abgeleitet (Weiß oder Schwarz, je nach Kontrast),
+  /// damit Beschriftungen auf Akzentflächen immer WCAG AA erfüllen — auch
+  /// bei hellen Akzenten im Dark Mode, wo Weiß nur ~2:1 hätte.
+  Color get accentText => ColorContrast.bestOn(accent);
+
   /// Default Light Theme (Material/Cupertino compliant)
   static const light = AppThemeData(
-    canvas: Color(0xfffcfbfa),
+    canvas: Color(0xffffffff),
     surface: Color(0xffffffff),
     textPrimary: Color(0xff1c1a17),
     textSecondary: Color(0xff706c64),
-    accent: Color(0xff007aff),
+    // Abgedunkeltes Systemblau: #007aff hätte nur 3.9:1 auf Weiß (AA-Fail).
+    accent: Color(0xff0062e6),
     success: Color(0xff34c759),
     warning: Color(0xffffcc00),
     error: Color(0xffff3b30),
@@ -60,7 +77,7 @@ class AppThemeData {
 
   /// Default Dark Theme
   static const dark = AppThemeData(
-    canvas: Color(0xff0c0c0e),
+    canvas: Color(0xff18181b),
     surface: Color(0xff18181b),
     textPrimary: Color(0xfff4f4f5),
     textSecondary: Color(0xffa1a1aa),
@@ -77,12 +94,16 @@ class AppThemeData {
   /// (Hintergrund zwischen den Karten) in beiden Modi sichtbar im
   /// Paletten-Farbton liegt statt „fast weiß" bzw. „grau/schwarz".
   factory AppThemeData.fromWadaPalette(SanzoWadaPalette palette, {bool isDark = false}) {
+    // Freifläche und Elementfläche teilen sich dieselbe Farbe — der
+    // Hintergrund „drumherum" ist damit identisch zum Hintergrund der
+    // Aufgaben-/Laufwerks-Elemente (kein zweiter Farbton im Layout).
+    final Color background = isDark ? palette.darkSurface : palette.lightSurface;
     return AppThemeData(
-      canvas: isDark ? palette.darkBackground : palette.lightBackground,
-      surface: isDark ? palette.darkSurface : palette.lightSurface,
+      canvas: background,
+      surface: background,
       textPrimary: isDark ? palette.darkTextPrimary : palette.lightTextPrimary,
       textSecondary: isDark ? palette.darkTextSecondary : palette.lightTextSecondary,
-      accent: palette.accent,
+      accent: palette.accentFor(isDark),
       success: isDark ? const Color(0xff30d158) : const Color(0xff34c759),
       warning: isDark ? const Color(0xffffd60a) : const Color(0xffffcc00),
       error: isDark ? const Color(0xffff453a) : const Color(0xffff3b30),

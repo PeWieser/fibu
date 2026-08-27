@@ -398,8 +398,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Normales Flutter-Text statt fluent.Text: maxLines/overflow
+              // sind dort nicht überall verfügbar, und die Darstellung ist
+              // identisch (fluent.Text wrappt ohnehin Flutter-Text).
               Expanded(
-                child: fluent.Text(
+                child: Text(
                   job.itemsTotal > 0
                       ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
                       : strings.syncPhaseScan,

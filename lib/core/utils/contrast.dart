@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/widgets.dart';
 
 /// WCAG-2.1-Kontrast-Hilfsfunktionen.
@@ -7,19 +5,14 @@ import 'package:flutter/widgets.dart';
 /// Wird vom Theme-System genutzt, damit Text-/Icon-Farben auf Akzentflächen
 /// automatisch lesbar sind, und von den Theme-Tests, die die in AGENTS.md
 /// geforderten Mindestkontraste (WCAG AA ≥ 4.5:1) dauerhaft absichern.
+///
+/// Die Leuchtdichte kommt aus [Color.computeLuminance] — Flutter rechnet dort
+/// exakt die WCAG-Formel, und wir vermeiden damit die veralteten
+/// Kanal-Accessoren (`color.red` & Co.), die im Rest des Projekts ebenfalls
+/// nicht mehr verwendet werden.
 abstract final class ColorContrast {
-  /// Linearisiert einen sRGB-Kanalwert (0–255) gemäß WCAG.
-  static double _linearize(int channel) {
-    final double c = channel / 255.0;
-    return c <= 0.03928 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
-  }
-
   /// Relative Leuchtdichte nach WCAG (0 = schwarz, 1 = weiß).
-  static double relativeLuminance(Color color) {
-    return 0.2126 * _linearize(color.red) +
-        0.7152 * _linearize(color.green) +
-        0.0722 * _linearize(color.blue);
-  }
+  static double relativeLuminance(Color color) => color.computeLuminance();
 
   /// Kontrastverhältnis zweier Farben (1.0 … 21.0).
   static double ratio(Color a, Color b) {

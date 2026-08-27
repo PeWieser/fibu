@@ -672,8 +672,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     }
     return material.FilledButton(
       onPressed: _isTesting || _isAdding ? null : _handleTestConnection,
+      // Kein `const`: theme.accentText ist zur Laufzeit aufgelöst.
       child: _isTesting
-          ? const SizedBox(
+          ? SizedBox(
               width: 16,
               height: 16,
               child: material.CircularProgressIndicator(

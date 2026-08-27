@@ -95,6 +95,22 @@
   über einen Farbversatz. Abgesichert durch den Test „canvas entspricht
   surface in allen Themes“.
 
+### Build-Fehler und ihre Ursache (Lehre für Skript-Migrationen)
+Der iOS-Build lief nach der Änderung dreimal rot. Beide Fehler stammen aus der
+**skript-basierten** Ersetzung von hartem Weiß durch `theme.accentText`:
+
+1. `dashboard_dialogs.dart` — `theme` ist innerhalb von `buildContent()`
+   deklariert; die OK-Buttons im Windows-/Material-Zweig liegen außerhalb
+   → `Undefined name 'theme'`. Fix: `context.theme`.
+2. `add_remote_wizard.dart` — `Color(0xFFFFFFFF)` ist const-fähig,
+   `theme.accentText` nicht. Das umschließende `const SizedBox(...)` blieb
+   stehen → `Error: Not a constant expression`. Fix: `const` entfernt.
+
+Beides sind **Analyzer**-Fehler, die `flutter analyze` in Sekunden findet —
+der iOS-Build brauchte dafür vier Zyklen à 10–14 Minuten.
+Gegenmaßnahme: const-Kontexte werden jetzt vor dem Push maschinell geprüft
+(rückwärts über Klammerebenen auf ein vorangestelltes `const`).
+
 ### CI: Analyse und Tests fehlen weiterhin (blockiert)
 - Der Workflow baut nur (`flutter build ios`) — Analyzer-Fehler und kaputte
   Tests laufen damit nirgends. Geplant waren `flutter analyze` und

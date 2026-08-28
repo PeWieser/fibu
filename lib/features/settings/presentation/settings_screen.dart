@@ -248,6 +248,7 @@ class SettingsScreen extends ConsumerWidget {
               fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
               fluent.Tooltip(
+                message: strings.tooltipNetwork,
                 child: fluent.Card(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),

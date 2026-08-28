@@ -18,6 +18,15 @@ import 'package:fibu/features/settings/presentation/settings_screen.dart';
 import '../helpers/platform_mocks.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 
+/// Die Screens zeigen unbestimmte Lade-Indikatoren (z. B. Quota), die endlos
+/// animieren — `pumpAndSettle` wartet dort bis zum Timeout. Stattdessen eine
+/// feste, kurze Folge von Frames pumpen.
+Future<void> settleBounded(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
   // path_provider mocken: Die Screens lesen tasks.json / settings.json und
   // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
@@ -60,7 +69,7 @@ void main() {
       
       try {
         await tester.pumpWidget(createWidgetUnderTest());
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Check initially Dashboard is visible
         expect(find.text(strings.navDashboard), findsWidgets);
@@ -69,7 +78,7 @@ void main() {
         final tasksItemFinder = find.byIcon(fluent.FluentIcons.task_manager);
         expect(tasksItemFinder, findsOneWidget);
         await tester.tap(tasksItemFinder);
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Check Tasks screen is loaded
         expect(find.byType(TasksScreen), findsOneWidget);
@@ -79,7 +88,7 @@ void main() {
         final settingsItemFinder = find.byIcon(fluent.FluentIcons.settings);
         expect(settingsItemFinder, findsOneWidget);
         await tester.tap(settingsItemFinder);
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Check Settings screen is loaded
         expect(find.byType(SettingsScreen), findsOneWidget);
@@ -104,7 +113,7 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Check initially Dashboard is visible (find by type to avoid label/appbar text conflicts)
         expect(find.byType(DashboardScreen), findsOneWidget);
@@ -113,7 +122,7 @@ void main() {
         final tasksDestination = find.byIcon(material.Icons.list_alt_outlined);
         expect(tasksDestination, findsOneWidget);
         await tester.tap(tasksDestination);
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         expect(find.byType(TasksScreen), findsOneWidget);
         expect(find.text(strings.tasksTitle), findsOneWidget);

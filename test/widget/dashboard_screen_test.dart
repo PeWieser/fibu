@@ -17,6 +17,15 @@ import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fibu/features/dashboard/presentation/widgets/multi_remote_storage_card.dart';
 import '../helpers/platform_mocks.dart';
 
+/// Die Screens zeigen unbestimmte Lade-Indikatoren (z. B. Quota), die endlos
+/// animieren — `pumpAndSettle` wartet dort bis zum Timeout. Stattdessen eine
+/// feste, kurze Folge von Frames pumpen.
+Future<void> settleBounded(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
   // path_provider mocken: Die Screens lesen tasks.json / settings.json und
   // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
@@ -59,7 +68,7 @@ void main() {
       
       try {
         await tester.pumpWidget(createWidgetUnderTest());
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Verify Windows Fluent scaffold elements
         expect(find.byType(fluent.ScaffoldPage), findsOneWidget);
@@ -91,7 +100,7 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Verify iOS Cupertino elements
         expect(find.byType(cupertino.CupertinoPageScaffold), findsOneWidget);
@@ -124,7 +133,7 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Verify Android Material 3 elements
         expect(find.byType(material.Scaffold), findsOneWidget);
@@ -168,7 +177,7 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await settleBounded(tester);
 
         // Mit Task + Remotes: normales Dashboard (kein Setup-Hinweis).
         expect(find.byType(MultiRemoteStorageCard), findsOneWidget);

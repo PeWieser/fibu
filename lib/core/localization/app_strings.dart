@@ -454,6 +454,10 @@ class AppStrings {
   String get drivesSection => isGerman ? 'Cloud-Verbindungen' : 'Cloud Connections';
   String get manageDrivesSubtitle => isGerman ? 'Remotes verbinden, bearbeiten und trennen' : 'Connect, edit, and disconnect cloud remotes';
   String get aboutSection => isGerman ? 'Über Fibu' : 'About Fibu';
+  String get tooltipNetwork => isGerman
+      ? 'Lege fest, ob Backups auch über mobile Daten laufen dürfen.'
+      : 'Choose whether backups may also run over cellular data.';
+
   String get tooltipLanguage => isGerman ? 'Wähle die Sprache der Benutzeroberfläche.' : 'Choose the interface language.';
   String get tooltipThemeMode => isGerman
       ? 'Wähle zwischen automatischem System-Modus oder manuellem Dunkel-/Hellmodus.'

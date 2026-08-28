@@ -335,6 +335,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         if (mounted) {
           setState(
               () => _syncMessage = strings.remoteFolderDeletedDetail(folder));
+        }
+        // `context` ist ein Methoden-Parameter — die mounted-Prüfung muss
+        // deshalb am BuildContext selbst erfolgen, nicht am State.
+        if (context.mounted) {
           _showActionResult(context, strings.remoteFolderDeletedDetail(folder));
         }
       } catch (e) {
@@ -360,7 +364,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 if (sharedWarning != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    sharedWarning!,
+                    sharedWarning,
                     style: TextStyle(color: theme.error, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -405,7 +409,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   if (sharedWarning != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      sharedWarning!,
+                      sharedWarning,
                       style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 12),
                     ),
                   ],
@@ -451,7 +455,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 if (sharedWarning != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    sharedWarning!,
+                    sharedWarning,
                     style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ],

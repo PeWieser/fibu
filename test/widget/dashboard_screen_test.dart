@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:fibu/core/localization/app_strings.dart';
 import 'package:fibu/core/localization/locale_provider.dart';
 import 'package:fibu/core/services/rclone_provider.dart';
+import 'package:fibu/core/services/remote_registry_service.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
@@ -56,6 +57,13 @@ void main() {
           tasksLoadedProvider.overrideWith((ref) => true),
           localeProvider.overrideWith((ref) => AppLocale.de),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          // remotesProvider liest die Registry-Datei, nicht listRemotes() —
+          // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
+          // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
+                RemoteEntry(
+                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+              ]),
         ],
         child: const fluent.FluentApp(
           home: DashboardScreen(),
@@ -94,6 +102,13 @@ void main() {
               tasksLoadedProvider.overrideWith((ref) => true),
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          // remotesProvider liest die Registry-Datei, nicht listRemotes() —
+          // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
+          // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
+                RemoteEntry(
+                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+              ]),
             ],
             child: const cupertino.CupertinoApp(
               home: DashboardScreen(),
@@ -126,6 +141,13 @@ void main() {
               tasksLoadedProvider.overrideWith((ref) => true),
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          // remotesProvider liest die Registry-Datei, nicht listRemotes() —
+          // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
+          // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
+                RemoteEntry(
+                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+              ]),
             ],
             child: material.MaterialApp(
               home: const DashboardScreen(),
@@ -156,6 +178,13 @@ void main() {
             tasksLoadedProvider.overrideWith((ref) => true),
             localeProvider.overrideWith((ref) => AppLocale.de),
             rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          // remotesProvider liest die Registry-Datei, nicht listRemotes() —
+          // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
+          // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
+                RemoteEntry(
+                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+              ]),
           ],
         );
         container.read(tasksListProvider.notifier).addTask(

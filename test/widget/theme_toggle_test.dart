@@ -62,18 +62,19 @@ void main() {
         expect(container.read(themeConfigProvider).selectedLightPalette, isNull);
         expect(container.read(themeConfigProvider).selectedDarkPalette, isNull);
         
-        // Tap on Autumn Aki palette swatch card. Identify by text Aki (Autumn)
-        final akiFinder = find.text('Aki (Autumn)');
-        expect(akiFinder, findsOneWidget);
+        // Jede Palette steht inzwischen in BEIDEN Reihen (Hell und Dunkel),
+        // der Name kommt also zweimal vor. Die Hell-Reihe liegt zuerst.
+        final akiFinder = find.text('Aki (Autumn)').first;
+        expect(find.text('Aki (Autumn)'), findsNWidgets(2));
         await tester.tap(akiFinder);
         await tester.pumpAndSettle();
 
         // Check that selectedLightPalette state is updated to autumnAki
         expect(container.read(themeConfigProvider).selectedLightPalette, equals(SanzoWadaPalette.autumnAki));
         
-        // Tap on Fuyu (Winter) palette card in the Dark row
-        final fuyuFinder = find.text('Fuyu (Winter)');
-        expect(fuyuFinder, findsOneWidget);
+        // Dunkel-Reihe liegt hinter der Hell-Reihe → letzter Treffer.
+        final fuyuFinder = find.text('Fuyu (Winter)').last;
+        expect(find.text('Fuyu (Winter)'), findsNWidgets(2));
         await tester.ensureVisible(fuyuFinder);
         await tester.pumpAndSettle();
         await tester.tap(fuyuFinder);

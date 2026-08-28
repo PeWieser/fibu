@@ -209,6 +209,12 @@ void main() {
           ),
         );
 
+        // Die Konfigurationsliste ist länger als der Standard-Viewport
+        // (800x600); ohne Vergrößerung wird der untere Teil nie gebaut.
+        tester.view.physicalSize = const Size(1400, 6000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
         await tester.pumpWidget(
           UncontrolledProviderScope(
             container: container,
@@ -222,14 +228,6 @@ void main() {
         expect(find.text('Photo Mirror Task'), findsOneWidget);
         expect(find.text(strings.allPhotos), findsOneWidget);
         expect(find.text(strings.syncModeMirror), findsOneWidget);
-        // Die Löschen-Zeile liegt unterhalb des Test-Viewports (800x600) und
-        // wird erst gebaut, sobald sie hineingescrollt wird.
-        await tester.dragUntilVisible(
-          find.text(strings.deleteTask),
-          find.byType(Scrollable).first,
-          const Offset(0, -300),
-        );
-        await tester.pump();
         expect(find.text(strings.deleteTask), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;

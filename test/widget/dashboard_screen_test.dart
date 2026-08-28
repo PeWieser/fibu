@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:fibu/core/localization/app_strings.dart';
 import 'package:fibu/core/localization/locale_provider.dart';
+import 'package:fibu/core/services/network_status_service.dart';
 import 'package:fibu/core/services/rclone_provider.dart';
 import 'package:fibu/core/services/remote_registry_service.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
@@ -24,6 +25,15 @@ import '../helpers/platform_mocks.dart';
 Future<void> settleBounded(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+/// connectivity_plus ist im Test nicht verfügbar, also bleibt `onWifi` false.
+/// Da die App standardmäßig „nur WLAN" aktiv hat, würde jeder Sync korrekt
+/// abgelehnt — für den Test wird deshalb WLAN gemeldet.
+class _WifiNetwork extends NetworkStatusNotifier {
+  _WifiNetwork() {
+    state = const NetworkStatus(online: true, onWifi: true);
   }
 }
 
@@ -57,6 +67,7 @@ void main() {
           tasksLoadedProvider.overrideWith((ref) => true),
           localeProvider.overrideWith((ref) => AppLocale.de),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -102,6 +113,7 @@ void main() {
               tasksLoadedProvider.overrideWith((ref) => true),
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -141,6 +153,7 @@ void main() {
               tasksLoadedProvider.overrideWith((ref) => true),
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -178,6 +191,7 @@ void main() {
             tasksLoadedProvider.overrideWith((ref) => true),
             localeProvider.overrideWith((ref) => AppLocale.de),
             rcloneServiceProvider.overrideWithValue(mockRcloneService),
+          networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".

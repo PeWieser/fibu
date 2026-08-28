@@ -209,12 +209,6 @@ void main() {
           ),
         );
 
-        // Die Konfigurationsliste ist länger als der Standard-Viewport
-        // (800x600); ohne Vergrößerung wird der untere Teil nie gebaut.
-        tester.view.physicalSize = const Size(1400, 6000);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.reset);
-
         await tester.pumpWidget(
           UncontrolledProviderScope(
             container: container,
@@ -228,6 +222,12 @@ void main() {
         expect(find.text('Photo Mirror Task'), findsOneWidget);
         expect(find.text(strings.allPhotos), findsOneWidget);
         expect(find.text(strings.syncModeMirror), findsOneWidget);
+
+        // Die Danger Zone (inkl. „Aufgabe löschen") wird nur im
+        // Bearbeiten-Modus gerendert — also erst dorthin wechseln.
+        expect(find.text(strings.deleteTask), findsNothing);
+        await tester.tap(find.text(strings.editTaskInline));
+        await tester.pump();
         expect(find.text(strings.deleteTask), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;

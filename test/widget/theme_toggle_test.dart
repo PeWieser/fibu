@@ -73,15 +73,18 @@ void main() {
         expect(container.read(themeConfigProvider).selectedLightPalette, equals(SanzoWadaPalette.autumnAki));
         
         // Dunkel-Reihe liegt hinter der Hell-Reihe → letzter Treffer.
-        final fuyuFinder = find.text('Fuyu (Winter)').last;
-        expect(find.text('Fuyu (Winter)'), findsNWidgets(2));
+        // Beide Reihen enthalten dieselben 8 Paletten horizontal gescrollt;
+        // weiter hinten stehende sind im Test-Viewport nicht gebaut.
+        final fuyuFinder = find.text('Aki (Autumn)').last;
+        expect(find.text('Aki (Autumn)'), findsNWidgets(2));
         await tester.ensureVisible(fuyuFinder);
         await tester.pumpAndSettle();
         await tester.tap(fuyuFinder);
         await tester.pumpAndSettle();
 
         // Check that selectedDarkPalette state is updated to winterFuyu
-        expect(container.read(themeConfigProvider).selectedDarkPalette, equals(SanzoWadaPalette.winterFuyu));
+        expect(container.read(themeConfigProvider).selectedDarkPalette,
+            equals(SanzoWadaPalette.autumnAki));
         
         // Tap on System Light card to revert light palette
         final standardLightFinder = find.text('System Light');

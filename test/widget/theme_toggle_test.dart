@@ -45,7 +45,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         
         await tester.pumpWidget(
@@ -103,7 +103,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         
         await tester.pumpWidget(

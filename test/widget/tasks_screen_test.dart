@@ -46,7 +46,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
 
         await tester.pumpWidget(
@@ -77,7 +77,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
 
         await tester.pumpWidget(
@@ -106,7 +106,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
 
         await tester.pumpWidget(
@@ -138,7 +138,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
 
         container.read(tasksListProvider.notifier).addTask(
@@ -195,7 +195,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
@@ -245,7 +245,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
@@ -285,7 +285,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
@@ -332,7 +332,7 @@ void main() {
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(

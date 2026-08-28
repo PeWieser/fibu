@@ -46,7 +46,7 @@ void main() {
       return ProviderScope(
         overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
-          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+          localeProvider.overrideWith((ref) => AppLocale.de),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
         ],
         child: const fluent.FluentApp(
@@ -96,7 +96,7 @@ void main() {
           ProviderScope(
             overrides: [
               tasksLoadedProvider.overrideWith((ref) => true),
-              localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+              localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: const material.MaterialApp(

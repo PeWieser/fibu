@@ -307,6 +307,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final typed = TextEditingController();
     var confirmed = false;
 
+    // Kritische Vorabprüfung: `operations/purge` löscht den GESAMTEN
+    // Verzeichnisbaum unter `folder`. Nutzen weitere Aufgaben denselben
+    // Cloud-Ordner (der Default „fibu-backup“ ist bei jeder neuen Aufgabe
+    // vorbelegt), liegen deren Dateien im selben Baum und würden still
+    // mitgelöscht. Das muss vor dem Bestätigen sichtbar sein.
+    final sharedOthers = <String>[
+      for (final BackupTask t in ref.read(tasksListProvider))
+        if (t.id != task.id &&
+            t.targetFolderName.trim() == folder &&
+            (t.targetRemotes.contains(remote) || t.targetRemote == remote))
+          t.name,
+    ];
+    final String? sharedWarning = sharedOthers.isEmpty
+        ? null
+        : strings.purgeSharedFolderWarning(folder, sharedOthers);
+
     Future<void> doPurge() async {
       Navigator.of(context).pop();
       try {
@@ -316,7 +332,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             );
         ref.invalidate(remotesProvider);
         ref.invalidate(primaryQuotaProvider);
-        if (mounted) setState(() => _syncMessage = strings.remoteFolderDeleted);
+        if (mounted) {
+          setState(
+              () => _syncMessage = strings.remoteFolderDeletedDetail(folder));
+          _showActionResult(context, strings.remoteFolderDeletedDetail(folder));
+        }
       } catch (e) {
         if (mounted) {
           setState(() => _syncMessage =
@@ -337,6 +357,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(strings.deleteRemoteFolderPrompt(folder)),
+                if (sharedWarning != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    sharedWarning!,
+                    style: TextStyle(color: theme.error, fontWeight: FontWeight.w600),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 fluent.TextBox(
                   controller: typed,
@@ -375,6 +402,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(strings.deleteRemoteFolderPrompt(folder), style: const TextStyle(fontSize: 12)),
+                  if (sharedWarning != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      sharedWarning!,
+                      style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   cupertino.CupertinoTextField(
                     controller: typed,
@@ -414,6 +448,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(strings.deleteRemoteFolderPrompt(folder), style: const TextStyle(fontSize: 13)),
+                if (sharedWarning != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    sharedWarning!,
+                    style: TextStyle(color: theme.error, fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 material.TextField(
                   controller: typed,
@@ -447,6 +488,60 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (confirmed) await doPurge();
   }
 
+  /// Ergebnis-Dialog NACH einer destruktiven Aktion.
+  ///
+  /// Ohne das bleibt unklar, ob tatsächlich etwas gelöscht wurde: Der
+  /// Bestätigungsdialog verschwindet, und die Statusmeldung oben im
+  /// Scrollview liegt außerhalb des sichtbaren Bereichs.
+  void _showActionResult(BuildContext context, String message) {
+    final strings = context.strings;
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.windows) {
+      fluent.showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
+          title: fluent.Text(strings.deleteTaskConfirmTitle),
+          content: Text(message),
+          actions: [
+            fluent.FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+    } else if (platform == TargetPlatform.iOS) {
+      cupertino.showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          content: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(message),
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+    } else {
+      material.showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => material.AlertDialog(
+          content: Text(message),
+          actions: [
+            material.TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   void _confirmDeleteTask(BuildContext context, BackupTask task, TargetPlatform platform) {
     final strings = context.strings;
     final title = strings.deleteTaskConfirmTitle;
@@ -467,6 +562,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   onPressed: () {
                     ref.read(tasksListProvider.notifier).removeTask(task.id);
                     Navigator.pop(dialogCtx);
+                    _showActionResult(
+                        context, strings.taskDeletedNotice(task.name));
                     Navigator.pop(context);
                   },
                   child: Text(
@@ -508,6 +605,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               onPressed: () {
                 ref.read(tasksListProvider.notifier).removeTask(task.id);
                 Navigator.pop(dialogCtx);
+                _showActionResult(
+                    context, strings.taskDeletedNotice(task.name));
                 Navigator.pop(context);
               },
               child: Text(strings.delete),
@@ -531,6 +630,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               onPressed: () {
                 ref.read(tasksListProvider.notifier).removeTask(task.id);
                 Navigator.pop(dialogCtx);
+                _showActionResult(
+                    context, strings.taskDeletedNotice(task.name));
                 Navigator.pop(context);
               },
               child: Text(strings.delete),

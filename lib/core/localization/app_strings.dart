@@ -670,6 +670,25 @@ class AppStrings {
       : 'This permanently deletes the entire cloud folder “$path” including all contents. Type the exact folder path to confirm:';
   String get deleteRemoteFolderTypeHint => isGerman ? 'Ordnerpfad eingeben' : 'Enter folder path';
   String get confirmationMismatch => isGerman ? 'Der eingegebene Name stimmt nicht überein.' : 'The typed name does not match.';
+  /// Rückmeldung NACH dem Löschen einer Aufgabe (Regel 6: Konsequenz klar
+  /// benennen — auch im Erfolgsfall, sonst bleibt unklar, ob etwas geschah).
+  String taskDeletedNotice(String name) => isGerman
+      ? 'Aufgabe „$name“ wurde gelöscht. Die bereits hochgeladenen Dateien in der Cloud bleiben erhalten.'
+      : 'Task “$name” deleted. Files already uploaded to the cloud are kept.';
+
+  /// Rückmeldung NACH dem Löschen eines Cloud-Ordners, mit Klartext was weg ist.
+  String remoteFolderDeletedDetail(String folder) => isGerman
+      ? 'Cloud-Ordner „$folder“ wurde gelöscht.'
+      : 'Cloud folder “$folder” deleted.';
+
+  /// Warnung, wenn weitere Aufgaben denselben Cloud-Ordner benutzen — deren
+  /// Dateien liegen im selben Baum und werden mitgelöscht.
+  String purgeSharedFolderWarning(String folder, List<String> others) => isGerman
+      ? 'Achtung: ${others.length} andere Aufgabe(n) nutzen ebenfalls „$folder“ '
+          '(${others.join(', ')}). Deren Dateien liegen im selben Ordner und werden MITGELÖSCHT.'
+      : 'Warning: ${others.length} other task(s) also use “$folder” '
+          '(${others.join(', ')}). Their files live in the same folder and WILL be deleted too.';
+
   String get remoteFolderDeleted => isGerman ? 'Cloud-Ordner wurde gelöscht.' : 'Cloud folder deleted.';
   String get remoteFolderDeleteError => isGerman ? 'Cloud-Ordner konnte nicht gelöscht werden.' : 'Could not delete the cloud folder.';
   String get dangerZone => isGerman ? 'Aktionen' : 'Actions';

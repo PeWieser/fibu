@@ -71,9 +71,15 @@ void main() {
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          // Muss zum Ziel der Test-Aufgabe passen (OneDrive_Backup:backup),
+          // sonst schlägt die Ziel-Vorprüfung korrekt fehl und der Sync
+          // startet gar nicht erst.
           remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
                 RemoteEntry(
-                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+                    id: 'OneDrive_Backup',
+                    name: 'OneDrive Backup',
+                    type: 'onedrive',
+                    createdAtMs: 0),
               ]),
         ],
         child: const fluent.FluentApp(
@@ -117,9 +123,15 @@ void main() {
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          // Muss zum Ziel der Test-Aufgabe passen (OneDrive_Backup:backup),
+          // sonst schlägt die Ziel-Vorprüfung korrekt fehl und der Sync
+          // startet gar nicht erst.
           remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
                 RemoteEntry(
-                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+                    id: 'OneDrive_Backup',
+                    name: 'OneDrive Backup',
+                    type: 'onedrive',
+                    createdAtMs: 0),
               ]),
             ],
             child: const cupertino.CupertinoApp(
@@ -157,9 +169,15 @@ void main() {
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          // Muss zum Ziel der Test-Aufgabe passen (OneDrive_Backup:backup),
+          // sonst schlägt die Ziel-Vorprüfung korrekt fehl und der Sync
+          // startet gar nicht erst.
           remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
                 RemoteEntry(
-                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+                    id: 'OneDrive_Backup',
+                    name: 'OneDrive Backup',
+                    type: 'onedrive',
+                    createdAtMs: 0),
               ]),
             ],
             child: material.MaterialApp(
@@ -195,9 +213,15 @@ void main() {
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
+          // Muss zum Ziel der Test-Aufgabe passen (OneDrive_Backup:backup),
+          // sonst schlägt die Ziel-Vorprüfung korrekt fehl und der Sync
+          // startet gar nicht erst.
           remoteEntriesProvider.overrideWith((ref) async => const <RemoteEntry>[
                 RemoteEntry(
-                    id: 'mega', name: 'MEGA', type: 'mega', createdAtMs: 0),
+                    id: 'OneDrive_Backup',
+                    name: 'OneDrive Backup',
+                    type: 'onedrive',
+                    createdAtMs: 0),
               ]),
           ],
         );

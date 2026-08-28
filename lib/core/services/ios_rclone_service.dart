@@ -1246,7 +1246,7 @@ class IosRcloneService implements RcloneService {
         if (!existingAlbumDirs.contains(albumName)) {
           try {
             AppLog.info('media',
-                'Entferne verwaisten Spiegel-Ordner: Photos/${albumName}');
+                'Entferne verwaisten Spiegel-Ordner: Photos/$albumName');
             await albumDir.delete(recursive: true);
             removedAlbumDirs++;
           } catch (_) {}

@@ -1,4 +1,3 @@
-import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
@@ -12,7 +11,6 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/services/network_status_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
-import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
@@ -245,7 +243,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             _buildStatusBanner(context, activeJob, strings),
             if (setupHint != null) ...[
               SizedBox(height: theme.sm),
-              setupHint!,
+              setupHint,
             ] else ...[
               quotaAsync.when(
                 data: (quota) {
@@ -556,7 +554,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 _buildStatusBanner(context, activeJob, strings),
               if (setupHint != null) ...[
                 SizedBox(height: theme.sm),
-                setupHint!,
+                setupHint,
               ] else ...[
               quotaAsync.when(
                 data: (quota) {
@@ -723,6 +721,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         disabledColor: theme.textSecondary.withValues(alpha: 0.12),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         borderRadius: BorderRadius.circular(theme.radiusSm),
+                        // Offline gibt es nichts zu durchsuchen — deaktiviert.
+                        onPressed: online
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
+                                );
+                              }
+                            : null,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -742,15 +749,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ],
                         ),
-                        // Offline gibt es nichts zu durchsuchen — deaktiviert.
-                        onPressed: online
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
-                                );
-                              }
-                            : null,
                       ),
                     ),
                     if (!online) ...[
@@ -887,7 +885,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             _buildStatusBanner(context, activeJob, strings),
             if (setupHint != null) ...[
               SizedBox(height: theme.sm),
-              setupHint!,
+              setupHint,
             ] else ...[
             quotaAsync.when(
               data: (quota) {

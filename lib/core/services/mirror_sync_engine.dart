@@ -738,24 +738,6 @@ class MirrorSyncEngine {
   // Pfad-Helfer
   // -------------------------------------------------------------------------
 
-  /// True, wenn die lokale Datei gegenüber der remote Version neuer ist.
-  ///
-  /// Vergleich auf Basis der Modtime (nicht Größe). Bei fehlender/ungültiger
-  /// remote-Modtime gilt eine Größenabweichung als "neuer", damit Änderungen
-  /// nicht fälschlich übersprungen werden. Eine kleine Toleranz verhindert
-  /// Ping-Pong durch leichte Uhrzeit-Drift zwischen Geräten.
-  bool _localIsNewer(File local, RcloneFileInfo remote) {
-    // Nur bei Größen-Diff und nicht klar remote-neuer.
-    final localSize = local.lengthSync();
-    if (remote.size <= 0 || remote.size == localSize) return false;
-    final remoteMod = DateTime.tryParse(remote.modTime);
-    if (remoteMod == null) return true;
-    final localMod = local.statSync().modified;
-    // Remote klar neuer → nicht „lokal neuer“
-    if (localMod.difference(remoteMod).inSeconds < -60) return false;
-    return true;
-  }
-
   String _relPath(String path, String root) {
     var rel = path.substring(root.length);
     rel = rel.replaceFirst(RegExp(r'^[/\\]'), '');

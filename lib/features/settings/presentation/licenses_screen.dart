@@ -296,7 +296,7 @@ class _LicensesScreenState extends ConsumerState<LicensesScreen> {
       ],
     );
 
-    final onTap = () => _openDetail(section, strings);
+    void onTap() => _openDetail(section, strings);
 
     if (platform == TargetPlatform.iOS) {
       return Padding(

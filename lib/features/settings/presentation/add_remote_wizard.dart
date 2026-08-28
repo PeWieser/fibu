@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart' as cupertino;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -134,7 +133,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
   List<RcloneProviderDescriptor> _filteredProviders() {
     final query = _searchQuery.toLowerCase().trim();
-    final all = RcloneProviderRegistry.providers;
+    const all = RcloneProviderRegistry.providers;
     if (query.isEmpty) {
       final popular = all.where((p) => p.isPopular).toList();
       final rest = all.where((p) => !p.isPopular).toList();

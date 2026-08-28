@@ -24,7 +24,7 @@ class QuickActionsService {
     if (_registered) return;
     _registered = true;
 
-    final actions = QuickActions();
+    const actions = QuickActions();
     actions.initialize((String type) {
       if (type == syncNowType) {
         AppLog.info('quickaction', 'Homescreen-Aktion „Jetzt synchronisieren“ getippt');

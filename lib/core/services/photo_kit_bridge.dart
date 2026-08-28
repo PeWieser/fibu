@@ -112,14 +112,15 @@ class PhotoKitBridge {
       if (!ps.isAuth && !ps.hasAccess) return false;
 
       final title = file.path.split('/').last;
-      final AssetEntity? asset;
+      // Beide Save-APIs liefern laut Signatur ein Asset; ein Fehlschlag
+      // wirft und wird vom umgebenden catch als false behandelt.
+      final AssetEntity asset;
       if (mimeHint.startsWith('video')) {
         asset = await PhotoManager.editor.saveVideo(file, title: title);
       } else {
         asset =
             await PhotoManager.editor.saveImageWithPath(file.path, title: title);
       }
-      if (asset == null) return false;
 
       final album = albumName?.trim();
       if (album != null && album.isNotEmpty && Platform.isIOS) {

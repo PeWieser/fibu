@@ -84,7 +84,7 @@ void _appendToLogFile(String line) {
         // Ring-Schnitt: bei 256 KB wird auf die letzten 1000 Zeilen gekürzt.
         final lines = await file.readAsLines();
         final tail = lines.length > 1000 ? lines.sublist(lines.length - 1000) : lines;
-        await file.writeAsString(tail.join('\n') + '\n', flush: false);
+        await file.writeAsString('${tail.join('\n')}\n', flush: false);
       }
       await file.writeAsString('$line\n', mode: FileMode.append, flush: false);
     } catch (_) {

@@ -670,9 +670,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           ],
         ),
       );
+      // Context nach await nur mit mounted-Prüfung weiterverwenden.
       if (action == 'rename') {
+        if (!mounted) return;
         await _showRenameDialog(context, remote, platform);
       } else if (action == 'disconnect') {
+        if (!mounted) return;
         final confirmed =
             await _confirmDeleteRemoteAsync(context, remote, platform);
         if (confirmed) _performDelete(remote);
@@ -908,11 +911,6 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       );
       return result ?? false;
     }
-  }
-
-  void _confirmDeleteRemote(
-      BuildContext context, String remoteName, TargetPlatform platform) {
-    _confirmDeleteRemoteAsync(context, remoteName, platform);
   }
 
   Future<void> _performDelete(String remoteName) async {

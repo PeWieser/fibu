@@ -579,10 +579,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     return strings.syncModeIncrementalDescription;
   }
 
-  String _formatYesNo(AppStrings strings, bool value) {
-    return value ? (strings.isGerman ? 'Ja' : 'Yes') : (strings.isGerman ? 'Nein' : 'No');
-  }
-
   @override
   Widget build(BuildContext context) {
     // Theme live verfolgen, damit Dark-/Light-/Palettenwechsel sofort greift.

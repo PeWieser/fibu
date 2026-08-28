@@ -670,12 +670,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           ],
         ),
       );
-      // Context nach await nur mit mounted-Prüfung weiterverwenden.
+      // `context` ist hier ein Methoden-Parameter, nicht State.context —
+      // die mounted-Prüfung muss deshalb am BuildContext selbst erfolgen.
       if (action == 'rename') {
-        if (!mounted) return;
+        if (!context.mounted) return;
         await _showRenameDialog(context, remote, platform);
       } else if (action == 'disconnect') {
-        if (!mounted) return;
+        if (!context.mounted) return;
         final confirmed =
             await _confirmDeleteRemoteAsync(context, remote, platform);
         if (confirmed) _performDelete(remote);

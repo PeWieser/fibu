@@ -15,7 +15,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// nichts an `pubspec.yaml` geändert werden muss.
 Future<Directory> installPathProviderMock() async {
   final Directory dir = await Directory.systemTemp.createTemp('fibu_test_');
-  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+  // setMockMethodCallHandler liefert void zurück — kein await.
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
     const MethodChannel('plugins.flutter.io/path_provider'),
     (MethodCall call) async {
@@ -40,7 +41,7 @@ Future<Directory> installPathProviderMock() async {
 
 /// Entfernt den Mock wieder und räumt den Temp-Ordner auf.
 Future<void> removePathProviderMock(Directory dir) async {
-  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
     const MethodChannel('plugins.flutter.io/path_provider'),
     null,

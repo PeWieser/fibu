@@ -125,6 +125,11 @@ class VirtualMirrorSyncEngine {
     /// Größe ist eine ANDERE Datei (z. B. `IMG_0001.HEIC` von einem zweiten
     /// Gerät) und wird korrekt geladen statt fälschlich übersprungen.
     Map<String, Set<int>>? librarySizes,
+
+    /// Liefert true, sobald der Nutzer abgebrochen hat. Wird zwischen den
+    /// Dateien geprüft — ein Abbruch wirkt damit sofort und nicht erst,
+    /// wenn die gesamte Warteschlange abgearbeitet ist.
+    bool Function()? isCancelled,
   }) async {
     onProgress?.call('scan', AppStrings.current.syncStartAnalysis, 0, 0);
     // Die Mengen werden direkt mutiert (blockedRels.add / adoptedRels.add …) und
@@ -395,6 +400,10 @@ class VirtualMirrorSyncEngine {
     var uploadedBytes = 0;
     for (final item in needUpload) {
       if (skipUploads) break; // Cloud voll → keine Upload-Versuche
+      if (isCancelled?.call() ?? false) {
+        AppLog.info('sync', 'Upload-Phase abgebrochen (Nutzer)');
+        break;
+      }
       File? tmp;
       try {
         tmp = await exportForUpload(item);
@@ -481,6 +490,7 @@ class VirtualMirrorSyncEngine {
     const tombWorkers = 5;
     Future<void> tombWorker() async {
       while (tombQueue.isNotEmpty) {
+        if (isCancelled?.call() ?? false) return;
         final tomb = tombQueue.removeFirst();
         tb++;
         onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
@@ -687,6 +697,10 @@ class VirtualMirrorSyncEngine {
     final tmpRels = <String>[];
     for (final entry in toDownload) {
       if (skipDownloads) break; // Gerät voll → keine Download-Versuche
+      if (isCancelled?.call() ?? false) {
+        AppLog.info('sync', 'Download-Phase abgebrochen (Nutzer)');
+        break;
+      }
       final rel = entry.key;
       final size = entry.value.size > 0 ? entry.value.size : 0;
       dl++;

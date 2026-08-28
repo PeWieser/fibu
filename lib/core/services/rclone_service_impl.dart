@@ -168,6 +168,13 @@ class WindowsRcloneService implements RcloneService {
   bool get isSyncRunning => false;
 
   @override
+  Future<void> cleanupMirrorState({
+    required String localPath,
+    required String remoteName,
+    required String remotePath,
+  }) async {}
+
+  @override
   Future<String> startBackupJob({
     required String localPath,
     required String remoteName,

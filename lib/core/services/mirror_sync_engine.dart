@@ -133,6 +133,10 @@ class MirrorSyncEngine {
     List<String> localDeletions = const [],
     TrashService? trash,
     MirrorProgressCallback? onProgress,
+
+    /// Liefert true, sobald der Nutzer abgebrochen hat — wird zwischen den
+    /// Dateien geprüft, damit „Abbrechen" sofort wirkt.
+    bool Function()? isCancelled,
   }) async {
     // --- Scan beide Seiten ---
     onProgress?.call('scan', 'Starte Analyse …', 0, 0);
@@ -293,6 +297,10 @@ class MirrorSyncEngine {
     var uploadedBytes = 0;
     for (final entry in needUpload) {
       if (skipUploads) break; // Cloud voll → keine Upload-Versuche
+      if (isCancelled?.call() ?? false) {
+        AppLog.info('sync', 'Upload-Phase abgebrochen (Nutzer)');
+        break;
+      }
       final rel = entry.key;
       final file = entry.value;
       try {
@@ -353,6 +361,7 @@ class MirrorSyncEngine {
     const tombWorkers = 5;
     Future<void> tombWorker() async {
       while (tombQueue.isNotEmpty) {
+        if (isCancelled?.call() ?? false) return;
         final tomb = tombQueue.removeFirst();
         tb++;
         onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
@@ -485,6 +494,10 @@ class MirrorSyncEngine {
     var downloadedBytes = 0;
     for (final entry in toDownload) {
       if (skipDownloads) break; // Gerät voll → keine Download-Versuche
+      if (isCancelled?.call() ?? false) {
+        AppLog.info('sync', 'Download-Phase abgebrochen (Nutzer)');
+        break;
+      }
       final rel = entry.key;
       dl++;
       final size = entry.value.size > 0 ? entry.value.size : 0;

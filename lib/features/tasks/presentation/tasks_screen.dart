@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1379,10 +1380,14 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         finalSourcePath = 'files:${selectedFolders.join('|')}';
       } else {
         // Fotos & Videos: "all:Album1|Album2"; leer = alle Alben.
+        // Alphabetisch sortiert: Die Tipp-Reihenfolge darf keine andere
+        // Aufgabe (und damit keinen anderen Mirror-Zustand) erzeugen.
         if (selectedAlbums.isEmpty) {
           finalSourcePath = 'all';
         } else {
-          finalSourcePath = 'all:${selectedAlbums.join('|')}';
+          final sortedAlbums = List<String>.from(selectedAlbums)
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          finalSourcePath = 'all:${sortedAlbums.join('|')}';
         }
       }
     } else if (widget.platform != TargetPlatform.windows && _selectedSourceCategory != 'folders') {
@@ -1772,6 +1777,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         SizedBox(height: theme.xs),
         fluent.TextBox(
           controller: _nameController,
+          inputFormatters: [LengthLimitingTextInputFormatter(80)],
           placeholder: strings.taskNameHint,
           decoration: _nameError != null
               ? WidgetStatePropertyAll(
@@ -2380,6 +2386,9 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         SizedBox(height: theme.xs),
         cupertino.CupertinoTextField(
           controller: _nameController,
+          // 80 Zeichen: Der Name landet in tasks.json, im Widget-Status und
+          // in Protokollen — unbegrenzt bricht Layouts und ist nicht nötig.
+          inputFormatters: [LengthLimitingTextInputFormatter(80)],
           placeholder: strings.taskNameHint,
           padding: EdgeInsets.all(theme.md),
           decoration: BoxDecoration(

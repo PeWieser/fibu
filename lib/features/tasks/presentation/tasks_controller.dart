@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/widget_status_service.dart';
 import '../../../core/utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -385,8 +386,43 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
   }
 
   void removeTask(String id) {
+    BackupTask? removed;
+    for (final t in state) {
+      if (t.id == id) {
+        removed = t;
+        break;
+      }
+    }
     state = state.where((t) => t.id != id).toList();
     _saveTasks();
+    if (removed != null) unawaited(_cleanupMirrorState(removed));
+  }
+
+  /// Mirror-Zustand der gelöschten Aufgabe entfernen.
+  ///
+  /// Ohne das erbt eine später neu angelegte Aufgabe mit gleicher Quelle und
+  /// gleichem Ziel den alten Scope — inklusive geblockter und adoptierter
+  /// Pfade, die dann nicht mehr zur Auswahl passen.
+  Future<void> _cleanupMirrorState(BackupTask task) async {
+    final List<String> targets = task.targetRemotes.isNotEmpty
+        ? task.targetRemotes
+        : (task.targetRemote.isNotEmpty
+            ? <String>[task.targetRemote]
+            : const <String>[]);
+    if (targets.isEmpty) return;
+    try {
+      final service = _ref.read(rcloneServiceProvider);
+      for (final target in targets) {
+        await service.cleanupMirrorState(
+          localPath: task.sourcePath,
+          remoteName: target,
+          remotePath: task.targetFolderName,
+        );
+      }
+    } catch (_) {
+      // Aufräumen ist Nebensache — das Löschen der Aufgabe darf daran nicht
+      // scheitern.
+    }
   }
 
   void toggleTaskActive(String id) {

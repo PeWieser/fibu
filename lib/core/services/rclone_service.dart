@@ -159,6 +159,15 @@ abstract class RcloneService {
   /// Läufe würden sich gegenseitig falsche Löschungen/Downloads erzeugen.
   bool get isSyncRunning;
 
+  /// Entfernt den Mirror-Zustand einer gelöschten Aufgabe, damit eine später
+  /// neu angelegte Aufgabe mit gleicher Quelle/Ziel nicht den alten Zustand
+  /// (geblockte/adoptierte Pfade) erbt.
+  Future<void> cleanupMirrorState({
+    required String localPath,
+    required String remoteName,
+    required String remotePath,
+  });
+
   /// Starts a sync/copy backup process and returns a unique Job ID.
   Future<String> startBackupJob({
     required String localPath,

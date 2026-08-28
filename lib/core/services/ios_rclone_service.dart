@@ -542,6 +542,11 @@ class IosRcloneService implements RcloneService {
   /// Job-IDs laufender Syncs. Leer = kein Lauf aktiv.
   final Set<String> _runningJobIds = <String>{};
 
+  /// Job-IDs, die der Nutzer abgebrochen hat. Die Spiegel-Engines fragen das
+  /// zwischen den Dateien ab — ohne sie liefe ein „abgebrochener" Lauf
+  /// unsichtbar bis zum Ende weiter.
+  final Set<String> _cancelledJobs = <String>{};
+
   @override
   bool get isSyncRunning => _runningJobIds.isNotEmpty;
 
@@ -569,7 +574,10 @@ class IosRcloneService implements RcloneService {
 
     _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.syncing));
     unawaited(_runJob(jobId, localPath, remoteName, remotePath, options, progressController)
-        .whenComplete(() => _runningJobIds.remove(jobId)));
+        .whenComplete(() {
+      _runningJobIds.remove(jobId);
+      _cancelledJobs.remove(jobId);
+    }));
     return jobId;
   }
 
@@ -678,6 +686,7 @@ class IosRcloneService implements RcloneService {
           // die Cloud-Kopie sofort wieder zurück.
           localDeletions: localDeletions,
           trash: trash,
+          isCancelled: () => _cancelledJobs.contains(jobId),
           onProgress: (phase, item, done, total,
               {bytesDone = 0, bytesTotal = 0}) {
             if (progress.isClosed) return;
@@ -977,6 +986,8 @@ class IosRcloneService implements RcloneService {
 
   @override
   Future<void> cancelBackupJob(String jobId) async {
+    // Gilt für BEIDE Pfade: rclone-Jobs (inkrementell) und die Spiegel-Engines.
+    _cancelledJobs.add(jobId);
     final rcJobId = _rcJobIds[jobId];
     if (rcJobId != null) {
       try {
@@ -1350,6 +1361,112 @@ class IosRcloneService implements RcloneService {
     }
   }
 
+  @override
+  Future<void> cleanupMirrorState({
+    required String localPath,
+    required String remoteName,
+    required String remotePath,
+  }) async {
+    try {
+      final Directory root = await _virtualStateRoot(
+          remoteName: remoteName, remotePath: remotePath, localPath: localPath);
+      final Directory base = root.parent;
+      if (root.path == base.path) return; // Sicherheitsnetz: nie den Basisordner löschen
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+        AppLog.info('sync', 'Mirror-Zustand der gelöschten Aufgabe entfernt');
+      }
+    } catch (e) {
+      AppLog.warn('sync', 'Mirror-Zustand konnte nicht aufgeräumt werden: $e');
+    }
+  }
+
+  /// Bestätigt „vermisste" Pfade als echte Löschungen.
+  ///
+  /// Ein Pfad fehlt im Task-Scan aus vielen Gründen, die **keine** Löschung
+  /// sind: Album umbenannt oder abgewählt, Smart-Album mit wechselndem Inhalt
+  /// („Zuletzt hinzugefügt", „Favoriten"), eingeschränkter Fotozugriff. Nur
+  /// wenn das Asset nachweislich nicht mehr in der Mediathek existiert, darf
+  /// die Cloud-Kopie gelöscht werden.
+  ///
+  /// Die Prüfung kostet einen `AssetEntity.fromId`-Aufruf je Kandidat — das
+  /// sind im Normalfall null bis wenige, also vernachlässigbar gegenüber
+  /// einem Vollscan der Mediathek.
+  Future<List<String>> _confirmDeletions(
+    List<VirtualMediaItem> previousItems,
+    List<String> missingRels, {
+    required bool permissionLimited,
+  }) async {
+    if (missingRels.isEmpty) return const <String>[];
+
+    if (permissionLimited) {
+      // Bei „Auswahl …" sind nicht freigegebene Assets unsichtbar; fromId
+      // liefert dann null, obwohl das Foto existiert.
+      AppLog.warn('media',
+          'Eingeschränkter Fotozugriff: Lösch-Erkennung für ${missingRels.length} Pfade übersprungen (keine Cloud-Löschungen)');
+      return const <String>[];
+    }
+
+    final Map<String, String> idByRel = <String, String>{
+      for (final VirtualMediaItem i in previousItems)
+        if (i.assetId.isNotEmpty) i.rel: i.assetId,
+    };
+
+    final List<String> confirmed = <String>[];
+    var stillInLibrary = 0;
+    for (final String rel in missingRels) {
+      final String? id = idByRel[rel];
+      if (id == null) {
+        // Ohne Asset-ID nicht überprüfbar → konservativ NICHT löschen.
+        stillInLibrary++;
+        continue;
+      }
+      AssetEntity? asset;
+      try {
+        asset = await AssetEntity.fromId(id);
+      } catch (_) {
+        asset = null;
+      }
+      if (asset == null) {
+        confirmed.add(rel);
+      } else {
+        stillInLibrary++;
+      }
+    }
+
+    if (stillInLibrary > 0) {
+      AppLog.info('media',
+          '$stillInLibrary „vermisste" Medien existieren noch in der Mediathek (Album-/Zugriffsänderung) → keine Cloud-Löschung');
+    }
+    return confirmed;
+  }
+
+  /// Kanonische Form einer Medien-Quelle: Alben alphabetisch, Präfix klein.
+  ///
+  /// Ohne das wäre `all:A|B` und `all:B|A` — je nachdem, in welcher
+  /// Reihenfolge der Nutzer die Alben angetippt hat — eine andere Aufgabe
+  /// mit anderem Mirror-Zustand. Allein das Bearbeiten einer Aufgabe (die
+  /// Auswahl wird dort listenkanonisch neu aufgebaut) würde sonst still den
+  /// Zustand verwerfen.
+  static String canonicalMediaSource(String localPath) {
+    final String trimmed = localPath.trim();
+    final String lower = trimmed.toLowerCase();
+    for (final String prefix in const <String>['all:', 'photos:', 'videos:']) {
+      if (lower.startsWith(prefix)) {
+        final List<String> parts = trimmed
+            .substring(prefix.length)
+            .split('|')
+            .map((String e) => e.trim())
+            .where((String e) => e.isNotEmpty)
+            .toList()
+          ..sort((String a, String b) =>
+              a.toLowerCase().compareTo(b.toLowerCase()));
+        return '$prefix${parts.join('|')}';
+      }
+    }
+    return lower;
+  }
+
   /// Stabiler Scope-Schlüssel je Aufgabe (Laufwerk + Zielpfad + Quelle).
   ///
   /// Dateisystemsicherer FNV-1a-Hash statt Klartext, weil Remote-Pfade und
@@ -1361,7 +1478,7 @@ class IosRcloneService implements RcloneService {
     required String localPath,
   }) {
     final String raw =
-        '${remoteName.trim()}|${remotePath.trim()}|${localPath.trim()}'.toLowerCase();
+        '${remoteName.trim()}|${remotePath.trim()}|${canonicalMediaSource(localPath)}';
     int hash = 0x811c9dc5;
     for (final int unit in raw.codeUnits) {
       hash ^= unit;
@@ -1611,6 +1728,10 @@ class IosRcloneService implements RcloneService {
 
     var total = 0;
     var done = 0;
+    // Global pro Lauf, nicht pro Album: Zwei gleichnamige Alben mit
+    // gleichlautendem Dateinamen dürfen sich nicht denselben Spiegelpfad
+    // teilen und gegenseitig überschreiben.
+    final taken = <String>{};
     for (final album in albums) {
       if (!allowAll && !selectedSet.contains(album.name.trim().toLowerCase())) {
         continue;
@@ -1622,7 +1743,6 @@ class IosRcloneService implements RcloneService {
       onStage(AppStrings.current.syncReadAlbum(albumName), done, total);
       AppLog.info('media', 'Album „$albumName“: $count Assets (Metadaten)');
       const batch = 100;
-      final taken = <String>{};
       for (int start = 0; start < count; start += batch) {
         final assets = await album.getAssetListRange(
             start: start, end: (start + batch).clamp(0, count));
@@ -1716,6 +1836,9 @@ class IosRcloneService implements RcloneService {
 
     final scan = await _scanVirtualMedia(localPath, options, stage,
         remoteName: remoteName, remotePath: remotePath);
+    // Für die Lösch-Prüfung unten: eingeschränkter Zugriff heißt „Asset nicht
+    // auffindbar", nicht „Asset gelöscht“.
+    final ps = await PhotoManager.requestPermissionExtend();
     final items = scan.items;
     final byRel = scan.byRel;
 
@@ -1746,10 +1869,16 @@ class IosRcloneService implements RcloneService {
     } catch (_) {}
 
     // Lokale Lösch-Erkennung ohne Dateisystem-Spiegel: Pfade, die im alten
-    // Zustand standen und jetzt fehlen ─→ Tombstone (nach Safety-Brake).
+    // Zustand standen und jetzt fehlen, sind Kandidaten — aber ein Kandidat
+    // ist noch lange keine Löschung (siehe _confirmDeletions).
     final previousRels = state.items.map((i) => i.rel).toSet();
-    final deletedNow =
+    final missingRels =
         previousRels.where((rel) => !items.containsKey(rel)).toList();
+    final deletedNow = await _confirmDeletions(
+      state.items,
+      missingRels,
+      permissionLimited: !ps.isAuth,
+    );
     if (previousRels.length >= 10 && deletedNow.length * 2 > previousRels.length) {
       AppLog.warn('media',
           'Virtual-Mirror: auffällig großer Schwund (${deletedNow.length}/${previousRels.length}) → als Formatwechsel behandelt, nichts als Löschung propagiert');
@@ -1827,6 +1956,7 @@ class IosRcloneService implements RcloneService {
       adoptOrphans: adoptOrphans,
       previouslySyncedRels: previousRels,
       librarySizes: librarySizes,
+      isCancelled: () => _cancelledJobs.contains(jobId),
       deleteLocalAssets: deleteLocalAssets,
       exportForUpload: exportForUpload,
       // Billige Vorab-Vermessung: asset.file direkt (ohne Temp-Kopie), damit

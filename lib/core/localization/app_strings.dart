@@ -698,6 +698,13 @@ class AppStrings {
   // --- Sync-Fortschritt: EINFACHE Verben, keine Technik-Sätze ---
   /// Ein Sync läuft bereits — parallele Läufe sind bewusst gesperrt, weil
   /// sich Mirror-Zustand und Transfers sonst gegenseitig korrumpieren.
+  /// Bearbeitung gesperrt, solange ein Sync läuft.
+  String get editBlockedDuringSyncTitle =>
+      isGerman ? 'Synchronisierung läuft' : 'Synchronization running';
+  String get editBlockedDuringSyncMessage => isGerman
+      ? 'Bitte warte, bis die laufende Synchronisierung beendet ist. Die Aufgabe kann währenddessen nicht geändert werden.'
+      : 'Please wait until the running synchronization finishes. The task cannot be changed meanwhile.';
+
   String get syncAlreadyRunning => isGerman
       ? 'Es läuft bereits eine Synchronisierung.'
       : 'A synchronization is already running.';

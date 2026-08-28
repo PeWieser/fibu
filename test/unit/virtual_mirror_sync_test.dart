@@ -96,6 +96,7 @@ void main() {
     required Map<String, VirtualMediaItem> localItems,
     Map<String, Set<int>>? librarySizes,
     Set<String>? previouslySyncedRels,
+    bool Function()? isCancelled,
   }) async {
     final _RecordingRclone rclone = _RecordingRclone(remote: remote);
     final List<String> phases = <String>[];
@@ -118,6 +119,7 @@ void main() {
       blockedRels: <String>{},
       previouslySyncedRels: previouslySyncedRels,
       librarySizes: librarySizes,
+      isCancelled: isCancelled,
       exportForUpload: exportOnce,
       importDownloaded: (List<File> files, List<String> rels) async {},
       persistLocalState: (List<Map<String, dynamic>> state) async {},
@@ -149,6 +151,38 @@ void main() {
           reason: 'Alle Uploads müssen vor dem ersten Download abgeschlossen '
               'sein (Reihenfolge: erst hochladen, dann laden). Aufrufe: '
               '${run1.rclone.calls}');
+    });
+  });
+
+  group('Abbruch', () {
+    test('Abbruch stoppt den Download-Lauf', () async {
+      // Nach der ersten Datei wird abgebrochen — der Rest darf nicht mehr
+      // geladen werden. Vor dem Fix lief ein „abgebrochener“ Spiegel-Sync
+      // unsichtbar bis zum Ende weiter.
+      var calls = 0;
+      final run1 = await run(
+        remote: <String, int>{
+          'Photos/Album/A.heic': 8,
+          'Photos/Album/B.heic': 8,
+          'Photos/Album/C.heic': 8,
+        },
+        localItems: <String, VirtualMediaItem>{},
+        isCancelled: () => calls++ > 0,
+      );
+      expect(run1.rclone.downloaded.length, lessThan(3),
+          reason: 'Abbruch muss den Lauf vor dem Ende beenden');
+    });
+
+    test('ohne Abbruchsignal läuft alles durch', () async {
+      final run1 = await run(
+        remote: <String, int>{
+          'Photos/Album/A.heic': 8,
+          'Photos/Album/B.heic': 8,
+          'Photos/Album/C.heic': 8,
+        },
+        localItems: <String, VirtualMediaItem>{},
+      );
+      expect(run1.result.downloaded, 3);
     });
   });
 

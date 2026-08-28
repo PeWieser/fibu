@@ -101,6 +101,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   }
 
   void _startInlineEdit(BackupTask task) {
+    // Während eines laufenden Syncs nicht bearbeiten: Der Lauf hat die
+    // Aufgabe beim Start gelesen. Eine Änderung wäre nur halb wirksam, und
+    // ein mitten im Lauf geänderter Zielordner/Albumsatz würde den
+    // Mirror-Zustand gegen die laufende Übertragung verschieben.
+    final job = ref.read(activeJobProvider);
+    if (job.status == RcloneJobStatus.syncing ||
+        job.status == RcloneJobStatus.pending) {
+      final strings = context.strings;
+      cupertino.showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          title: Text(strings.editBlockedDuringSyncTitle),
+          content: Text(strings.editBlockedDuringSyncMessage),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     setState(() {
       _isEditing = true;
       _nameCtrl.text = task.name;
@@ -121,10 +144,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         newSource = 'all';
         newAlbums = const [];
       } else {
+        // Alphabetisch — identisch zum Wizard, damit Bearbeiten nicht die
+        // Album-Reihenfolge und damit den Mirror-Zustand ändert.
         final ordered = _editAlbumOptions
             .map((o) => o.name)
             .where((n) => _editAlbumSelection.contains(n))
-            .toList();
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         // Falls ein gewähltes Album aktuell nicht (mehr) geladen werden kann,
         // bleibt es trotzdem in der Auswahl (kein stiller Datenverlust).
         for (final sel in _editAlbumSelection) {

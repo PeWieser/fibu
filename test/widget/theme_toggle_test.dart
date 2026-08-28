@@ -43,7 +43,10 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       
       try {
-        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
+        final container = ProviderContainer(overrides: [
+          tasksLoadedProvider.overrideWith((ref) => true),
+          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+        ]);
         
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -98,7 +101,10 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       
       try {
-        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
+        final container = ProviderContainer(overrides: [
+          tasksLoadedProvider.overrideWith((ref) => true),
+          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
+        ]);
         
         await tester.pumpWidget(
           UncontrolledProviderScope(

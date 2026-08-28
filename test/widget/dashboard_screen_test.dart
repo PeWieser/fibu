@@ -45,6 +45,7 @@ void main() {
       return ProviderScope(
         overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
+          localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
         ],
         child: const fluent.FluentApp(
@@ -82,6 +83,7 @@ void main() {
           ProviderScope(
             overrides: [
               tasksLoadedProvider.overrideWith((ref) => true),
+              localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: const cupertino.CupertinoApp(
@@ -113,6 +115,7 @@ void main() {
           ProviderScope(
             overrides: [
               tasksLoadedProvider.overrideWith((ref) => true),
+              localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: material.MaterialApp(
@@ -142,6 +145,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             tasksLoadedProvider.overrideWith((ref) => true),
+            localeModeProvider.overrideWith((ref) => AppLocaleMode.de),
             rcloneServiceProvider.overrideWithValue(mockRcloneService),
           ],
         );

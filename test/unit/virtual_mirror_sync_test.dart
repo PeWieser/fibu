@@ -25,21 +25,38 @@ class _RecordingRclone extends MockRcloneService {
   final List<String> downloaded = <String>[];
 
   @override
-  /// Die Engine listet den Zielordner (`fibu-backup`) und bildet daraus die
-  /// relativen Pfade. Die Schlüssel in [remote] sind bereits relativ dazu und
-  /// werden deshalb 1:1 als Name zurückgegeben — alle Einträge sind Dateien,
-  /// die Engine rekursiert also nicht weiter.
+  /// Bildet den Zielordner als echten Verzeichnisbaum ab.
+  ///
+  /// rclone liefert pro Aufruf nur die UNMITTELBAREN Kinder — Namen dürfen
+  /// also kein `/` enthalten. Die Schlüssel in [remote] sind relativ zum
+  /// Zielordner des Tests (`fibu-backup`); Zwischenordner werden deshalb als
+  /// `isDir: true` synthesisiert, damit die Engine korrekt rekursiert und
+  /// die Zieldatei am Ende einen einfachen Dateinamen hat.
   Future<List<RcloneFileInfo>> listFiles(String remoteName, String path) async {
     listedPaths.add(path);
-    return <RcloneFileInfo>[
-      for (final MapEntry<String, int> e in remote.entries)
-        RcloneFileInfo(
-          name: e.key,
-          size: e.value,
-          modTime: DateTime(2024, 1, 1).toIso8601String(),
-          isDir: false,
-        ),
-    ];
+    const String root = 'fibu-backup';
+    final String rel = path == root
+        ? ''
+        : (path.startsWith('$root/') ? path.substring(root.length + 1) : path);
+    final String prefix = rel.isEmpty ? '' : '$rel/';
+    const String modTime = '2024-01-01T00:00:00.000Z';
+    final Map<String, RcloneFileInfo> children = <String, RcloneFileInfo>{};
+    for (final MapEntry<String, int> e in remote.entries) {
+      if (!e.key.startsWith(prefix)) continue;
+      final String rest = e.key.substring(prefix.length);
+      final int slash = rest.indexOf('/');
+      if (slash < 0) {
+        children[rest] = RcloneFileInfo(
+            name: rest, size: e.value, modTime: modTime, isDir: false);
+      } else {
+        final String dir = rest.substring(0, slash);
+        children.putIfAbsent(
+            dir,
+            () => RcloneFileInfo(
+                name: dir, size: 0, modTime: modTime, isDir: true));
+      }
+    }
+    return children.values.toList();
   }
 
   @override

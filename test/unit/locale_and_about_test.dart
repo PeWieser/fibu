@@ -5,10 +5,12 @@ import 'package:fibu/core/localization/app_strings.dart';
 
 void main() {
   group('LocaleMode and System Language Tests', () {
-    test('default localeMode is AppLocaleMode.de', () {
+    test('default localeMode follows the system', () {
+      // Default ist `system` (Sprache des Geräts) — passend zum Loader, der
+      // unbekannte Persistenzwerte ebenfalls auf `system` zurückfallen lässt.
       final container = ProviderContainer();
       final mode = container.read(localeModeProvider);
-      expect(mode, AppLocaleMode.de);
+      expect(mode, AppLocaleMode.system);
     });
 
     test('setting localeMode to de and en updates active localeProvider', () {

@@ -44,7 +44,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -72,7 +72,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -98,7 +98,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -127,7 +127,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
 
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
@@ -181,7 +181,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
             id: 'task_swipe',
@@ -228,7 +228,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
             id: 'task_detail_test',
@@ -265,7 +265,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
             id: 'task_test',
@@ -309,7 +309,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
             id: 'task_del',

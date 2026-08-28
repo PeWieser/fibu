@@ -17,21 +17,28 @@ class _RecordingRclone extends MockRcloneService {
   final Map<String, int> remote;
 
   final List<String> calls = <String>[];
+
+  /// Abgesetzte List-Aufrufe — damit „nichts geladen"-Tests nicht leer
+  /// durchlaufen, wenn die Remote-Liste versehentlich leer ist.
+  final List<String> listedPaths = <String>[];
   final List<String> uploaded = <String>[];
   final List<String> downloaded = <String>[];
 
   @override
+  /// Die Engine listet den Zielordner (`fibu-backup`) und bildet daraus die
+  /// relativen Pfade. Die Schlüssel in [remote] sind bereits relativ dazu und
+  /// werden deshalb 1:1 als Name zurückgegeben — alle Einträge sind Dateien,
+  /// die Engine rekursiert also nicht weiter.
   Future<List<RcloneFileInfo>> listFiles(String remoteName, String path) async {
-    final String prefix = path.isEmpty ? '' : '$path/';
+    listedPaths.add(path);
     return <RcloneFileInfo>[
       for (final MapEntry<String, int> e in remote.entries)
-        if (e.key.startsWith(prefix) && !e.key.substring(prefix.length).contains('/'))
-          RcloneFileInfo(
-            name: e.key.substring(prefix.length),
-            size: e.value,
-            modTime: DateTime(2024, 1, 1).toIso8601String(),
-            isDir: false,
-          ),
+        RcloneFileInfo(
+          name: e.key,
+          size: e.value,
+          modTime: DateTime(2024, 1, 1).toIso8601String(),
+          isDir: false,
+        ),
     ];
   }
 
@@ -170,6 +177,8 @@ void main() {
         localItems: <String, VirtualMediaItem>{},
         isCancelled: () => calls++ > 0,
       );
+      expect(run1.rclone.listedPaths, isNotEmpty,
+          reason: 'Remote-Scan muss stattgefunden haben');
       expect(run1.rclone.downloaded.length, lessThan(3),
           reason: 'Abbruch muss den Lauf vor dem Ende beenden');
     });
@@ -197,6 +206,8 @@ void main() {
         localItems: <String, VirtualMediaItem>{},
         librarySizes: <String, Set<int>>{'img_1.heic': <int>{8}},
       );
+      expect(run1.rclone.listedPaths, isNotEmpty,
+          reason: 'Remote-Scan muss stattgefunden haben');
       expect(run1.result.downloaded, 0,
           reason: 'Bereits lokal vorhanden (gleicher Name, gleiche Größe)');
       expect(run1.rclone.downloaded, isEmpty);
@@ -220,6 +231,8 @@ void main() {
         localItems: <String, VirtualMediaItem>{},
         previouslySyncedRels: <String>{'Photos/Urlaub/IMG_2.heic'},
       );
+      expect(run1.rclone.listedPaths, isNotEmpty,
+          reason: 'Remote-Scan muss stattgefunden haben');
       expect(run1.result.downloaded, 0,
           reason: 'Pfad war im letzten Lauf bereits abgeglichen');
     });

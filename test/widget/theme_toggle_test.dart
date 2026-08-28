@@ -13,6 +13,7 @@ import 'package:fibu/features/settings/presentation/settings_screen.dart';
 import 'package:fibu/theme/theme.dart';
 import 'package:fibu/theme/sanzo_wada_palettes.dart';
 import '../helpers/platform_mocks.dart';
+import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 
 void main() {
   // path_provider mocken: Die Screens lesen tasks.json / settings.json und
@@ -42,7 +43,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -97,7 +98,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       
       try {
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: [tasksLoadedProvider.overrideWith((ref) => true),]);
         
         await tester.pumpWidget(
           UncontrolledProviderScope(

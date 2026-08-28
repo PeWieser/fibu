@@ -16,6 +16,7 @@ import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fibu/features/tasks/presentation/tasks_screen.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
 import '../helpers/platform_mocks.dart';
+import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 
 void main() {
   // path_provider mocken: Die Screens lesen tasks.json / settings.json und
@@ -44,6 +45,7 @@ void main() {
     Widget createWidgetUnderTest() {
       return ProviderScope(
         overrides: [
+          tasksLoadedProvider.overrideWith((ref) => true),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
         ],
         child: const fluent.FluentApp(
@@ -92,6 +94,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              tasksLoadedProvider.overrideWith((ref) => true),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: const material.MaterialApp(

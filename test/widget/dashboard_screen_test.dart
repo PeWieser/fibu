@@ -44,6 +44,7 @@ void main() {
     Widget createWidgetUnderTest() {
       return ProviderScope(
         overrides: [
+          tasksLoadedProvider.overrideWith((ref) => true),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
         ],
         child: const fluent.FluentApp(
@@ -80,6 +81,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              tasksLoadedProvider.overrideWith((ref) => true),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: const cupertino.CupertinoApp(
@@ -110,6 +112,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              tasksLoadedProvider.overrideWith((ref) => true),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
             ],
             child: material.MaterialApp(
@@ -138,6 +141,7 @@ void main() {
       try {
         final container = ProviderContainer(
           overrides: [
+            tasksLoadedProvider.overrideWith((ref) => true),
             rcloneServiceProvider.overrideWithValue(mockRcloneService),
           ],
         );

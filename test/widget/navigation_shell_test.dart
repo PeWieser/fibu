@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -13,8 +15,19 @@ import 'package:fibu/features/shell/presentation/shell_screen.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fibu/features/tasks/presentation/tasks_screen.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
+import '../helpers/platform_mocks.dart';
 
 void main() {
+  // path_provider mocken: Die Screens lesen tasks.json / settings.json und
+  // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
+  late Directory mockDir;
+  setUpAll(() async {
+    mockDir = await installPathProviderMock();
+  });
+  tearDownAll(() async {
+    await removePathProviderMock(mockDir);
+  });
+
   group('ShellScreen Navigation Tests', () {
     late MockRcloneService mockRcloneService;
     const strings = AppStrings(AppLocale.de);

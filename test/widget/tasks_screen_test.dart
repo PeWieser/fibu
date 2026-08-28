@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
@@ -12,8 +14,19 @@ import 'package:fibu/features/tasks/presentation/tasks_screen.dart';
 import 'package:fibu/features/tasks/presentation/task_detail_screen.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
+import '../helpers/platform_mocks.dart';
 
 void main() {
+  // path_provider mocken: Die Screens lesen tasks.json / settings.json und
+  // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
+  late Directory mockDir;
+  setUpAll(() async {
+    mockDir = await installPathProviderMock();
+  });
+  tearDownAll(() async {
+    await removePathProviderMock(mockDir);
+  });
+
   group('TasksScreen & TaskDetailScreen Widget Tests', () {
     late MockRcloneService mockRcloneService;
     const strings = AppStrings(AppLocale.de);

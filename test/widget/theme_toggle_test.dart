@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -10,8 +12,19 @@ import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
 import 'package:fibu/theme/theme.dart';
 import 'package:fibu/theme/sanzo_wada_palettes.dart';
+import '../helpers/platform_mocks.dart';
 
 void main() {
+  // path_provider mocken: Die Screens lesen tasks.json / settings.json und
+  // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
+  late Directory mockDir;
+  setUpAll(() async {
+    mockDir = await installPathProviderMock();
+  });
+  tearDownAll(() async {
+    await removePathProviderMock(mockDir);
+  });
+
   group('Theme Configurations & Design Menu Tests', () {
     late MockRcloneService mockRcloneService;
     const strings = AppStrings(AppLocale.de);

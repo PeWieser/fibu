@@ -1,5 +1,56 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-28 — Lösch-Rückmeldungen, Purge-Kollisionswarnung, CI-Testschuld
+
+### Rückmeldung nach destruktiven Aktionen
+Beide Löschaktionen hatten bereits eine **Vorab**-Bestätigung (Aufgabe löschen:
+Dialog mit Rule-6-Hinweis; Cloud-Ordner löschen: Ordnernamen eintippen).
+Was fehlte, war die Rückmeldung **danach** — die Statusmeldung liegt oben im
+ScrollView und ist nach dem Bestätigen am unteren Rand nicht sichtbar.
+
+- Neu: `_showActionResult()` (Cupertino/Fluent/Material) wird nach dem Löschen
+  einer Aufgabe und nach dem Purgen des Cloud-Ordners aufgerufen und benennt
+  konkret, was entfernt wurde.
+
+### Datenverlust-Risiko: geteilter Cloud-Ordner
+`purgeRemoteDirectory` ruft `operations/purge` auf `task.targetFolderName` auf
+und löscht damit den **gesamten Verzeichnisbaum**. `fibu-backup` ist der
+vorbelegte Default jeder neuen Aufgabe — nutzen zwei Aufgaben denselben Ordner
+auf demselben Laufwerk, lagen deren Dateien im selben Baum, und das Purgen der
+einen Aufgabe löschte die Dateien der anderen **still** mit.
+
+- Die Bestätigung nennt jetzt die betroffenen anderen Aufgaben namentlich und
+  sagt klar, dass deren Dateien mitgelöscht werden.
+- **Offen (Design-Grenze):** Dateien zweier Aufgaben im selben Ordner sind
+  nicht trennbar. Echte Isolation erfordert einen eigenen Ordner je Aufgabe.
+
+### CI: Test-Schuld abgearbeitet (44/22 → 62/1)
+Die Tests liefen vor der Workflow-Erweiterung nie. Gefundene Ursachen:
+
+| Problem | Ursache | Fix |
+|---|---|---|
+| 22 Fehlschläge | `test/e2e/mega_sync_e2e_test.dart` verlangte `d:\code gemini\fibu win\rclone.exe` + Mega-Konto | nach `integration_test/` verschoben |
+| Widget-Tests | keine Plugin-Mocks → `MissingPluginException` | gemeinsamer `path_provider`-Mock |
+| `pumpAndSettle`-Timeouts | unbestimmte Spinner animieren endlos | begrenztes Pumpen |
+| deutsche Texte nicht gefunden | App folgt der Systemsprache (CI: en_US) | `localeProvider` auf `de` |
+| „Aufgabe erstellen" fehlt | `remotesProvider` liest die Registry, nicht `listRemotes()` | `remoteEntriesProvider` gemockt |
+| Palette doppelt | beide Reihen zeigen dieselben 8 Paletten | `.first` (Hell) / `.last` (Dunkel) |
+| „Aufgabe löschen" fehlt | Danger Zone nur im Bearbeiten-Modus | Test wechselt in den Edit-Modus |
+| Swipe-to-delete | Feature existiert nicht mehr (kein `Dismissible`) | Test entfernt |
+| Sync startet nicht | WLAN-only ist Default, `onWifi` im Test false | Netzwerk-Override |
+| Ziel-Vorprüfung scheitert | Mock-Registry kannte `mega`, Aufgabe nutzt `OneDrive_Backup` | Mock angeglichen |
+
+### Echter App-Fehler, den die Tests aufgedeckt haben
+Die Windows-Einstellungsseite baute `fluent.Tooltip` **ohne** `message` und
+ohne `richMessage`. fluent_ui assertet `(message == null) != (richMessage ==
+null)` → die gesamte Seite stürzt ab. Behoben durch `tooltipNetwork`.
+
+### Offene Punkte
+- **1 Widget-Test rot** (`dashboard_screen_test`, Windows): nach dem Tippen auf
+  „Alles synchronisieren" wird der Status-Text nicht gefunden. Build und IPA
+  sind davon nicht betroffen, der Test-Step läuft hinter dem Build.
+- Purge-Isolation bei geteiltem Ordner (siehe oben).
+
 ## 2026-08-26 — Fortschrittszeile, Re-Download-Schutz, Task-Isolation, WCAG-AA-Themes
 
 ### Fix: „x von y“ ploppte verspätet und stand nicht bei der Prozentzahl

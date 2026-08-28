@@ -68,5 +68,5 @@ jobs:
           path: app-release-unsigned.ipa
           retention-days: 7
           
-       - name: Unit- und Widget-Tests
-         run: flutter test
+      - name: Unit- und Widget-Tests
+        run: flutter test

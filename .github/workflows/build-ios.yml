@@ -31,9 +31,6 @@ jobs:
       - name: Analyze (0 Errors, 0 Warnings)
         run: flutter analyze
 
-      - name: Unit- und Widget-Tests
-        run: flutter test
-
       - name: Set up Go (für librclone / gomobile)
         uses: actions/setup-go@v6
         with:
@@ -70,3 +67,6 @@ jobs:
           name: ios-app-release
           path: app-release-unsigned.ipa
           retention-days: 7
+          
+       - name: Unit- und Widget-Tests
+         run: flutter test

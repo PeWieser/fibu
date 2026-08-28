@@ -28,6 +28,12 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Analyze (0 Errors, 0 Warnings)
+        run: flutter analyze
+
+      - name: Unit- und Widget-Tests
+        run: flutter test
+
       - name: Set up Go (für librclone / gomobile)
         uses: actions/setup-go@v6
         with:

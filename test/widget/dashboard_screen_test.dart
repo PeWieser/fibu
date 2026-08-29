@@ -68,6 +68,11 @@ void main() {
           localeProvider.overrideWith((ref) => AppLocale.de),
           rcloneServiceProvider.overrideWithValue(mockRcloneService),
           networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
+          // Der Provider summiert rekursiv über listFiles (je 150 ms
+          // Mock-Verzögerung) und wird nach jedem Sync invalidiert — das
+          // hinterlässt eine Kette aus Timern, die den Test mit „A Timer is
+          // still pending" abbrechen lässt.
+          remoteFibuUsageProvider.overrideWith((ref, remote) async => 0),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -120,6 +125,11 @@ void main() {
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
           networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
+          // Der Provider summiert rekursiv über listFiles (je 150 ms
+          // Mock-Verzögerung) und wird nach jedem Sync invalidiert — das
+          // hinterlässt eine Kette aus Timern, die den Test mit „A Timer is
+          // still pending" abbrechen lässt.
+          remoteFibuUsageProvider.overrideWith((ref, remote) async => 0),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -166,6 +176,11 @@ void main() {
               localeProvider.overrideWith((ref) => AppLocale.de),
               rcloneServiceProvider.overrideWithValue(mockRcloneService),
           networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
+          // Der Provider summiert rekursiv über listFiles (je 150 ms
+          // Mock-Verzögerung) und wird nach jedem Sync invalidiert — das
+          // hinterlässt eine Kette aus Timern, die den Test mit „A Timer is
+          // still pending" abbrechen lässt.
+          remoteFibuUsageProvider.overrideWith((ref, remote) async => 0),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -210,6 +225,11 @@ void main() {
             localeProvider.overrideWith((ref) => AppLocale.de),
             rcloneServiceProvider.overrideWithValue(mockRcloneService),
           networkStatusProvider.overrideWith((ref) => _WifiNetwork()),
+          // Der Provider summiert rekursiv über listFiles (je 150 ms
+          // Mock-Verzögerung) und wird nach jedem Sync invalidiert — das
+          // hinterlässt eine Kette aus Timern, die den Test mit „A Timer is
+          // still pending" abbrechen lässt.
+          remoteFibuUsageProvider.overrideWith((ref, remote) async => 0),
           // remotesProvider liest die Registry-Datei, nicht listRemotes() —
           // ohne dieses Override hat das Dashboard keine Laufwerke und zeigt
           // „Laufwerk hinzufügen" statt „Aufgabe erstellen".
@@ -266,15 +286,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         expect(find.text(strings.activeTaskProgress), findsOneWidget);
 
-        // Ausstehende Timer ablaufen lassen, sonst bricht der Test mit
-        // „A Timer is still pending even after the widget tree was disposed"
-        // ab. Zwei Quellen: die „ruhiger Balken"-Mindestanzeigedauer von 2 s
-        // in _syncTaskToRemote und die rekursiven listFiles-Aufrufe des
-        // remoteFibuUsageProvider (je 150 ms Mock-Verzögerung, verkettet).
-        for (var i = 0; i < 60; i++) {
-          await tester.pump(const Duration(milliseconds: 500));
-        }
-        container.dispose();
+        // Die „ruhiger Balken"-Mindestanzeigedauer (2 s) aus
+        // _syncTaskToRemote ablaufen lassen, sonst bleibt ein Timer offen.
+        await tester.pump(const Duration(seconds: 3));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

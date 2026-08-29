@@ -1,5 +1,46 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-29 — Purge-Scoping, Leisten-Abgrenzung, Palettenfarben, CI grün
+
+### „Remote-Dateien löschen" auf Album-Ordner begrenzt
+`operations/purge` lief auf dem gesamten Zielordner. Da `fibu-backup` der
+vorbelegte Default jeder neuen Aufgabe ist, nahm das Löschen in einer Aufgabe
+die Dateien der anderen mit.
+
+- Jetzt: `Photos/<Album>` je Album, das die Aufgabe tatsächlich sichert —
+  saniert exakt wie im Scan, damit nicht am Ziel vorbeigelöscht wird.
+- Ohne Album-Auswahl gibt es nichts einzugrenzen; dann bleibt der Zielordner
+  das Ziel und der Dialog nennt jede andere Aufgabe, die ihn teilt.
+- Der Ergebnis-Dialog listet die tatsächlich gelöschten Pfade.
+
+### Leisten-Abgrenzung
+- Neues Token `bar`: surface Richtung Weiß (Dark) bzw. Schwarz (Light)
+  verschoben. Da sich Freifläche und Karten eine Farbe teilen, war die
+  Tab-Bar sonst nicht mehr als eigene Ebene erkennbar.
+- **iOS 26:** Tab-Bar transparent, natives `UIGlassEffect` dahinter
+  (`LiquidGlassTabBarBackdrop`). `bar` greift dort nicht — das Material
+  liefert das System. Dazu eine Haarlinie als Kante des transluzenten Glass.
+- **iOS < 26:** `bar` trennt farbig, keine Linie.
+
+### Palettenfarben
+`secondary` ist jetzt der Fortschritts-Track auf allen drei Plattformen.
+`primary` war als Streifen vor den Section-Headern eingesetzt — auf Wunsch
+wieder entfernt.
+
+**Messergebnis zu `primary`:** In keiner Palette/Modus-Kombination erreicht
+`primary` 3:1 gegen den Hintergrund (schlechtester Wert 1,21:1). Es kann
+deshalb nichts Informationstragendes färben, ohne WCAG zu verletzen.
+
+### Doppeltes „Über Fibu"
+Entfernt — die Info-Sektion zeigt Version, Entwickler, Engine und Lizenz
+bereits inline; der Dialog wiederholte dieselben vier Werte.
+
+### CI: vollständig grün
+`Analyze` 0 Issues · `iOS-Build` ✅ · `IPA-Artefakt` ✅ · `Tests` 66/66.
+Letzter Blocker war ein offener Timer: Die 2 s Mindestanzeigedauer wird erst
+NACH Abschluss der Mock-Simulation (~1,5 s) erzeugt, also nach den Pumpen im
+Test. Längeres Pumpen löst es.
+
 ## 2026-08-28 — Lösch-Rückmeldungen, Purge-Kollisionswarnung, CI-Testschuld
 
 ### Rückmeldung nach destruktiven Aktionen

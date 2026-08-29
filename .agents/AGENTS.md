@@ -87,3 +87,9 @@ Jede destruktive Aktion **muss** durch einen Bestätigungs-Dialog geschützt sei
 - Commits in englischer Sprache, prägnant.
 - Konvention: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`.
 - Kein Commit der die CI-Pipeline bricht (TypeCheck oder Lint Fehler).
+- **Direktpush auf `main` und Build-Überwachung:** siehe
+  [`GITHUB_MAIN_WORKFLOW.md`](GITHUB_MAIN_WORKFLOW.md). Kurz: Workspace wird
+  zwischen Nachrichten neu geklont → erst `git fetch` + `git reset -q
+  origin/main`; Workflow-Dateien nie antasten (keine `workflows`-Permission);
+  Step-Logs sind aus der Agent-Umgebung nicht lesbar, nur die
+  Annotations-Zusammenfassung.

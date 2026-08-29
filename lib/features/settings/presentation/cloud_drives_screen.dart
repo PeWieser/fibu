@@ -128,7 +128,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ),
       ),
       content: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
+        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg, theme.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -174,6 +174,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               SizedBox(height: theme.md),
               Text(
                 strings.noDrivesConnected,
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               SizedBox(height: theme.xs),
@@ -264,7 +265,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
+          padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg, theme.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -339,6 +340,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             SizedBox(height: theme.md),
             Text(
               strings.noDrivesConnected,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             SizedBox(height: theme.xs),
@@ -398,7 +400,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
+        padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg, theme.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -458,6 +460,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             SizedBox(height: theme.md),
             Text(
               strings.noDrivesConnected,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             SizedBox(height: theme.xs),

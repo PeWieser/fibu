@@ -80,7 +80,7 @@ class TasksScreen extends ConsumerWidget {
           : tasks.isEmpty
               ? _buildEmptyState(context, ref, TargetPlatform.windows, theme, strings)
               : ListView.separated(
-              padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg + 16, theme.lg),
+              padding: EdgeInsets.fromLTRB(theme.lg, theme.lg, theme.lg, theme.lg),
               itemCount: tasks.length,
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
@@ -1594,7 +1594,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
               // Animated Step Body
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg, theme.lg),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
                     child: KeyedSubtree(
@@ -2240,7 +2240,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
               _buildStepIndicatorHeader(theme, strings),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                  padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg, theme.lg),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
                     child: KeyedSubtree(
@@ -2990,7 +2990,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
             const material.Divider(height: 1),
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg + 16, theme.lg),
+                padding: EdgeInsets.fromLTRB(theme.lg, theme.md, theme.lg, theme.lg),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   child: KeyedSubtree(

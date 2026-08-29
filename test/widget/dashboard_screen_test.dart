@@ -266,8 +266,15 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         expect(find.text(strings.activeTaskProgress), findsOneWidget);
 
-        // Let the simulation complete so its periodic timer is cancelled
-        await tester.pump(const Duration(seconds: 2));
+        // Ausstehende Timer ablaufen lassen, sonst bricht der Test mit
+        // „A Timer is still pending even after the widget tree was disposed"
+        // ab. Zwei Quellen: die „ruhiger Balken"-Mindestanzeigedauer von 2 s
+        // in _syncTaskToRemote und die rekursiven listFiles-Aufrufe des
+        // remoteFibuUsageProvider (je 150 ms Mock-Verzögerung, verkettet).
+        for (var i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+        }
+        container.dispose();
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

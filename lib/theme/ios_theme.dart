@@ -75,17 +75,54 @@ class IosTheme {
   /// Gruppierter Section-Header (Apple-HIG): klein, sekundär, mit leichtem
   /// Tracking — bewusst NICHT in Versalien (Steve-Jobs-Regel: kein Schrei-Text).
   static Widget sectionHeader(String title, AppThemeData theme) {
+    // `primaryFor` braucht die Modi-Information; abgeleitet aus der
+    // Leuchtdichte von surface, damit kein zusätzlicher Parameter nötig ist.
+    final bool isDark = theme.surface.computeLuminance() < 0.25;
+
+    final bool wash = theme.primaryUsage == PrimaryUsage.wash;
+    final bool accessible = theme.primaryUsage == PrimaryUsage.accessible;
+
+    // Textton je Modus:
+    //  - accessible: Charakterfarbe, Richtung Schwarz/Weiß verschoben bis 3:1.
+    //  - wash: textPrimary. Über der Waschung fällt textSecondary in drei
+    //    Paletten unter 4.5:1 (Fuyu 4.09, Mori 4.18, Kazan 4.41);
+    //    textPrimary hält überall (Minimum 8.34).
+    //  - identity: der geprüfte Standardton.
+    final Color labelColor = accessible
+        ? theme.primaryFor(isDark)
+        : (wash ? theme.textPrimary : theme.textSecondary);
+
+    final Widget label = Text(
+      title,
+      style: TextStyle(
+        color: labelColor,
+        fontSize: 13,
+        fontWeight:
+            (accessible || wash) ? FontWeight.w600 : FontWeight.w500,
+        letterSpacing: 0.3,
+      ),
+    );
+
+    // Modus `wash`: dezente Hintergrund-Tönung in der Charakterfarbe.
+    // Rein dekorativ — der Text behält seinen zugänglichen Ton.
+    if (wash) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 6),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: theme.primaryWash,
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+          ),
+          child: label,
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(left: 16, bottom: 6),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: theme.textSecondary,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.3,
-        ),
-      ),
+      child: label,
     );
   }
 

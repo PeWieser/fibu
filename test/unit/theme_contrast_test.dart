@@ -141,4 +141,62 @@ void main() {
     });
   });
 
+
+  group('Einstellung „Charakterfarbe“', () {
+    List<AppThemeData> allThemes() => [
+          AppThemeData.light,
+          AppThemeData.dark,
+          for (final SanzoWadaPalette p in SanzoWadaPalette.values)
+            AppThemeData.fromWadaPalette(p, isDark: false),
+          for (final SanzoWadaPalette p in SanzoWadaPalette.values)
+            AppThemeData.fromWadaPalette(p, isDark: true),
+        ];
+
+    test('Modus „Abgesichert“: primaryFor erreicht 3:1', () {
+      for (final AppThemeData t in allThemes()) {
+        final bool isDark = t.surface.computeLuminance() < 0.25;
+        final Color c = t.primaryFor(isDark);
+        expect(ColorContrast.ratio(c, t.canvas), greaterThanOrEqualTo(3.0),
+            reason: 'primaryFor muss 3:1 gegen canvas erreichen');
+        expect(ColorContrast.ratio(c, t.surface), greaterThanOrEqualTo(3.0),
+            reason: 'primaryFor muss 3:1 gegen surface erreichen');
+      }
+    });
+
+    test('Modus „Farbwaschung“: Text bleibt über der Waschung lesbar', () {
+      // Die Waschung ist dekorativ, der Text darüber muss trotzdem 4.5:1
+      // gegen die GEMISCHTE Fläche halten. Im wash-Modus wird deshalb
+      // textPrimary verwendet: textSecondary fiele in drei Paletten unter
+      // 4.5:1 (Fuyu 4.09, Mori 4.18, Kazan 4.41).
+      for (final AppThemeData t in allThemes()) {
+        final Color blended = Color.alphaBlend(t.primaryWash, t.surface);
+        expect(ColorContrast.ratio(t.textPrimary, blended),
+            greaterThanOrEqualTo(4.5),
+            reason: 'textPrimary kippt über der Waschung unter 4.5:1');
+      }
+    });
+
+    test('Modus „Farbwaschung“: textSecondary wäre zu schwach', () {
+      // Dokumentiert, warum der wash-Modus textPrimary braucht.
+      var tooWeak = 0;
+      for (final AppThemeData t in allThemes()) {
+        final Color blended = Color.alphaBlend(t.primaryWash, t.surface);
+        if (ColorContrast.ratio(t.textSecondary, blended) < 4.5) tooWeak++;
+      }
+      expect(tooWeak, greaterThan(0),
+          reason: 'Fällt keine Kombination ab, wäre textPrimary unnötig');
+    });
+
+    test('alle drei Modi sind auswählbar und persistent', () {
+      expect(PrimaryUsage.values, hasLength(3));
+      for (final PrimaryUsage usage in PrimaryUsage.values) {
+        final AppThemeData t =
+            AppThemeData.light.copyWith(primaryUsage: usage);
+        expect(t.primaryUsage, usage);
+        expect(t.canvas, AppThemeData.light.canvas,
+            reason: 'copyWith darf keine anderen Tokens ändern');
+      }
+    });
+  });
+
 }

@@ -1070,6 +1070,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       style: TextStyle(color: theme.textSecondary, fontSize: 14),
                     ),
                   ),
+                  // Dateifilter gehört zu Quelle/Ziel, nicht zu Zeitplan.
+                  // Ohne Filter bleibt die Zeile ganz weg — sonst steht dort
+                  // dauerhaft ein totes „Keine".
+                  if (task.excludedFiles.isNotEmpty)
+                    cupertino.CupertinoListTile(
+                      leading: Icon(cupertino.CupertinoIcons.slider_horizontal_3,
+                          color: theme.accent, size: 22),
+                      title: Text(strings.excludedFilesLabel,
+                          style: const TextStyle(fontSize: 16)),
+                      subtitle: Text(
+                        task.excludedFiles.join(', '),
+                        style: TextStyle(
+                            color: theme.textSecondary, fontSize: 13),
+                      ),
+                    ),
                   if (task.targetRemotes.length > 1)
                     cupertino.CupertinoListTile(
                       title: Text(strings.distributionLabel, style: const TextStyle(fontSize: 16)),
@@ -1233,14 +1248,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     trailing: Text(
                       strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime),
                       style: TextStyle(color: theme.textSecondary, fontSize: 15),
-                    ),
-                  ),
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.slider_horizontal_3, color: theme.accent, size: 22),
-                    title: Text(strings.excludedFilesLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(
-                      task.excludedFiles.isNotEmpty ? task.excludedFiles.join(', ') : strings.noExcludedFiles,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 14),
                     ),
                   ),
                 ],

@@ -8,6 +8,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/contrast.dart';
 import 'sanzo_wada_palettes.dart';
 
+/// Wie die Paletten-Charakterfarbe [AppThemeData.primary] eingesetzt wird.
+///
+/// In den Einstellungen umschaltbar. `primary` erreicht roh in keiner
+/// Palette 3:1 gegen den Hintergrund (schlechtester Wert 1,21:1) und darf
+/// deshalb nur so verwendet werden, wie es hier gewählt wurde.
+enum PrimaryUsage {
+  /// Nur Identitätsfarbe: erscheint ausschließlich in der Paletten-Vorschau.
+  identity,
+
+  /// Dekorative Waschung: `primary` mit niedriger Alpha als Hintergrund-
+  /// Tönung. Trägt selbst keine Information, der Text darüber bleibt
+  /// ungeändert zugänglich.
+  wash,
+
+  /// Abgesicherte Variante: `primary` wird Richtung Schwarz bzw. Weiß
+  /// verschoben, bis es 3:1 gegen `canvas` und `surface` erreicht, und
+  /// färbt dann die Section-Header.
+  accessible,
+}
+
 /// Semantic token-based theme design system for the Fibu application.
 /// Strictly enforces the 4pt grid system and specific border-radius guidelines.
 class AppThemeData {
@@ -50,6 +70,9 @@ class AppThemeData {
   final Color primary;
   final Color secondary;
 
+  /// Gewählter Einsatz von [primary] (Einstellung).
+  final PrimaryUsage primaryUsage;
+
   const AppThemeData({
     required this.canvas,
     required this.surface,
@@ -62,7 +85,44 @@ class AppThemeData {
     required this.offline,
     this.primary = const Color(0xff007aff),
     this.secondary = const Color(0xff8e8e93),
+    this.primaryUsage = PrimaryUsage.identity,
   });
+
+  /// Kopie mit anderem [PrimaryUsage] — alle übrigen Tokens bleiben gleich.
+  AppThemeData copyWith({PrimaryUsage? primaryUsage}) => AppThemeData(
+        canvas: canvas,
+        surface: surface,
+        textPrimary: textPrimary,
+        textSecondary: textSecondary,
+        accent: accent,
+        success: success,
+        warning: warning,
+        error: error,
+        offline: offline,
+        primary: primary,
+        secondary: secondary,
+        primaryUsage: primaryUsage ?? this.primaryUsage,
+      );
+
+  /// [primary], Richtung Schwarz (hell) bzw. Weiß (dunkel) verschoben, bis es
+  /// 3:1 gegen [canvas] und [surface] erreicht — dieselbe Technik, die
+  /// `accent` WCAG-tauglich macht.
+  Color primaryFor(bool isDark) {
+    final Color target =
+        isDark ? const Color(0xffffffff) : const Color(0xff000000);
+    Color candidate = primary;
+    for (int i = 0; i <= 20; i++) {
+      candidate = Color.lerp(primary, target, i / 20)!;
+      if (ColorContrast.ratio(candidate, canvas) >= 3.0 &&
+          ColorContrast.ratio(candidate, surface) >= 3.0) {
+        return candidate;
+      }
+    }
+    return candidate;
+  }
+
+  /// Hintergrund-Waschung aus [primary] für den Modus [PrimaryUsage.wash].
+  Color get primaryWash => primary.withValues(alpha: 0.10);
 
   /// Haarlinie zur Abtrennung transluzenter Leisten vom Inhalt.
   ///
@@ -157,12 +217,14 @@ class ThemeConfig {
   final bool forceDarkMode;
   final SanzoWadaPalette? selectedLightPalette;
   final SanzoWadaPalette? selectedDarkPalette;
+  final PrimaryUsage primaryUsage;
 
   const ThemeConfig({
     this.syncWithSystem = true,
     this.forceDarkMode = false,
     this.selectedLightPalette,
     this.selectedDarkPalette,
+    this.primaryUsage = PrimaryUsage.identity,
   });
 
   ThemeConfig copyWith({
@@ -170,6 +232,7 @@ class ThemeConfig {
     bool? forceDarkMode,
     SanzoWadaPalette? selectedLightPalette,
     SanzoWadaPalette? selectedDarkPalette,
+    PrimaryUsage? primaryUsage,
     bool clearLightPalette = false,
     bool clearDarkPalette = false,
   }) {
@@ -178,6 +241,7 @@ class ThemeConfig {
       forceDarkMode: forceDarkMode ?? this.forceDarkMode,
       selectedLightPalette: clearLightPalette ? null : (selectedLightPalette ?? this.selectedLightPalette),
       selectedDarkPalette: clearDarkPalette ? null : (selectedDarkPalette ?? this.selectedDarkPalette),
+      primaryUsage: primaryUsage ?? this.primaryUsage,
     );
   }
 }
@@ -224,6 +288,10 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
           forceDarkMode: data['forceDarkMode'] as bool? ?? false,
           selectedLightPalette: lightPal,
           selectedDarkPalette: darkPal,
+          primaryUsage: PrimaryUsage.values.firstWhere(
+            (PrimaryUsage u) => u.name == data['primaryUsage'],
+            orElse: () => PrimaryUsage.identity,
+          ),
         );
       }
     } catch (_) {}
@@ -242,6 +310,7 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
       data['forceDarkMode'] = state.forceDarkMode;
       data['selectedLightPalette'] = state.selectedLightPalette?.name;
       data['selectedDarkPalette'] = state.selectedDarkPalette?.name;
+      data['primaryUsage'] = state.primaryUsage.name;
       await file.writeAsString(json.encode(data));
     } catch (_) {}
   }
@@ -261,6 +330,11 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
       selectedLightPalette: palette,
       clearLightPalette: palette == null,
     );
+    _persistThemeConfig();
+  }
+
+  void setPrimaryUsage(PrimaryUsage usage) {
+    state = state.copyWith(primaryUsage: usage);
     _persistThemeConfig();
   }
 
@@ -298,17 +372,18 @@ final appThemeProvider = Provider<AppThemeData>((ref) {
       ? systemBrightness == Brightness.dark
       : config.forceDarkMode;
 
+  final AppThemeData base;
   if (isDark) {
-    if (config.selectedDarkPalette != null) {
-      return AppThemeData.fromWadaPalette(config.selectedDarkPalette!, isDark: true);
-    }
-    return AppThemeData.dark;
+    base = config.selectedDarkPalette != null
+        ? AppThemeData.fromWadaPalette(config.selectedDarkPalette!, isDark: true)
+        : AppThemeData.dark;
   } else {
-    if (config.selectedLightPalette != null) {
-      return AppThemeData.fromWadaPalette(config.selectedLightPalette!, isDark: false);
-    }
-    return AppThemeData.light;
+    base = config.selectedLightPalette != null
+        ? AppThemeData.fromWadaPalette(config.selectedLightPalette!,
+            isDark: false)
+        : AppThemeData.light;
   }
+  return base.copyWith(primaryUsage: config.primaryUsage);
 });
 
 /// Extension on [BuildContext] to access design tokens quickly and elegantly.

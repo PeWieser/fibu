@@ -139,13 +139,11 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         currentIndex: activeIndex,
         activeColor: theme.accent,
         inactiveColor: theme.textSecondary,
-        // Unter iOS 26 ist die Leiste natives, transluzentes Glass und
-        // bekommt eine Haarlinie als Kante. Darunter trennt bereits der
-        // eigene Farbton von theme.bar — eine Linie wäre dort zu viel.
+        // Unter iOS 26 ist die Leiste natives, transluzentes Glass; darunter
+        // trennt der eigene Farbton von theme.bar. Die Haarlinie gibt der
+        // Leiste in BEIDEN Fällen eine klare Kante zum Inhalt.
         backgroundColor: glass ? const Color(0x00000000) : theme.bar,
-        border: glass
-            ? Border(top: BorderSide(color: theme.hairline, width: 0.5))
-            : null,
+        border: Border(top: BorderSide(color: theme.hairline, width: 0.5)),
         iconSize: 22.0,
         height: tabBarHeight,
         onTap: (index) {

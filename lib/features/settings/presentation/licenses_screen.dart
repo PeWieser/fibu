@@ -415,12 +415,15 @@ class _LicenseDetailScreen extends ConsumerWidget {
         SizedBox(height: theme.lg),
         Text(
           section.body,
+          // Systemschrift statt 'monospace': Der Name ist auf iOS keine
+          // gültige Familie, der Fallback landete bei Courier — dünn und
+          // in 12 px kaum lesbar. Rechtstext braucht keine Festbreiten-
+          // schrift, Lesbarkeit geht vor.
           style: TextStyle(
-            color: theme.textSecondary,
-            fontFamily: 'monospace',
-            fontFamilyFallback: const ['Courier New', 'Courier'],
-            fontSize: 12,
-            height: 1.45,
+            color: theme.textPrimary,
+            fontSize: 14,
+            height: 1.55,
+            letterSpacing: 0.1,
           ),
         ),
       ],

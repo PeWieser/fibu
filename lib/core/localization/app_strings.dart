@@ -458,6 +458,24 @@ class AppStrings {
       ? 'Lege fest, ob Backups auch über mobile Daten laufen dürfen.'
       : 'Choose whether backups may also run over cellular data.';
 
+  /// Einstellung: Einsatz der Paletten-Charakterfarbe.
+  String get primaryUsageSection =>
+      isGerman ? 'Charakterfarbe' : 'Accent character colour';
+  String get primaryUsageIdentity =>
+      isGerman ? 'Nur Vorschau' : 'Preview only';
+  String get primaryUsageIdentityHint => isGerman
+      ? 'Die Charakterfarbe erscheint nur in der Paletten-Vorschau.'
+      : 'The character colour appears only in the palette preview.';
+  String get primaryUsageWash => isGerman ? 'Farbwaschung' : 'Colour wash';
+  String get primaryUsageWashHint => isGerman
+      ? 'Dezente Hintergrund-Tönung der Abschnitts-Titel. Rein dekorativ.'
+      : 'Subtle background tint on section titles. Purely decorative.';
+  String get primaryUsageAccessible =>
+      isGerman ? 'Abgesichert' : 'Contrast-safe';
+  String get primaryUsageAccessibleHint => isGerman
+      ? 'Charakterfarbe färbt die Abschnitts-Titel, auf 3:1 Kontrast angehoben.'
+      : 'Character colour tints section titles, raised to 3:1 contrast.';
+
   String get tooltipLanguage => isGerman ? 'Wähle die Sprache der Benutzeroberfläche.' : 'Choose the interface language.';
   String get tooltipThemeMode => isGerman
       ? 'Wähle zwischen automatischem System-Modus oder manuellem Dunkel-/Hellmodus.'

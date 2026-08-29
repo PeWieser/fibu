@@ -42,6 +42,14 @@ class AppThemeData {
   final Color error;
   final Color offline;
 
+  /// Charakterfarben der Palette.
+  ///
+  /// Beide sind bewusst NICHT text-tauglich (Kontrast teils unter 3:1) und
+  /// werden deshalb ausschließlich dekorativ eingesetzt — immer neben einem
+  /// zugänglichen Text-Label, nie als alleiniger Informationsträger.
+  final Color primary;
+  final Color secondary;
+
   const AppThemeData({
     required this.canvas,
     required this.surface,
@@ -52,7 +60,26 @@ class AppThemeData {
     required this.warning,
     required this.error,
     required this.offline,
+    this.primary = const Color(0xff007aff),
+    this.secondary = const Color(0xff8e8e93),
   });
+
+  /// Hintergrund für Tab- und Navigationsleisten.
+  ///
+  /// Bewusst von [canvas]/[surface] abgesetzt: Da Freifläche und Karten sich
+  /// eine Farbe teilen, braucht die Leiste einen eigenen Ton, sonst verschwimmt
+  /// sie mit dem Inhalt und ist nicht mehr als eigene Ebene erkennbar.
+  Color get bar {
+    final bool dark = surface.computeLuminance() < 0.25;
+    return Color.lerp(
+      surface,
+      dark ? const Color(0xffffffff) : const Color(0xff000000),
+      dark ? 0.10 : 0.07,
+    )!;
+  }
+
+  /// Haarlinie zur Abtrennung der Leisten vom Inhalt.
+  Color get hairline => textSecondary.withValues(alpha: 0.28);
 
   /// Text-/Icon-Farbe auf [accent]-Flächen (Buttons, Chips, Badges).
   ///
@@ -73,6 +100,8 @@ class AppThemeData {
     warning: Color(0xffffcc00),
     error: Color(0xffff3b30),
     offline: Color(0xff8e8e93),
+    primary: Color(0xff0a84ff),
+    secondary: Color(0xff5e5ce6),
   );
 
   /// Default Dark Theme
@@ -86,6 +115,8 @@ class AppThemeData {
     warning: Color(0xffffd60a),
     error: Color(0xffff453a),
     offline: Color(0xff636366),
+    primary: Color(0xff64d2ff),
+    secondary: Color(0xffbf5af2),
   );
 
   /// Create a theme from a Sanzo Wada palette
@@ -108,6 +139,8 @@ class AppThemeData {
       warning: isDark ? const Color(0xffffd60a) : const Color(0xffffcc00),
       error: isDark ? const Color(0xffff453a) : const Color(0xffff3b30),
       offline: isDark ? const Color(0xff636366) : const Color(0xff8e8e93),
+      primary: palette.primary,
+      secondary: palette.secondary,
     );
   }
 }

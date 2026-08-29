@@ -101,4 +101,44 @@ void main() {
       }
     });
   });
+
+  group('Farbtokens werden tatsächlich genutzt', () {
+    List<AppThemeData> allThemes() => [
+          AppThemeData.light,
+          AppThemeData.dark,
+          for (final SanzoWadaPalette p in SanzoWadaPalette.values)
+            AppThemeData.fromWadaPalette(p, isDark: false),
+          for (final SanzoWadaPalette p in SanzoWadaPalette.values)
+            AppThemeData.fromWadaPalette(p, isDark: true),
+        ];
+
+    test('Tab-/Navigationsleisten heben sich vom Inhalt ab', () {
+      // Freifläche und Karten teilen sich eine Farbe; die Leiste braucht
+      // deshalb einen eigenen Ton, sonst ist sie keine erkennbare Ebene.
+      for (final AppThemeData t in allThemes()) {
+        expect(t.bar, isNot(t.canvas),
+            reason: 'bar muss sich von canvas unterscheiden');
+        expect(t.bar, isNot(t.surface),
+            reason: 'bar muss sich von surface unterscheiden');
+      }
+    });
+
+    test('Haarlinie ist sichtbar, aber dezent', () {
+      for (final AppThemeData t in allThemes()) {
+        expect(t.hairline.a, greaterThan(0.1));
+        expect(t.hairline.a, lessThan(0.5));
+      }
+    });
+
+    test('Charakterfarben primary/secondary sind je Palette gesetzt', () {
+      for (final SanzoWadaPalette p in SanzoWadaPalette.values) {
+        for (final bool isDark in [false, true]) {
+          final AppThemeData t = AppThemeData.fromWadaPalette(p, isDark: isDark);
+          expect(t.primary, p.primary);
+          expect(t.secondary, p.secondary);
+        }
+      }
+    });
+  });
+
 }

@@ -108,9 +108,9 @@ bool liquidGlassActive(WidgetRef ref) {
 
 /// Hintergrundfarbe für Cupertino-Nav-Bars: transparent bei Glass, sonst surface.
 Color iosBarBackground(WidgetRef ref, AppThemeData theme) {
-  return liquidGlassActive(ref)
-      ? const Color(0x00000000)
-      : theme.surface;
+  // Derselbe abgesetzte Ton wie die TabBar, damit beide Leisten als eigene
+  // Ebene erkennbar bleiben (Freifläche und Karten teilen sich eine Farbe).
+  return liquidGlassActive(ref) ? const Color(0x00000000) : theme.bar;
 }
 
 class _NativeGlassView extends StatelessWidget {

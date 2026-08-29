@@ -139,11 +139,14 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         currentIndex: activeIndex,
         activeColor: theme.accent,
         inactiveColor: theme.textSecondary,
-        // Transparent bei Glass, sonst solid surface — Optik unter iOS 26 unverändert.
-        backgroundColor: glass ? const Color(0x00000000) : theme.surface,
+        // Unter iOS 26 bleibt die Leiste transparent ( natives Glass ).
+        // Darunter bekommt sie einen eigenen Ton plus Haarlinie: Da sich
+        // Freifläche und Karten eine Farbe teilen, wäre die Leiste sonst
+        // nicht mehr als eigene Ebene erkennbar.
+        backgroundColor: glass ? const Color(0x00000000) : theme.bar,
         border: glass
             ? const Border(top: BorderSide(color: Color(0x00000000), width: 0))
-            : null,
+            : Border(top: BorderSide(color: theme.hairline, width: 0.5)),
         iconSize: 22.0,
         height: tabBarHeight,
         onTap: (index) {

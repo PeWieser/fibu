@@ -114,78 +114,6 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showAboutDialog(BuildContext context, AppStrings strings, AppThemeData theme) {
-    final platform = defaultTargetPlatform;
-    if (platform == TargetPlatform.iOS) {
-      cupertino.showCupertinoDialog<void>(
-        context: context,
-        builder: (ctx) => cupertino.CupertinoAlertDialog(
-          title: Text(strings.aboutSectionTitle),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              '${strings.aboutAppSubtitle}\n\n'
-              '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
-              '${strings.developerLabel}: ${strings.developerValue}\n'
-              '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
-              '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
-              '${strings.aboutDescription}',
-              textAlign: TextAlign.start,
-            ),
-          ),
-          actions: [
-            cupertino.CupertinoDialogAction(
-              isDefaultAction: true,
-              child: Text(strings.close),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ],
-        ),
-      );
-    } else if (platform == TargetPlatform.windows) {
-      fluent.showDialog<void>(
-        context: context,
-        builder: (ctx) => fluent.ContentDialog(
-          title: Text(strings.aboutSectionTitle),
-          content: Text(
-            '${strings.aboutAppSubtitle}\n\n'
-            '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
-            '${strings.developerLabel}: ${strings.developerValue}\n'
-            '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
-            '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
-            '${strings.aboutDescription}',
-          ),
-          actions: [
-            fluent.FilledButton(
-              child: Text(strings.close),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ],
-        ),
-      );
-    } else {
-      material.showDialog<void>(
-        context: context,
-        builder: (ctx) => material.AlertDialog(
-          title: Text(strings.aboutSectionTitle),
-          content: Text(
-            '${strings.aboutAppSubtitle}\n\n'
-            '${strings.appVersionLabel}: ${strings.appVersionValue}\n'
-            '${strings.developerLabel}: ${strings.developerValue}\n'
-            '${strings.cloudEngineLabel}: ${strings.cloudEngineValue}\n'
-            '${strings.licenseLabel}: ${strings.licenseValue}\n\n'
-            '${strings.aboutDescription}',
-          ),
-          actions: [
-            material.FilledButton(
-              child: Text(strings.close),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ],
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -634,15 +562,6 @@ class SettingsScreen extends ConsumerWidget {
                       _navigateToDebugLog(context);
                     },
                   ),
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.aboutAppTitle, style: TextStyle(color: theme.accent, fontWeight: FontWeight.w600, fontSize: 16)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.info_circle,
-                      size: 20,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () => _showAboutDialog(context, strings, theme),
-                  ),
                 ],
               ),
 
@@ -851,12 +770,6 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                     trailing: const Icon(material.Icons.chevron_right),
                     onTap: () => _navigateToDebugLog(context),
-                  ),
-                  const material.Divider(height: 1),
-                  material.ListTile(
-                    title: Text(strings.aboutAppTitle, style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold)),
-                    trailing: const Icon(material.Icons.info_outline),
-                    onTap: () => _showAboutDialog(context, strings, theme),
                   ),
                 ],
               ),

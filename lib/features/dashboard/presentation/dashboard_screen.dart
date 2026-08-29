@@ -389,7 +389,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             style: fluent.FluentTheme.of(context).typography.body,
           ),
           SizedBox(height: theme.sm),
-          fluent.ProgressBar(value: job.percentage, activeColor: theme.accent),
+          fluent.ProgressBar(
+            value: job.percentage,
+            activeColor: theme.accent,
+            backgroundColor: theme.secondary.withValues(alpha: 0.28),
+          ),
           // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
           // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
           SizedBox(height: theme.sm),
@@ -820,7 +824,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Stack(
                   children: [
                     Container(
-                        color: theme.textSecondary.withValues(alpha: 0.15)),
+                        // Track in der zweiten Paletten-Charakterfarbe —
+                        // dekorativ, der Fortschritt selbst bleibt eindeutig.
+                        color: theme.secondary.withValues(alpha: 0.28)),
                     FractionallySizedBox(
                       widthFactor: job.percentage / 100,
                       child: Container(color: theme.accent),
@@ -1084,7 +1090,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: theme.sm),
-            material.LinearProgressIndicator(value: job.percentage / 100, valueColor: material.AlwaysStoppedAnimation(theme.accent)),
+            material.LinearProgressIndicator(
+              value: job.percentage / 100,
+              valueColor: material.AlwaysStoppedAnimation(theme.accent),
+              backgroundColor: theme.secondary.withValues(alpha: 0.28),
+            ),
             // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
             // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
             SizedBox(height: theme.sm),

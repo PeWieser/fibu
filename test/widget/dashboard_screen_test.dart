@@ -287,8 +287,13 @@ void main() {
         expect(find.text(strings.activeTaskProgress), findsOneWidget);
 
         // Die „ruhiger Balken"-Mindestanzeigedauer (2 s) aus
-        // _syncTaskToRemote ablaufen lassen, sonst bleibt ein Timer offen.
-        await tester.pump(const Duration(seconds: 3));
+        // _syncTaskToRemote wird erst NACH Abschluss der Mock-Simulation
+        // (~1,5 s) erzeugt — also erst spät im Testverlauf. Deshalb deutlich
+        // über das Ende hinaus pumpen, sonst bleibt dieser Timer offen und
+        // der Test bricht mit „A Timer is still pending" ab.
+        for (var i = 0; i < 12; i++) {
+          await tester.pump(const Duration(seconds: 1));
+        }
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

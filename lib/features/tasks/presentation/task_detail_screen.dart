@@ -307,16 +307,32 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final typed = TextEditingController();
     var confirmed = false;
 
-    // Kritische Vorabprüfung: `operations/purge` löscht den GESAMTEN
-    // Verzeichnisbaum unter `folder`. Nutzen weitere Aufgaben denselben
-    // Cloud-Ordner (der Default „fibu-backup“ ist bei jeder neuen Aufgabe
-    // vorbelegt), liegen deren Dateien im selben Baum und würden still
-    // mitgelöscht. Das muss vor dem Bestätigen sichtbar sein.
+    // Scoping: Gelöscht werden NUR die Album-Unterordner dieser Aufgabe,
+    // nie der gesamte Zielordner und niemals etwas darüber. Die Album-
+    // Sanierung muss exakt der im Scan entsprechen (Photos/<Album>/...),
+    // sonst wird am Ziel vorbeigelöscht.
+    //
+    // Ohne Album-Auswahl („alle Alben") gibt es keine Eingrenzung — dann
+    // bleibt der gesamte Zielordner das Ziel, und die Warnung unten nennt
+    // die betroffenen anderen Aufgaben.
+    final List<String> albums = task.effectiveAlbums
+        .map((String a) => a.replaceAll(RegExp(r'[/\\:]'), '_').trim())
+        .where((String a) => a.isNotEmpty)
+        .toList();
+    final List<String> purgeTargets = albums.isEmpty
+        ? <String>[folder]
+        : <String>[for (final String a in albums) '$folder/Photos/$a'];
+
+    // Betroffene andere Aufgaben: bei Scoping nur solche, die sich dieselben
+    // Album-Ordner teilen; ohne Scoping alle im selben Zielordner.
     final sharedOthers = <String>[
       for (final BackupTask t in ref.read(tasksListProvider))
         if (t.id != task.id &&
             t.targetFolderName.trim() == folder &&
-            (t.targetRemotes.contains(remote) || t.targetRemote == remote))
+            (t.targetRemotes.contains(remote) || t.targetRemote == remote) &&
+            (albums.isEmpty ||
+                t.effectiveAlbums.any((String a) =>
+                    albums.contains(a.replaceAll(RegExp(r'[/\\:]'), '_').trim()))))
           t.name,
     ];
     final String? sharedWarning = sharedOthers.isEmpty
@@ -326,20 +342,26 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     Future<void> doPurge() async {
       Navigator.of(context).pop();
       try {
-        await ref.read(rcloneServiceProvider).purgeRemoteDirectory(
-              remoteName: remote,
-              remotePath: folder,
-            );
+        final service = ref.read(rcloneServiceProvider);
+        for (final String target in purgeTargets) {
+          await service.purgeRemoteDirectory(
+            remoteName: remote,
+            remotePath: target,
+          );
+        }
         ref.invalidate(remotesProvider);
         ref.invalidate(primaryQuotaProvider);
         if (mounted) {
-          setState(
-              () => _syncMessage = strings.remoteFolderDeletedDetail(folder));
+          setState(() => _syncMessage =
+              '${strings.remoteFolderDeletedDetail(folder)}\n${strings.purgeScopeInfo(purgeTargets)}');
         }
         // `context` ist ein Methoden-Parameter — die mounted-Prüfung muss
         // deshalb am BuildContext selbst erfolgen, nicht am State.
         if (context.mounted) {
-          _showActionResult(context, strings.remoteFolderDeletedDetail(folder));
+          _showActionResult(
+              context,
+              '${strings.remoteFolderDeletedDetail(folder)}\n'
+              '${strings.purgeScopeInfo(purgeTargets)}');
         }
       } catch (e) {
         if (mounted) {

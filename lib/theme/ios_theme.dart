@@ -77,30 +77,14 @@ class IosTheme {
   static Widget sectionHeader(String title, AppThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(left: 16, bottom: 6),
-      child: Row(
-        children: [
-          // Akzentstreifen in der Paletten-Charakterfarbe. Rein dekorativ:
-          // Die Information trägt der Text daneben, der weiterhin den
-          // geprüften Kontrast von textSecondary hat.
-          Container(
-            width: 3,
-            height: 13,
-            decoration: BoxDecoration(
-              color: theme.primary,
-              borderRadius: BorderRadius.circular(theme.radiusSm),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            title,
-            style: TextStyle(
-              color: theme.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.3,
-            ),
-          ),
-        ],
+      child: Text(
+        title,
+        style: TextStyle(
+          color: theme.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }

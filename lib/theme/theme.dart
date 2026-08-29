@@ -64,6 +64,13 @@ class AppThemeData {
     this.secondary = const Color(0xff8e8e93),
   });
 
+  /// Haarlinie zur Abtrennung transluzenter Leisten vom Inhalt.
+  ///
+  /// Nur unter iOS 26 sinnvoll: Dort ist die Leiste natives, transluzentes
+  /// Glass und braucht eine Kante. Darunter trennt bereits der eigene
+  /// Farbton von [bar], eine Linie wäre dort zu viel.
+  Color get hairline => textSecondary.withValues(alpha: 0.28);
+
   /// Hintergrund für Tab- und Navigationsleisten.
   ///
   /// Bewusst von [canvas]/[surface] abgesetzt: Da Freifläche und Karten sich
@@ -78,8 +85,6 @@ class AppThemeData {
     )!;
   }
 
-  /// Haarlinie zur Abtrennung der Leisten vom Inhalt.
-  Color get hairline => textSecondary.withValues(alpha: 0.28);
 
   /// Text-/Icon-Farbe auf [accent]-Flächen (Buttons, Chips, Badges).
   ///

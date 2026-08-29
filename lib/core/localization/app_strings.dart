@@ -681,6 +681,11 @@ class AppStrings {
       ? 'Cloud-Ordner „$folder“ wurde gelöscht.'
       : 'Cloud folder “$folder” deleted.';
 
+  /// Klartext, welche Pfade gelöscht werden (Scoping auf Album-Ordner).
+  String purgeScopeInfo(List<String> paths) => isGerman
+      ? 'Gelöscht werden: ${paths.join(', ')}'
+      : 'Will delete: ${paths.join(', ')}';
+
   /// Warnung, wenn weitere Aufgaben denselben Cloud-Ordner benutzen — deren
   /// Dateien liegen im selben Baum und werden mitgelöscht.
   String purgeSharedFolderWarning(String folder, List<String> others) => isGerman

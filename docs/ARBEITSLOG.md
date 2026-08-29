@@ -1,5 +1,42 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-29 — Charakterfarbe umschaltbar, Hairline, Lizenztexte, Task-Detail
+
+### Einstellung „Charakterfarbe" (`PrimaryUsage`)
+`primary` erreicht roh in keiner Palette 3:1 (Minimum 1,21:1) und kann deshalb
+nichts Informationstragendes färben. Statt einer Festlegung ist der Einsatz
+jetzt in den Einstellungen wählbar und wird mit `settings.json` persistiert:
+
+| Modus | Verhalten |
+|---|---|
+| `identity` | Nur Vorschau (Standard) |
+| `wash` | `primary` mit 10 % Alpha als Tönung der Abschnitts-Titel |
+| `accessible` | `primaryFor(isDark)` — Richtung Schwarz/Weiß verschoben bis 3:1 — färbt die Abschnitts-Titel |
+
+**Messwert für `wash`:** Über der Waschung fällt `textSecondary` in drei
+Paletten unter 4.5:1 (Fuyu 4.09, Mori 4.18, Kazan 4.41). Deshalb nutzt der
+wash-Modus `textPrimary` (Minimum 8.34). Vier neue Tests sichern beides ab.
+
+`primaryFor` erreicht in allen 8 Paletten × 2 Modi ≥ 3.0 (Minimum 3.02).
+
+### Hairline
+Wieder in **beiden** Modi, nicht nur unter iOS 26.
+
+### Lizenztexte
+`fontFamily: 'monospace'` entfernt. Der Name ist auf iOS keine gültige
+Familie, der Fallback landete bei **Courier in 12 px** — dünn und kaum lesbar.
+Jetzt Systemschrift, 14 px, Zeilenhöhe 1.55, `textPrimary`.
+
+### Task-Detail: toter Rest
+Die Zeile „Dateifilter" stand unter **„Zeitplan & Netzwerk"** (falsch
+zugeordnet) und renderte dauerhaft „Keine". Nach „Quelle & Ziel" verschoben
+und nur noch sichtbar, wenn tatsächlich Filter gesetzt sind.
+
+### Zentrierung (Vorrunde)
+Die Scrollviews paddeten rechts `theme.lg + 16` gegen links `theme.lg` — das
+verschob jede Liste um 8 px, in Cloud Drives *und* Aufgaben, auf allen drei
+Plattformen. Alle 7 Stellen korrigiert.
+
 ## 2026-08-29 — Purge-Scoping, Leisten-Abgrenzung, Palettenfarben, CI grün
 
 ### „Remote-Dateien löschen" auf Album-Ordner begrenzt

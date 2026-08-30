@@ -17,6 +17,39 @@ import '../../settings/presentation/settings_screen.dart';
 /// Platform-adaptive root navigation shell for Fibu.
 /// Automatically renders NavigationView on Windows, CupertinoTabScaffold on iOS,
 /// and material NavigationBar on Android/fallback with immediate live theme reactivity.
+/// Schwebende Tab-Bar-Kapsel.
+///
+/// `CupertinoTabScaffold.tabBar` verlangt ein [PreferredSizeWidget]; ein
+/// blosses `Padding`/`ClipRRect` erfüllt das nicht. Der Wrapper reicht die
+/// Hoehe der eigentlichen Leiste plus Abstand nach aussen weiter.
+class _FloatingTabBar extends StatelessWidget implements PreferredSizeWidget {
+  const _FloatingTabBar({
+    required this.child,
+    required this.padding,
+    required this.radius,
+    required this.barHeight,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+  final double barHeight;
+
+  @override
+  Size get preferredSize => Size.fromHeight(barHeight + padding.vertical);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: child,
+      ),
+    );
+  }
+}
+
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
 
@@ -193,12 +226,11 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
     // iOS 26: schwebende, abgerundete Kapsel mit Abstand zum Rand.
     // Darunter bleibt das native Liquid Glass sichtbar.
-    final Widget floatingBar = Padding(
+    final Widget floatingBar = _FloatingTabBar(
       padding: const EdgeInsets.fromLTRB(horizontalInset, 0, horizontalInset, 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: bar,
-      ),
+      radius: 26,
+      barHeight: tabBarHeight,
+      child: bar,
     );
 
     final scaffold = cupertino.CupertinoTabScaffold(

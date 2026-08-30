@@ -1,5 +1,45 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-30 — iOS 26 Liquid Glass: Stand und Grenzen
+
+### Recherche-Ergebnis
+Flutter unterstuetzt Liquid Glass **nicht** und wird es laut Flutter-Team auch
+nicht: flutter/flutter#170310 — „we are not developing the new Apple'26 UI
+design features in the Cupertino library right now, and we will not be
+accepting contributions". Die Cupertino-Widgets sind auf dem Stand vor iOS 26.
+Das ist der Grund, warum die App wie iOS 17 aussieht.
+
+Drei Wege, nur einer liefert echte native Controls:
+
+| Weg | Ergebnis |
+|---|---|
+| Native UIKit-Bridge (`cupertino_native_better`, iOS 15+) | Echte `UITabBar`, `UISlider`, `UISwitch`, `UISegmentedControl`, `UIButton` als Platform Views |
+| Visuelle Naeherung (`cupertino_liquid_glass`) | `BackdropFilter`-Blur, keine nativen Controls |
+| Selbst bauen | Blur + Specular + Edge-Stroke, bleibt Naeherung |
+
+Eine „direkte native Implementierung ueber Swift" waere ein Neuaufbau der App
+in SwiftUI, keine Anpassung.
+
+### Umgesetzt
+- Tab-Bar ohne Haarlinie.
+- Inaktive Tab-Punkte auf `textPrimary` mit 62 % statt `textSecondary` — auf
+  dem transluzenten Untergrund waren sie kaum lesbar.
+
+### Nicht umsetzbar ohne groesseren Umbau
+**Eine schwebende Tab-Bar-Kapsel wie in iOS 26 ist mit `CupertinoTabScaffold`
+unmoeglich.** Dessen `tabBar`-Parameter ist auf den Typ `CupertinoTabBar`
+festgelegt, nicht auf `PreferredSizeWidget` — ein `Padding`/`ClipRRect`-Wrapper
+laesst sich nicht uebergeben (`argument_type_not_assignable`). Dafuer muesste
+die Navigation weg von `CupertinoTabScaffold` auf einen eigenen Stack umgebaut
+werden. Das ist ohne Geraet nicht verifizierbar und wurde deshalb nicht
+gemacht.
+
+### Lehre
+`CupertinoTabScaffold.tabBar` ist **typisiert**, nicht nur auf
+`PreferredSizeWidget` beschraenkt. Wrapper um Cupertino-Widgets muessen vorher
+gegen die tatsaechliche Signatur geprueft werden, nicht gegen die
+offensichtliche Schnittstelle.
+
 ## 2026-08-30 — Bearbeiten-Modus, Hintergrund-Löschungen, UI-Korrekturen
 
 ### Bearbeiten-Modus (Task-Detail)

@@ -131,21 +131,22 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final glass = liquidGlassActive(ref);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     const tabBarHeight = 52.0;
+    // iOS 26: Die Tab-Bar schwebt als abgerundete Kapsel mit Abstand zum
+    // Rand, ohne Haarlinie. Darunter bleibt natives Liquid Glass sichtbar.
+    const double horizontalInset = 12.0;
     final glassHeight = tabBarHeight + bottomInset;
 
-    final scaffold = cupertino.CupertinoTabScaffold(
-      controller: _tabController,
-      tabBar: cupertino.CupertinoTabBar(
-        currentIndex: activeIndex,
-        activeColor: theme.accent,
-        inactiveColor: theme.textSecondary,
-        // Unter iOS 26 ist die Leiste natives, transluzentes Glass; darunter
-        // trennt der eigene Farbton von theme.bar. Die Haarlinie gibt der
-        // Leiste in BEIDEN Fällen eine klare Kante zum Inhalt.
-        backgroundColor: glass ? const Color(0x00000000) : theme.bar,
-        border: Border(top: BorderSide(color: theme.hairline, width: 0.5)),
-        iconSize: 22.0,
-        height: tabBarHeight,
+    final bar = cupertino.CupertinoTabBar(
+      currentIndex: activeIndex,
+      activeColor: theme.accent,
+      // Inaktive Punkte brauchen genug Kontrast: textSecondary war auf dem
+      // transluzenten Untergrund kaum lesbar.
+      inactiveColor: theme.textPrimary.withValues(alpha: 0.62),
+      backgroundColor: glass ? const Color(0x00000000) : theme.bar,
+      // Keine Haarlinie: Eine schwebende Kapsel hat keine Trennkante.
+      border: null,
+      iconSize: 22.0,
+      height: tabBarHeight,
         onTap: (index) {
           IosHaptics.selection();
           ref.read(shellIndexProvider.notifier).state = index;
@@ -188,7 +189,21 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             tooltip: strings.navSettings,
           ),
         ],
+    );
+
+    // iOS 26: schwebende, abgerundete Kapsel mit Abstand zum Rand.
+    // Darunter bleibt das native Liquid Glass sichtbar.
+    final Widget floatingBar = Padding(
+      padding: const EdgeInsets.fromLTRB(horizontalInset, 0, horizontalInset, 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: bar,
       ),
+    );
+
+    final scaffold = cupertino.CupertinoTabScaffold(
+      controller: _tabController,
+      tabBar: floatingBar,
       tabBuilder: (context, index) {
         switch (index) {
           case 0:

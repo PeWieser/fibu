@@ -17,39 +17,6 @@ import '../../settings/presentation/settings_screen.dart';
 /// Platform-adaptive root navigation shell for Fibu.
 /// Automatically renders NavigationView on Windows, CupertinoTabScaffold on iOS,
 /// and material NavigationBar on Android/fallback with immediate live theme reactivity.
-/// Schwebende Tab-Bar-Kapsel.
-///
-/// `CupertinoTabScaffold.tabBar` verlangt ein [PreferredSizeWidget]; ein
-/// blosses `Padding`/`ClipRRect` erfüllt das nicht. Der Wrapper reicht die
-/// Hoehe der eigentlichen Leiste plus Abstand nach aussen weiter.
-class _FloatingTabBar extends StatelessWidget implements PreferredSizeWidget {
-  const _FloatingTabBar({
-    required this.child,
-    required this.padding,
-    required this.radius,
-    required this.barHeight,
-  });
-
-  final Widget child;
-  final EdgeInsets padding;
-  final double radius;
-  final double barHeight;
-
-  @override
-  Size get preferredSize => Size.fromHeight(barHeight + padding.vertical);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: padding,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: child,
-      ),
-    );
-  }
-}
-
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
 
@@ -166,7 +133,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     const tabBarHeight = 52.0;
     // iOS 26: Die Tab-Bar schwebt als abgerundete Kapsel mit Abstand zum
     // Rand, ohne Haarlinie. Darunter bleibt natives Liquid Glass sichtbar.
-    const double horizontalInset = 12.0;
     final glassHeight = tabBarHeight + bottomInset;
 
     final bar = cupertino.CupertinoTabBar(
@@ -226,16 +192,14 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
     // iOS 26: schwebende, abgerundete Kapsel mit Abstand zum Rand.
     // Darunter bleibt das native Liquid Glass sichtbar.
-    final Widget floatingBar = _FloatingTabBar(
-      padding: const EdgeInsets.fromLTRB(horizontalInset, 0, horizontalInset, 8),
-      radius: 26,
-      barHeight: tabBarHeight,
-      child: bar,
-    );
-
+    // Hinweis: Eine schwebende Kapsel wie in iOS 26 ist mit
+    // CupertinoTabScaffold nicht möglich — dessen tabBar-Parameter ist auf
+    // den Typ CupertinoTabBar festgelegt, ein Wrapper ist kein
+    // CupertinoTabBar. Dafuer muesste die Navigation weg von
+    // CupertinoTabScaffold auf einen eigenen Stack umgebaut werden.
     final scaffold = cupertino.CupertinoTabScaffold(
       controller: _tabController,
-      tabBar: floatingBar,
+      tabBar: bar,
       tabBuilder: (context, index) {
         switch (index) {
           case 0:

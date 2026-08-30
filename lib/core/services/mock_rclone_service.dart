@@ -89,7 +89,6 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
-  @override
   bool get isSyncRunning => false;
 
   @override

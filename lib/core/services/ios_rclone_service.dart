@@ -243,7 +243,6 @@ class IosRcloneService implements RcloneService {
   }
 
   @override
-  @override
   Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
       List<PendingLocalDeletion> pending) async {
     if (pending.isEmpty) return const <PendingLocalDeletion>[];
@@ -256,7 +255,7 @@ class IosRcloneService implements RcloneService {
           .where((PendingLocalDeletion d) => deleted.contains(d.assetId))
           .toList();
       AppLog.info('media',
-          '${done.length}/${pending.length} ausstehende lokale Löschungen ausgefuehrt');
+          '${done.length}/${pending.length} ausstehende lokale Löschungen ausgeführt');
       return done;
     } catch (e) {
       AppLog.warn('media', 'Ausstehende Löschungen fehlgeschlagen: $e');
@@ -264,6 +263,7 @@ class IosRcloneService implements RcloneService {
     }
   }
 
+  @override
   Future<void> purgeRemoteDirectory({
     required String remoteName,
     required String remotePath,

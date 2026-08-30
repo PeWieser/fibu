@@ -165,7 +165,6 @@ class WindowsRcloneService implements RcloneService {
   }
 
   @override
-  @override
   bool get isSyncRunning => false;
 
   @override

@@ -1,5 +1,55 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-30 — Bearbeiten-Modus, Hintergrund-Löschungen, UI-Korrekturen
+
+### Bearbeiten-Modus (Task-Detail)
+- Name bekommt eine eigene, ganze Zeile: kein Icon links, kein Label daneben.
+- Sync-Modus-Zeile ohne Label im Bearbeiten-Modus — „Sync-Modus" steht als
+  Abschnitts-Titel bereits eine Zeile darüber.
+- Reine Anzeige-Sektionen (Quelle & Ziel, Zeitplan & Netzwerk, Jetzt
+  synchronisieren) sind im Bearbeiten-Modus ausgeblendet: nur Bearbeitbares
+  bleibt sichtbar.
+- „Abbrechen" ersetzt den Zurück-Button. Zurück hätte die Eingaben still
+  verworfen; Abbrechen sagt es und setzt Name, Sync-Modus und Albenauswahl
+  zurück.
+
+### Hintergrund-Löschungen
+iOS verlangt für das Löschen aus der Mediathek einen Bestätigungsdialog, den
+ein Hintergrundtask nicht zeigen kann. Diese Löschungen wurden verworfen.
+
+- `SyncOptions.isBackground`, vom Scheduler gesetzt.
+- `PendingDeletionsStore` speichert sie im privaten App-Support-Ordner.
+- `deleteLocalAssets` speichert im Hintergrund statt zu löschen.
+- Das Dashboard zeigt einen antippbaren Hinweis mit Anzahl; Antippen
+  bestätigt, führt über PhotoKit aus (iOS fragt je Datei einzeln), meldet die
+  Anzahl und entfernt die ausgeführten aus dem Speicher.
+
+### Übersicht und Zeitplan
+- Quelle nennt die Album-Namen statt einer bloßen Anzahl, höchstens zwei,
+  danach „, N+" — eine lange Auswahl kann die Zeile nicht sprengen.
+- Der Zeitplan verspricht keine Uhrzeit mehr. iOS entscheidet, wann ein
+  Hintergrundtask läuft; „Täglich um 02:00" war ein Versprechen, das die App
+  nicht halten kann. Jetzt: „Täglich (Hintergrundtask, von iOS gesteuert)".
+
+### UI-Korrekturen
+- Debug-Log: `fontFamily: 'monospace'` entfernt (auf iOS kein gültiger
+  Familienname, der Fallback landete bei Courier). Jetzt Systemschrift.
+- „Fibu-Beleg" zeigt `n/a` statt `0 MB`, wenn die Schätzung nicht verfügbar
+  ist — sie beruht auf einer Ordnersumme und existiert nicht für jedes
+  Backend.
+- Die sechs Hinweise „nur mit Internetverbindung verfügbar" entfernt; die
+  Buttons sind offline bereits ausgegraut.
+- Auswahl der Charakterfarbe wieder entfernt; „Nur Vorschau" bleibt Standard.
+- „Cloud-Dateien durchsuchen" vom Dashboard nach Einstellungen → Cloud-Lauf-
+  werke verlegt: Antippen eines Laufwerks bietet es als erste Aktion an,
+  vor „Umbenennen".
+
+### Lehre für Agenten
+Beim Einfügen einer Methode VOR ein bestehendes Mitglied wandert dessen
+`@override` auf die neue Methode und fehlt dann am ursprünglichen. Drei
+Methoden waren betroffen (`annotate_overrides`). Nach solchen Einfügungen
+immer auf doppelte `@override` prüfen.
+
 ## 2026-08-29 — Charakterfarbe umschaltbar, Hairline, Lizenztexte, Task-Detail
 
 ### Einstellung „Charakterfarbe" (`PrimaryUsage`)

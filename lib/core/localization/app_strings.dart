@@ -610,6 +610,9 @@ class AppStrings {
       isGerman ? '$used von $total belegt' : '$used of $total used';
   String get quotaSummaryUnavailable =>
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
+  /// „n/a" für Werte, die nicht ermittelt werden können (nicht „0 MB").
+  String get valueNotAvailable => isGerman ? 'n/a' : 'n/a';
+
   String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';
 
   // --- Fehlerhinweise beim Verbinden ---

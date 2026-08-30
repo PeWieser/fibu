@@ -97,8 +97,6 @@ class DebugLogScreen extends ConsumerWidget {
         child: Text(
           entry.format(),
           style: TextStyle(
-            fontFamily: 'monospace',
-            fontFamilyFallback: const ['Courier New', 'Courier'],
             fontSize: 11.5,
             height: 1.35,
             color: color,

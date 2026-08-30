@@ -5,6 +5,8 @@ import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../dashboard/presentation/cloud_explorer_screen.dart';
+
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
@@ -545,8 +547,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
           error: (err, _) => Text(strings.quotaSummaryUnavailable, style: textStyle),
         ),
         fibuAsync.when(
+          // 0 Byte heißt nicht „0 MB belegt", sondern „nicht ermittelbar" —
+          // die Belegung wird über eine Ordner-Summe geschätzt und ist nicht
+          // für jedes Backend verfügbar.
           data: (bytes) => Text(
-            '${strings.fibuSpaceLabel}: ${formatBytes(bytes)}',
+            '${strings.fibuSpaceLabel}: '
+            '${bytes > 0 ? formatBytes(bytes) : strings.valueNotAvailable}',
             style: textStyle,
           ),
           loading: () => Text('${strings.fibuSpaceLabel}: …', style: textStyle),
@@ -572,6 +578,17 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         builder: (sheetCtx) => cupertino.CupertinoActionSheet(
           title: Text(displayName),
           actions: [
+            cupertino.CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetCtx);
+                Navigator.push(
+                  context,
+                  cupertino.CupertinoPageRoute(
+                      builder: (context) => const CloudExplorerScreen()),
+                );
+              },
+              child: Text(strings.exploreRemoteFiles),
+            ),
             cupertino.CupertinoActionSheetAction(
               onPressed: () async {
                 Navigator.pop(sheetCtx);

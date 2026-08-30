@@ -494,30 +494,6 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
 
-              // 3b. Einsatz der Charakterfarbe
-              cupertino.CupertinoListSection.insetGrouped(
-                backgroundColor: theme.surface,
-                header: IosTheme.sectionHeader(strings.primaryUsageSection, theme),
-                children: [
-                  for (final PrimaryUsage usage in PrimaryUsage.values)
-                    cupertino.CupertinoListTile(
-                      title: Text(_primaryUsageLabel(usage, strings),
-                          style: const TextStyle(fontSize: 16)),
-                      subtitle: Text(_primaryUsageHint(usage, strings),
-                          style: TextStyle(
-                              color: theme.textSecondary, fontSize: 12)),
-                      trailing: config.primaryUsage == usage
-                          ? Icon(cupertino.CupertinoIcons.check_mark_circled_solid,
-                              color: theme.accent, size: 22)
-                          : Icon(cupertino.CupertinoIcons.circle,
-                              color: theme.textSecondary, size: 22),
-                      onTap: () => ref
-                          .read(themeConfigProvider.notifier)
-                          .setPrimaryUsage(usage),
-                    ),
-                ],
-              ),
-
               // 4. Language Section
               Semantics(
                 label: strings.tooltipLanguage,
@@ -839,27 +815,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // --- Wada Color Palette Grid Swatch Selector Row ---
-  static String _primaryUsageLabel(PrimaryUsage usage, AppStrings strings) {
-    switch (usage) {
-      case PrimaryUsage.identity:
-        return strings.primaryUsageIdentity;
-      case PrimaryUsage.wash:
-        return strings.primaryUsageWash;
-      case PrimaryUsage.accessible:
-        return strings.primaryUsageAccessible;
-    }
-  }
 
-  static String _primaryUsageHint(PrimaryUsage usage, AppStrings strings) {
-    switch (usage) {
-      case PrimaryUsage.identity:
-        return strings.primaryUsageIdentityHint;
-      case PrimaryUsage.wash:
-        return strings.primaryUsageWashHint;
-      case PrimaryUsage.accessible:
-        return strings.primaryUsageAccessibleHint;
-    }
-  }
 
   Widget _buildWadaPaletteRow(
     BuildContext context,

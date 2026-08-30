@@ -17,7 +17,6 @@ import '../../tasks/presentation/tasks_controller.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
-import 'cloud_explorer_screen.dart';
 import '../../../core/widgets/liquid_glass.dart';
 
 /// Platform-adaptive Dashboard Screen. Renders layout dynamically based on
@@ -283,59 +282,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildSyncActionsWindows(context, activeJob, strings),
               _lastSyncInfo(context, strings),
               SizedBox(height: theme.xl),
-              Builder(builder: (context) {
-                final online = ref.watch(networkStatusProvider).online;
-                return fluent.Tooltip(
-                  message: online ? strings.exploreRemoteFiles : strings.statusOffline,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      fluent.Button(
-                        // Offline gibt es nichts zu durchsuchen — ausgegraut.
-                        onPressed: online
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  fluent.FluentPageRoute(builder: (context) => const CloudExplorerScreen()),
-                                );
-                              }
-                            : null,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 44),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  fluent.FluentIcons.cloud,
-                                  size: 16,
-                                  color: online ? theme.accent : theme.textSecondary,
-                                  semanticLabel: strings.exploreRemoteFiles,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  strings.exploreRemoteFiles,
-                                  style: TextStyle(
-                                    color: online ? null : theme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (!online) ...[
-                        SizedBox(height: theme.xs),
-                        Text(
-                          strings.offlineActionHint,
-                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
               SizedBox(height: theme.xl),
             ],
           ],
@@ -471,15 +417,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!online) ...[
-          Padding(
-            padding: EdgeInsets.only(bottom: theme.xs),
-            child: Text(
-              strings.offlineActionHint,
-              style: TextStyle(color: theme.textSecondary, fontSize: 12),
-            ),
-          ),
-        ],
         fluent.Tooltip(
       message: !online
           ? strings.statusOffline
@@ -698,74 +635,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ),
                       ),
-                      if (!online) ...[
-                        SizedBox(height: theme.xs),
-                        Text(
-                          strings.offlineActionHint,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               _lastSyncInfo(context, strings),
               const SizedBox(height: 12),
-              Semantics(
-                label: online ? strings.exploreRemoteFiles : strings.statusOffline,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: cupertino.CupertinoButton(
-                        color: theme.accent.withValues(alpha: 0.15),
-                        // Offline deutlich ausgegraut: graue Fläche statt
-                        // Akzentfarbe, damit der Zustand sofort erkennbar ist.
-                        disabledColor: theme.textSecondary.withValues(alpha: 0.12),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        borderRadius: BorderRadius.circular(theme.radiusSm),
-                        // Offline gibt es nichts zu durchsuchen — deaktiviert.
-                        onPressed: online
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  cupertino.CupertinoPageRoute(builder: (context) => const CloudExplorerScreen()),
-                                );
-                              }
-                            : null,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              cupertino.CupertinoIcons.folder,
-                              color: online ? theme.accent : theme.textSecondary,
-                              size: 18,
-                              semanticLabel: strings.exploreRemoteFiles,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              strings.exploreRemoteFiles,
-                              style: TextStyle(
-                                color: online ? theme.accent : theme.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (!online) ...[
-                      SizedBox(height: theme.xs),
-                      Text(
-                        strings.offlineActionHint,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
               ],
                 ],
               ),
@@ -964,16 +838,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (!online) ...[
-                      Padding(
-                        padding: EdgeInsets.only(bottom: theme.xs),
-                        child: Text(
-                          strings.offlineActionHint,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                        ),
-                      ),
-                    ],
                     material.Tooltip(
                       message: !online
                           ? strings.statusOffline
@@ -1004,43 +868,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }),
             _lastSyncInfo(context, strings),
             const SizedBox(height: 12),
-            Builder(builder: (context) {
-              final online = ref.watch(networkStatusProvider).online;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  material.Tooltip(
-                    message: online ? strings.exploreRemoteFiles : strings.statusOffline,
-                    child: material.OutlinedButton.icon(
-                      icon: Icon(material.Icons.folder_open, semanticLabel: strings.exploreRemoteFiles),
-                      label: Text(strings.exploreRemoteFiles),
-                      style: material.OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        disabledForegroundColor: theme.textSecondary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                      ),
-                      // Offline gibt es nichts zu durchsuchen — ausgegraut.
-                      onPressed: online
-                          ? () {
-                              Navigator.push(
-                                context,
-                                material.MaterialPageRoute(builder: (context) => const CloudExplorerScreen()),
-                              );
-                            }
-                          : null,
-                    ),
-                  ),
-                  if (!online) ...[
-                    SizedBox(height: theme.xs),
-                    Text(
-                      strings.offlineActionHint,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ],
-              );
-            }),
             ],
           ],
         ),

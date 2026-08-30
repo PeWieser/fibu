@@ -794,15 +794,19 @@ class AppStrings {
       return isGerman ? 'Automatisch (iOS-System)' : 'Automatic (iOS system)';
     }
     if (scheduleDay == 'Daily') {
-      return isGerman ? 'Täglich um $scheduleTime' : 'Daily at $scheduleTime';
+      // Keine Uhrzeit: iOS entscheidet selbst, wann der Hintergrundtask
+      // läuft. Eine feste Zeit zu versprechen wäre falsch.
+      return isGerman
+          ? 'Täglich (Hintergrundtask, von iOS gesteuert)'
+          : 'Daily (background task, scheduled by iOS)';
     }
     if (scheduleDay == 'Manual') {
       return isGerman ? 'Manuell' : 'Manual';
     }
     final day = _weekdayLabel(scheduleDay);
     return isGerman
-        ? 'Wöchentlich am $day um $scheduleTime'
-        : 'Weekly on ${day}s at $scheduleTime';
+        ? 'Wöchentlich am $day (Hintergrundtask, von iOS gesteuert)'
+        : 'Weekly on ${day}s (background task, scheduled by iOS)';
   }
 
   String _weekdayLabel(String key) {

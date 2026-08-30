@@ -92,13 +92,29 @@ class BackupTask {
   }
 
   /// Kurze, menschenlesbare Beschreibung der Quelle für die Liste/Detail-Ansicht.
+  /// Höchstens so viele Album-Namen in der Übersicht, danach „, N+".
+  static const int maxAlbumNamesInSummary = 2;
+
   String get sourceDescription {
     if (sourcePath.startsWith('files:')) {
       return 'Dateien (${selectedFolders.length})';
     }
-    if (sourcePath.startsWith('all:')) return 'Fotos & Videos (${selectedAlbums.length})';
-    if (sourcePath.startsWith('photos:')) return 'Fotos (${selectedAlbums.length})';
-    if (sourcePath.startsWith('videos:')) return 'Videos (${selectedAlbums.length})';
+    final bool isMedia = sourcePath.startsWith('all:') ||
+        sourcePath.startsWith('photos:') ||
+        sourcePath.startsWith('videos:');
+    if (isMedia) {
+      final List<String> albums = effectiveAlbums;
+      if (albums.isEmpty) {
+        return sourcePath.startsWith('videos:')
+            ? 'Videos (alle)'
+            : (sourcePath.startsWith('photos:')
+                ? 'Fotos (alle)'
+                : 'Fotos & Videos (alle)');
+      }
+      if (albums.length <= maxAlbumNamesInSummary) return albums.join(', ');
+      final int rest = albums.length - maxAlbumNamesInSummary;
+      return '${albums.take(maxAlbumNamesInSummary).join(', ')}, $rest+';
+    }
     switch (sourcePath) {
       case 'all':
         return 'Fotos & Videos (alle)';

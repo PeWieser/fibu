@@ -5,7 +5,11 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  # Flutter 3.47 buendelt Dart 3.13 und verlangt mindestens iOS 15 — beides
+  # passt zum Deployment-Target dieser App. Die Untergrenze wird auf 3.9.0
+  # angehoben, weil cupertino_native_better das voraussetzt.
+  sdk: '>=3.9.0 <4.0.0'
+  flutter: '>=3.47.0'
 
 dependencies:
   flutter:
@@ -24,6 +28,11 @@ dependencies:
   open_filex: ^4.5.0
   # In-app browser for cloud provider OAuth (Google Drive, OneDrive, Dropbox, ...).
   flutter_web_auth_2: ^4.1.0
+  # Native iOS-Controls (UITabBar, UISlider, UISwitch, UISegmentedControl,
+  # UIButton) als Platform Views. Flutter unterstuetzt Liquid Glass nicht und
+  # wird es laut flutter/flutter#170310 auch nicht; native Controls sind nur
+  # ueber Platform Views erreichbar. Benoetigt iOS 15+.
+  cupertino_native_better: ^1.5.4
   # NOTE: No secure-storage plugin on purpose — iOS uses the native Apple
   # Keychain directly via the `fibu/keychain` MethodChannel (see
   # lib/core/services/secure_store_service.dart).

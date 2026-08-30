@@ -100,6 +100,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
+  /// Bearbeiten ohne Speichern verlassen — verwirft die Eingaben.
+  void _cancelInlineEdit(BackupTask task) {
+    setState(() {
+      _isEditing = false;
+      _nameCtrl.text = task.name;
+    });
+    _editSyncMode = task.syncMode;
+    _editAlbumSelection
+      ..clear()
+      ..addAll(task.effectiveAlbums);
+  }
+
   void _startInlineEdit(BackupTask task) {
     // Während eines laufenden Syncs nicht bearbeiten: Der Lauf hat die
     // Aufgabe beim Start gelesen. Eine Änderung wäre nur halb wirksam, und
@@ -959,6 +971,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     return cupertino.CupertinoPageScaffold(
       backgroundColor: theme.canvas,
       navigationBar: cupertino.CupertinoNavigationBar(
+        // Im Bearbeiten-Modus ersetzt „Abbrechen" den Zurück-Button: Zurück
+        // würde die Eingaben still verwerfen, Abbrechen sagt es.
+        leading: _isEditing
+            ? cupertino.CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: () => _cancelInlineEdit(task),
+                child: Text(strings.cancel,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              )
+            : null,
         // Nav-Titel sind laut HIG einzeilig; lange Namen kürzen wir sauber
         // mit Ellipse, statt sie unkontrolliert abzuschneiden.
         middle: Text(
@@ -1010,20 +1032,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 ),
 
               // 1. Status Section
+              if (!_isEditing)
+              if (!_isEditing)
               cupertino.CupertinoListSection.insetGrouped(
                 backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.generalSection, theme),
                 children: [
+                  // Im Bearbeiten-Modus bekommt der Name eine eigene, ganze
+                  // Zeile: kein Icon links, kein Label daneben.
                   if (_isEditing)
                     cupertino.CupertinoListTile(
-                      leading: Icon(cupertino.CupertinoIcons.text_cursor, color: theme.accent, size: 22),
-                      title: Text(strings.taskNameLabel, style: const TextStyle(fontSize: 16)),
-                      trailing: SizedBox(
-                        width: 170,
-                        child: cupertino.CupertinoTextField(
-                          controller: _nameCtrl,
-                          textAlign: TextAlign.end,
-                        ),
+                      title: cupertino.CupertinoTextField(
+                        controller: _nameCtrl,
+                        placeholder: strings.taskNameHint,
                       ),
                     ),
                   cupertino.CupertinoListTile(
@@ -1208,7 +1229,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       color: theme.accent,
                       size: 22,
                     ),
-                    title: Text(strings.syncModeLabel, style: const TextStyle(fontSize: 16)),
+                    // Im Bearbeiten-Modus steht der Schalter allein in der
+                    // Zeile — „Sync-Modus" steht bereits als Abschnitts-Titel
+                    // eine Zeile darüber.
+                    title: _isEditing
+                        ? const SizedBox.shrink()
+                        : Text(strings.syncModeLabel,
+                            style: const TextStyle(fontSize: 16)),
                     trailing: _isEditing
                         ? cupertino.CupertinoSlidingSegmentedControl<SyncMode>(
                             groupValue: _editSyncMode,
@@ -1254,6 +1281,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
 
               // 5a. Sync Section (sync ist bewusst NICHT im Löschbereich)
+              if (!_isEditing)
               cupertino.CupertinoListSection.insetGrouped(
                 backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.syncSection, theme),

@@ -14,6 +14,7 @@ import 'virtual_mirror_sync.dart';
 import '../localization/app_strings.dart';
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
+import 'pending_deletions_store.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
 import 'trash_service.dart';
@@ -242,6 +243,27 @@ class IosRcloneService implements RcloneService {
   }
 
   @override
+  @override
+  Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
+      List<PendingLocalDeletion> pending) async {
+    if (pending.isEmpty) return const <PendingLocalDeletion>[];
+    try {
+      final List<String> ids =
+          pending.map((PendingLocalDeletion d) => d.assetId).toList();
+      final Set<String> deleted =
+          (await PhotoManager.editor.deleteWithIds(ids)).toSet();
+      final List<PendingLocalDeletion> done = pending
+          .where((PendingLocalDeletion d) => deleted.contains(d.assetId))
+          .toList();
+      AppLog.info('media',
+          '${done.length}/${pending.length} ausstehende lokale Löschungen ausgefuehrt');
+      return done;
+    } catch (e) {
+      AppLog.warn('media', 'Ausstehende Löschungen fehlgeschlagen: $e');
+      return const <PendingLocalDeletion>[];
+    }
+  }
+
   Future<void> purgeRemoteDirectory({
     required String remoteName,
     required String remotePath,
@@ -1929,6 +1951,17 @@ class IosRcloneService implements RcloneService {
         if (asset != null) idByRel[item.rel] = asset.id;
       }
       if (idByRel.isEmpty) return const [];
+
+      // Im Hintergrund kann iOS keinen Bestätigungsdialog zeigen. Die
+      // Löschungen werden deshalb gespeichert und auf dem Dashboard
+      // angeboten, statt sie still auszuführen oder zu verwerfen.
+      if (options.isBackground) {
+        await PendingDeletionsStore.addAll([
+          for (final MapEntry<String, String> e in idByRel.entries)
+            PendingLocalDeletion(rel: e.key, assetId: e.value),
+        ]);
+        return const [];
+      }
       try {
         final deletedIds =
             (await PhotoManager.editor.deleteWithIds(idByRel.values.toList()))

@@ -611,6 +611,20 @@ class AppStrings {
   String get quotaSummaryUnavailable =>
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
   /// „n/a" für Werte, die nicht ermittelt werden können (nicht „0 MB").
+  /// Ausstehende lokale Löschungen aus einem Hintergrundtask.
+  String pendingDeletionsNotice(int count) => isGerman
+      ? '$count lokale Löschung(en) ausstehend – antippen zum Ausführen'
+      : '$count local deletion(s) pending – tap to run';
+  String get pendingDeletionsTitle => isGerman
+      ? 'Lokale Löschungen ausführen'
+      : 'Run local deletions';
+  String pendingDeletionsConfirm(int count) => isGerman
+      ? 'Diese $count Dateien wurden in der Cloud gelöscht und sollen auch lokal entfernt werden. iOS fragt danach für jede Datei einzeln nach.'
+      : 'These $count files were deleted in the cloud and should be removed locally too. iOS will ask for each file individually.';
+  String pendingDeletionsDone(int count) => isGerman
+      ? '$count Datei(en) lokal gelöscht.'
+      : '$count file(s) deleted locally.';
+
   String get valueNotAvailable => isGerman ? 'n/a' : 'n/a';
 
   String get fibuSpaceLabel => isGerman ? 'Fibu-Beleg' : 'Used by Fibu';

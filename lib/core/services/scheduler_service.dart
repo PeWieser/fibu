@@ -120,7 +120,7 @@ class SchedulerService {
           localPath: sourcePath,
           remoteName: remoteName,
           remotePath: targetFolder,
-          options: SyncOptions(isEchoMode: isEcho),
+          options: SyncOptions(isEchoMode: isEcho, isBackground: true),
         );
       } catch (_) {
         // Keep trying the remaining tasks.

@@ -18,6 +18,7 @@ import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
 import '../../../core/widgets/liquid_glass.dart';
+import '../../../core/services/pending_deletions_store.dart';
 
 /// Platform-adaptive Dashboard Screen. Renders layout dynamically based on
 /// the current platform. Alle Live-Daten aktualisieren sich automatisch
@@ -544,6 +545,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
               ),
               SizedBox(height: theme.xl),
+              _buildPendingDeletionsIOS(context, theme, strings),
               if (isSyncing) ...[
                 _buildActiveJobPanelIOS(context, activeJob, strings),
                 SizedBox(height: theme.xl),
@@ -653,6 +655,98 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
     );
+  }
+
+  /// Hinweis auf lokale Löschungen, die ein Hintergrundtask erkannt, aber
+  /// nicht ausführen konnte (iOS verlangt dafür einen Bestätigungsdialog).
+  /// Antippen führt sie aus.
+  Widget _buildPendingDeletionsIOS(
+      BuildContext context, AppThemeData theme, AppStrings strings) {
+    final pending = ref.watch(pendingDeletionsProvider).valueOrNull ?? const [];
+    if (pending.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: theme.xl),
+      child: GestureDetector(
+        onTap: () => _executePendingDeletions(context, strings),
+        child: Container(
+          padding: EdgeInsets.all(theme.md),
+          decoration: BoxDecoration(
+            color: theme.warning.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: theme.warning, width: 1),
+          ),
+          child: Row(
+            children: [
+              Icon(cupertino.CupertinoIcons.trash,
+                  color: theme.warning, size: 20, semanticLabel: 'Pending'),
+              SizedBox(width: theme.sm),
+              Expanded(
+                child: Text(
+                  strings.pendingDeletionsNotice(pending.length),
+                  style: TextStyle(
+                      color: theme.textPrimary, fontWeight: FontWeight.w600),
+                ),
+              ),
+              Icon(cupertino.CupertinoIcons.chevron_forward,
+                  color: theme.warning, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executePendingDeletions(
+      BuildContext context, AppStrings strings) async {
+    final pending =
+        ref.read(pendingDeletionsProvider).valueOrNull ?? const [];
+    if (pending.isEmpty) return;
+    final confirmed = await cupertino.showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+        title: Text(strings.pendingDeletionsTitle),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Text(strings.pendingDeletionsConfirm(pending.length)),
+        ),
+        actions: [
+          cupertino.CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text(strings.cancel),
+          ),
+          cupertino.CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(strings.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final done = await ref
+        .read(rcloneServiceProvider)
+        .deletePendingLocalDeletions(pending);
+    await PendingDeletionsStore.removeAll(done.map((d) => d.assetId));
+    ref.invalidate(pendingDeletionsProvider);
+    if (context.mounted) {
+      cupertino.showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+          content: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(strings.pendingDeletionsDone(done.length)),
+          ),
+          actions: [
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildActiveJobPanelIOS(BuildContext context, ActiveJobState job, AppStrings strings) {

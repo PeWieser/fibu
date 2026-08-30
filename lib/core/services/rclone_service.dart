@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'pending_deletions_store.dart';
+
 /// Model representing a sync/copy job options.
 class SyncOptions {
   final bool isEchoMode; // true = sync (deletes extra target files), false = copy (incremental)
@@ -7,11 +9,19 @@ class SyncOptions {
   final List<String> excludeFilters;
   final int maxSpeedKbps;
 
+  /// Läuft der Sync ohne sichtbare UI (Hintergrundtask)?
+  ///
+  /// Lokale Löschungen brauchen den iOS-Bestätigungsdialog und können im
+  /// Hintergrund nicht ausgeführt werden. Sie werden dann als ausstehend
+  /// gespeichert und auf dem Dashboard angeboten.
+  final bool isBackground;
+
   const SyncOptions({
     this.isEchoMode = false,
     this.includeFilters = const [],
     this.excludeFilters = const [],
     this.maxSpeedKbps = 0,
+    this.isBackground = false,
   });
 }
 
@@ -148,6 +158,11 @@ abstract class RcloneService {
   /// Wechsel Inkrementell → Spiegelung). Standard: keine Aktion – nur die
   /// iOS-Implementierung (virtueller Mirror) überschreibt dies sinnvoll.
   Future<void> markMirrorAdoption() async {}
+
+  /// Fuehrt ausstehende lokale Löschungen aus und liefert die tatsächlich
+  /// gelöschten Eintraege zurück (iOS lehnt einzelne ab).
+  Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
+      List<PendingLocalDeletion> pending);
 
   /// Queries storage quota for a specific remote.
   Future<QuotaInfo> getQuota(String remoteName);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'rclone_service.dart';
+import 'pending_deletions_store.dart';
 
 /// Windows-specific implementation of [RcloneService] using bundled `rclone.exe`
 /// and Dart [Process] API for subprocess invocation.
@@ -166,6 +167,11 @@ class WindowsRcloneService implements RcloneService {
   @override
   @override
   bool get isSyncRunning => false;
+
+  @override
+  Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
+          List<PendingLocalDeletion> pending) async =>
+      const <PendingLocalDeletion>[];
 
   @override
   Future<void> cleanupMirrorState({

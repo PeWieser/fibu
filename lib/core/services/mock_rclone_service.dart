@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'rclone_service.dart';
+import 'pending_deletions_store.dart';
 
 /// Mock implementation of [RcloneService] simulating asynchronous network operations
 /// and job state machines. Extremely useful for testing, widget stories, and platform previews.
@@ -90,6 +91,11 @@ class MockRcloneService implements RcloneService {
   @override
   @override
   bool get isSyncRunning => false;
+
+  @override
+  Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
+          List<PendingLocalDeletion> pending) async =>
+      const <PendingLocalDeletion>[];
 
   @override
   Future<void> cleanupMirrorState({

@@ -823,7 +823,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Center(
       child: cupertino.CupertinoButton(
         padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
-        minSize: 44,
+        // 44 pt Trefferfläche, auch wenn der Text selbst klein ist.
+        // `minimumSize` statt des seit Flutter 3.28 veralteten `minSize`.
+        minimumSize: const Size(44, 44),
         onPressed: () {
           IosHaptics.light();
           ref.read(activeJobProvider.notifier).cancelActiveSync();

@@ -481,7 +481,25 @@ Zugriff auf neuen Android-Versionen anders als auf iOS.
 
 ## E. Distribution
 
-### 🟠 L-23 — Unsignierte IPA als öffentliches CI-Artefakt — **Vertriebsweg festlegen**
+### 🟠 L-23 — Unsignierte IPA als öffentliches CI-Artefakt — **entschieden: TestFlight, dann App Store**
+
+**Entscheidung (2026-08-31).** TestFlight für die Beta-Phase, danach App Store.
+Damit ist der Vertriebsweg sauber: Beides läuft über Apple, es gibt keine
+Weitergabe signierter oder um-signierter Builds an Dritte, und § 3.3.2 des
+Developer Program License Agreement ist nicht berührt.
+
+**Was daraus folgt — noch zu tun:**
+
+| Punkt | Konsequenz |
+|---|---|
+| Apple Developer Program | Kostenpflichtige Mitgliedschaft (99 €/Jahr) ist Voraussetzung für **beide** Wege |
+| Signierung | Die CI baut `--no-codesign`. Für TestFlight braucht es einen signierten, archivierten Build — entweder lokal aus Xcode oder die CI um Fastlane/`xcodebuild -exportArchive` erweitern |
+| Bundle-ID | Muss vorher final sein (L-16) — nach der ersten TestFlight-Einreichung praktisch eingefroren |
+| Impressum | Muss vor der ersten Einreichung vollständig sein (L-08) |
+| CI-Artefakt | Die unsignierte IPA im öffentlichen Repo bleibt unkritisch, solange sie nicht als Installationsweg beworben wird. Optional `retention-days` senken oder den Upload auf `workflow_dispatch` beschränken |
+| Export-Compliance | Mit `ITSAppUsesNonExemptEncryption = false` (L-15) bereits erledigt |
+
+**Ursprünglicher Befund:**
 
 **Befund.** `.github/workflows/build-ios.yml` baut
 `flutter build ios --release --no-codesign`, packt eine
@@ -668,7 +686,7 @@ eigenen Commit mit Test.
 | 7 | L-20 | `fibuoauth`-Intent-Filter in AndroidManifest.xml | Code |
 | 8 | L-17 | `en.lproj/InfoPlist.strings` | Code |
 | 9 | L-32 | `state` mit Zufallsanteil + Callback-Verifikation | Code |
-| 10 | L-13 | Nach erstem Xcode-Archive den Privacy Report gegen das Manifest abgleichen | du (Xcode) |
+| 10 | L-13 | ~~Nach erstem Xcode-Archive den Privacy Report gegen das Manifest abgleichen~~ **erledigt**: der CI-Schritt „Verify PrivacyInfo.xcprivacy is bundled" prüft das Bundle bei jedem Build (Run `33393513109` grün). Offen bleibt nur der Abgleich, ob librclone `SystemBootTime` wirklich referenziert | du (Xcode, optional) |
 
 ## Was hier nicht geprüft werden konnte
 
@@ -680,14 +698,14 @@ eigenen Commit mit Test.
   `stat`/`mach_absolute_time` referenziert, ist deshalb Annahme, nicht Befund.
 - **Das CI-Artefakt ist aus der Sandbox nicht ladbar.** `gh run download`
   bricht mit `EOF` gegen `productionresultssa3.blob.core.windows.net` ab
-  (dieselbe Netzgrenze wie bei den Step-Logs). Ob
-  `Payload/Runner.app/PrivacyInfo.xcprivacy` im fertigen Bundle liegt, ist
-  damit **nicht direkt** geprüft. Geprüft ist: die Resources-Phase
-  `97C146EC1CF9000F007C117D` gehört zum Target **Runner**, die Group
-  `Runner/` enthält die Dateireferenz, die Datei existiert unter
-  `ios/Runner/PrivacyInfo.xcprivacy`, und der CI-Schritt
-  „Build iOS App (Unsigned Release)" ist grün — ein unauffindbares Build-Input
-  hätte dort mit „Build input file cannot be found" abgebrochen.
+  (dieselbe Netzgrenze wie bei den Step-Logs).
+
+  **Inzwischen gelöst — aber anders.** Seit Commit `9e13150` enthält der
+  Workflow den Schritt „Verify PrivacyInfo.xcprivacy is bundled", der auf dem
+  Runner `plutil -lint` gegen `build/ios/iphoneos/Runner.app/PrivacyInfo.xcprivacy`
+  laufen lässt und den Build abbricht, wenn die Datei fehlt. In Run
+  `33393513109` ist dieser Schritt grün — das Manifest liegt damit belegt im
+  fertigen Bundle. Der Umweg über das Artefakt ist nicht mehr nötig.
 - **Kein Registerzugriff.** DPMA und EUIPO waren nicht erreichbar (L-24).
 - **Kein Gerät.** OAuth-Flows, Keychain-Verhalten und Permission-Dialoge sind
   aus dem Code gelesen, nicht ausgeführt. Ebenso ist der neue

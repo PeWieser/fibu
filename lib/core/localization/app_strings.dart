@@ -640,8 +640,8 @@ class AppStrings {
       ? 'Bitte zuerst erfolgreich über „Anmelden“ verbinden – erst dann kann das Laufwerk hinzugefügt werden.'
       : 'Please sign in successfully first – the drive can only be added afterwards.';
   String debugLogFileLocation(String path) => isGerman
-      ? 'Logdatei: $path (im Dokumente-Ordner, neben rclone.conf)'
-      : 'Log file: $path (in the documents folder, next to rclone.conf)';
+      ? 'Logdatei: $path — im privaten App-Ordner, nicht in der Dateien-App sichtbar. Zum Teilen bitte hier kopieren.'
+      : 'Log file: $path — stored in the private app folder, not visible in the Files app. Copy it here if you need to share it.';
 
   // --- Homescreen Quick Action (iOS) ---
   String get quickActionSyncNow => isGerman ? 'Jetzt synchronisieren' : 'Sync Now';
@@ -1126,6 +1126,15 @@ class AppStrings {
 
   // --- Rechtliches ---
   String get legalSectionTitle => isGerman ? 'Rechtliches' : 'Legal';
+  String get privacyNoticeTitle =>
+      isGerman ? 'Datenschutzerklärung' : 'Privacy Policy';
+  String get privacyNoticeSubtitle => isGerman
+      ? 'Welche Daten die App nutzt – und welche sie bewusst nicht nutzt'
+      : 'Which data the app uses – and which it deliberately does not';
+  String get imprintTitle => isGerman ? 'Impressum & Anbieter' : 'Imprint & Provider';
+  String get imprintSubtitle => isGerman
+      ? 'Anbieter, Haftung, Marken und Open Source'
+      : 'Provider, liability, trademarks and open source';
   String get openSourceLicenses =>
       isGerman ? 'Open-Source-Lizenzen' : 'Open-Source Licenses';
   String get openSourceLicensesSubtitle => isGerman

@@ -75,7 +75,8 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - **Home-screen widgets (3 sizes):** live sync state per task (ok / pending / never / error), last sync time, and a sync-needed indicator. Data flows through an App Group whose ID is resolved at runtime from the signing profile — so widgets keep working with sideload tools that rename app groups. Refreshed on app start/resume, after every task change, and by the 2-hour background run.
 - **Home-screen context menu:** Long-press the app icon → **"Sync Now"** (quick action, SF symbol) starts the sync queue immediately — works from cold start as well.
 - **Open-source licenses:** Settings → Legal presents a structured overview — a short classification, the core components (rclone, gomobile, Flutter) with descriptions, and the full list of bundled libraries; each entry opens its complete license text in a dedicated detail view.
-- **Diagnostics log:** Settings → "Sync Log & Diagnostics" shows every action with timestamps and severity (engine, rclone RPCs, remotes, media staging, syncs, offline events) — copyable for support. Everything is also appended to a persistent log file at `Documents/fibu.log` (next to `rclone.conf`, visible in the Files app under "On My iPhone").
+- **Legal in-app:** Settings → Legal also carries the full privacy notice and imprint, so the App Store / Play Store requirement for an in-app privacy policy is met without a website ([`docs/DATENSCHUTZ.md`](docs/DATENSCHUTZ.md), [`docs/IMPRESSUM.md`](docs/IMPRESSUM.md)).
+- **Diagnostics log:** Settings → "Sync Log & Diagnostics" shows every action with timestamps and severity (engine, rclone RPCs, remotes, media staging, syncs, offline events) — copyable for support. Everything is also appended to a persistent log file in the private app-support folder (next to `rclone.conf`). It is deliberately **not** in the documents folder: the log contains file names, album names and remote paths, which are personal data and must not sit in a folder the Files app exposes for export.
 
 ---
 
@@ -147,11 +148,18 @@ flutter run -d android
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together (sync engines, remote identity model, widget pipeline, background scheduling, CI).
 - [`docs/ARBEITSLOG.md`](docs/ARBEITSLOG.md) — chronological work log of the ongoing development sessions (German).
+- [`docs/RECHTS_AUDIT.md`](docs/RECHTS_AUDIT.md) — legal/compliance audit: copyright and OSS obligations, GDPR, App Store and Play Store requirements, distribution, trademarks (German, with file/line evidence).
+- [`docs/DATENSCHUTZ.md`](docs/DATENSCHUTZ.md) / [`docs/IMPRESSUM.md`](docs/IMPRESSUM.md) — publishable privacy notice and imprint; the same text ships in-app under Settings → Legal.
 
 CI builds an unsigned iOS IPA on every push to `main` (`.github/workflows/build-ios.yml`); the artifact `ios-app-release` is attached to each run.
 
 ---
 
 ## License
-MIT License. Built for secure, decentralized, and independent data backups.
+MIT License, © PeWieser (Fibu). Built for secure, decentralized, and independent data backups.
 Bundled open-source components are listed in-app under Settings → Legal → Open-Source Licenses.
+
+Fibu is an independent project. It is not affiliated with, endorsed by, or
+sponsored by the rclone project, Apple, Google, Microsoft or any other cloud
+provider mentioned here. Third-party names and marks are used solely to
+identify the supported services.

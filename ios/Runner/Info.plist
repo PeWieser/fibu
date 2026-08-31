@@ -26,6 +26,17 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!--
+		Export-Compliance (US EAR / EU Dual-Use-VO 2021/821).
+		Fibu nutzt ausschließlich (a) TLS/HTTPS aus den Betriebssystem- bzw.
+		Standard-Bibliotheken und (b) die Krypto-Routinen von rclone, die auf
+		golang.org/x/crypto aufsetzen. Beides fällt unter die Ausnahmen für
+		Standard-/Massenmarkt-Kryptographie (5D992.c bzw. EU Anhang II Nr. 4).
+		Deshalb: false. Ohne diesen Schlüssel fragt App Store Connect bei
+		jedem Build erneut nach der Export-Compliance.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

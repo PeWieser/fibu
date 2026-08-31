@@ -16,6 +16,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
 import 'debug_log_screen.dart';
+import 'legal_documents_screen.dart';
 import 'licenses_screen.dart';
 
 /// Platform-adaptive Settings screen structured according to Apple HIG:
@@ -69,6 +70,22 @@ class SettingsScreen extends ConsumerWidget {
         : (platform == TargetPlatform.iOS
             ? cupertino.CupertinoPageRoute(builder: (_) => const LicensesScreen())
             : material.MaterialPageRoute(builder: (_) => const LicensesScreen()));
+    Navigator.of(context).push(route);
+  }
+
+  /// Öffnet einen statischen Rechtstext (Datenschutzerklärung / Impressum).
+  void _openLegalDocument(
+    BuildContext context,
+    String title,
+    List<LegalDocSection> sections,
+  ) {
+    final screen = LegalDocumentScreen(title: title, sections: sections);
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => screen)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
+            : material.MaterialPageRoute(builder: (_) => screen));
     Navigator.of(context).push(route);
   }
 
@@ -346,6 +363,32 @@ class SettingsScreen extends ConsumerWidget {
                   onPressed: () => _openLicenses(context, strings, theme),
                 ),
               ),
+              SizedBox(height: theme.sm),
+              fluent.Card(
+                child: fluent.ListTile(
+                  title: fluent.Text(strings.privacyNoticeTitle),
+                  subtitle: fluent.Text(strings.privacyNoticeSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open privacy policy'),
+                  onPressed: () => _openLegalDocument(
+                    context,
+                    strings.privacyNoticeTitle,
+                    LegalDocuments.privacy(strings.isGerman),
+                  ),
+                ),
+              ),
+              SizedBox(height: theme.sm),
+              fluent.Card(
+                child: fluent.ListTile(
+                  title: fluent.Text(strings.imprintTitle),
+                  subtitle: fluent.Text(strings.imprintSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open imprint'),
+                  onPressed: () => _openLegalDocument(
+                    context,
+                    strings.imprintTitle,
+                    LegalDocuments.imprint(strings.isGerman),
+                  ),
+                ),
+              ),
               SizedBox(height: theme.xl),
             ],
           ),
@@ -584,6 +627,42 @@ class SettingsScreen extends ConsumerWidget {
                       _openLicenses(context, strings, theme);
                     },
                   ),
+                  cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.eye, color: theme.accent, size: 22),
+                    title: Text(strings.privacyNoticeTitle, style: const TextStyle(fontSize: 16)),
+                    subtitle: Text(strings.privacyNoticeSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
+                    onTap: () {
+                      IosHaptics.selection();
+                      _openLegalDocument(
+                        context,
+                        strings.privacyNoticeTitle,
+                        LegalDocuments.privacy(strings.isGerman),
+                      );
+                    },
+                  ),
+                  cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.info_circle, color: theme.accent, size: 22),
+                    title: Text(strings.imprintTitle, style: const TextStyle(fontSize: 16)),
+                    subtitle: Text(strings.imprintSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
+                    onTap: () {
+                      IosHaptics.selection();
+                      _openLegalDocument(
+                        context,
+                        strings.imprintTitle,
+                        LegalDocuments.imprint(strings.isGerman),
+                      );
+                    },
+                  ),
                 ],
               ),
                   SizedBox(height: theme.xl),
@@ -791,6 +870,44 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                 trailing: const Icon(material.Icons.chevron_right),
                 onTap: () => _openLicenses(context, strings, theme),
+              ),
+            ),
+            SizedBox(height: theme.sm),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.ListTile(
+                leading: Icon(material.Icons.visibility, color: theme.accent),
+                title: Text(strings.privacyNoticeTitle),
+                subtitle: Text(strings.privacyNoticeSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                trailing: const Icon(material.Icons.chevron_right),
+                onTap: () => _openLegalDocument(
+                  context,
+                  strings.privacyNoticeTitle,
+                  LegalDocuments.privacy(strings.isGerman),
+                ),
+              ),
+            ),
+            SizedBox(height: theme.sm),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.ListTile(
+                leading: Icon(material.Icons.info_outline, color: theme.accent),
+                title: Text(strings.imprintTitle),
+                subtitle: Text(strings.imprintSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                trailing: const Icon(material.Icons.chevron_right),
+                onTap: () => _openLegalDocument(
+                  context,
+                  strings.imprintTitle,
+                  LegalDocuments.imprint(strings.isGerman),
+                ),
               ),
             ),
             SizedBox(height: theme.xl),

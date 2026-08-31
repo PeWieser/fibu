@@ -133,7 +133,9 @@ class _FibuAppState extends ConsumerState<FibuApp> with WidgetsBindingObserver {
 
     // Zentrales Diagnose-Protokoll: statische Fassade mit Provider verbinden,
     // damit alle Services (auch ohne Ref) loggen können; zusätzlich wird jede
-    // Zeile in <Dokumente>/fibu.log persistiert (neben der rclone.conf).
+    // Zeile in fibu.log im privaten App-Support-Ordner persistiert (nicht im
+    // Dokumente-Ordner — dort wäre die Datei über die Dateien-App exportierbar,
+    // obwohl Dateinamen und Albennamen personenbezogene Daten sind).
     AppLog.attach(ref);
     AppLog.info('app', 'Fibu gestartet');
     unawaited(AppLog.attachFileSink());

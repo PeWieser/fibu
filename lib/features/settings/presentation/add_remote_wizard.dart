@@ -242,10 +242,21 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     }
     switch (providerId) {
       case 'drive':
+        return Uri.parse(
+            'https://accounts.google.com/o/oauth2/v2/auth?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
+      // Google Photos hat eigene Scopes — der Drive-Scope gewährt keinen
+      // Zugriff auf die Photos Library API. rclone verlangt seit der
+      // Umstellung Googles auf die Photos-Picker-API genau diese drei
+      // Scopes (siehe rclone.org/googlephotos → „Making your own client_id").
+      // Mehrere Scopes werden als %20-getrennte Liste übergeben.
       case 'google_photos':
       case 'google photos':
         return Uri.parse(
-            'https://accounts.google.com/o/oauth2/v2/auth?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
+            'https://accounts.google.com/o/oauth2/v2/auth'
+            '?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fphotoslibrary.appendonly'
+            '%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fphotoslibrary.readonly.appcreateddata'
+            '%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fphotoslibrary.edit.appcreateddata'
+            '&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');
       case 'onedrive':
         return Uri.parse(
             'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?scope=offline_access%20files.readwrite.all&state=$state&redirect_uri=$redirect&response_type=code&client_id=$clientId');

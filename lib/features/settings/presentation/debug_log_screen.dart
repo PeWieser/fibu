@@ -63,8 +63,7 @@ class DebugLogScreen extends ConsumerWidget {
     }
   }
 
-  /// Fußzeile mit Pfad zur persistenten Logdatei (Dokumente-Ordner, neben
-  /// der rclone.conf).
+  /// Fußzeile mit Pfad zur persistenten Logdatei (privater App-Support-Ordner).
   Widget _fileFooter(AppThemeData theme, AppStrings strings) {
     final path = AppLog.logFilePath;
     if (path == null) return const SizedBox.shrink();

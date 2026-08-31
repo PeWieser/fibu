@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../utils/app_paths.dart';
 
 /// Schweregrad eines Protokolleintrags.
 enum AppLogLevel { info, warning, error }
@@ -103,7 +104,7 @@ class AppLog {
 
   static AppLogNotifier? _notifier;
 
-  /// Pfad zur persistenten Logdatei (im Dokumente-Ordner, neben rclone.conf).
+  /// Pfad zur persistenten Logdatei (im privaten App-Support-Ordner).
   static String? get logFilePath => _logFile?.path;
 
   /// Verbindet die Fassade mit dem Provider-Notifier (App-Start).
@@ -111,12 +112,18 @@ class AppLog {
     _notifier = ref.read(appLogProvider.notifier);
   }
 
-  /// Aktiviert die Logdatei im Dokumente-Ordner (wo auch rclone.conf liegt).
-  /// Datei wird angelegt, ohne bestehende Inhalte zu löschen.
+  /// Aktiviert die persistente Logdatei.
+  ///
+  /// Sie liegt bewusst im PRIVATEN App-Support-Ordner, nicht im
+  /// Dokumente-Ordner: `UIFileSharingEnabled` macht den Dokumente-Ordner in
+  /// der Dateien-App („Auf meinem iPhone") sichtbar und exportierbar, und das
+  /// Protokoll enthält personenbezogene Daten — Dateinamen, Albennamen und
+  /// Remote-Pfade (Art. 4 Nr. 1 DSGVO). Zugangsdaten werden ohnehin nie
+  /// geloggt. Eine alte Logdatei im Dokumente-Ordner wird von
+  /// [privateAppFile] einmalig übernommen und dort gelöscht.
   static Future<void> attachFileSink() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/fibu.log');
+      final file = await privateAppFile('fibu.log');
       if (!await file.exists()) await file.create();
       _logFile = file;
       AppLog.info('app', 'Logdatei aktiv: ${file.path}');

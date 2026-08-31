@@ -1,6 +1,6 @@
-The MIT License (MIT)
+MIT License
 
-Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)
+Copyright (c) 2025-present PeWieser (Fibu)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Third-party components
+----------------------
+
+This product bundles third-party open-source software under its own terms.
+The authoritative, in-app list is generated at runtime from every bundled
+library and is available under Settings > Legal > Open-Source Licenses.
+
+The statically linked non-Dart components, which no package manager tracks,
+are:
+
+  * rclone          - MIT License
+                      Copyright (C) 2012 Nick Craig-Wood and contributors
+                      https://rclone.org
+  * golang.org/x/mobile (gomobile)
+                    - BSD 3-Clause License
+                      Copyright 2014 The Go Authors
+
+"rclone" is a project of Nick Craig-Wood and the rclone contributors.
+Fibu is an independent project and is not affiliated with, endorsed by,
+or sponsored by the rclone project.

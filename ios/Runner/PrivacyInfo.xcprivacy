@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+	App-Datenschutzmanifest (Apple, verpflichtend seit 01.05.2024).
+
+	Fibu hat keinen eigenen Server, keine Analytics- und keine Crash-SDKs.
+	Der Entwickler verarbeitet keine personenbezogenen Daten: Alles, was die
+	App liest (Fotos, Dateien, Zugangsdaten), bleibt auf dem Gerät oder geht
+	auf ausdrückliche Anweisung des Nutzers an dessen eigenes Cloud-Konto.
+	Deshalb ist NSPrivacyCollectedDataTypes leer und NSPrivacyTracking false.
+
+	Die Required-Reason-APIs werden trotzdem gebraucht — für die Kernfunktion
+	(incrementeller Sync) und weil die statisch eingebundene Go-Runtime von
+	librclone die entsprechenden Symbole referenziert. Belege im Code:
+	  UserDefaults    ios/Runner/AppDelegate.swift (Widget-Status, App Group)
+	                  ios/FibuWidget/FibuWidget.swift
+	  DiskSpace       ios/Runner/AppDelegate.swift:98
+	                  (volumeAvailableCapacityForImportantUsageKey)
+	  FileTimestamp   librclone (stat/fstat) + lib/core/services/
+	                  sync_manifest_service.dart (Größe + mtime statt Hash)
+	  SystemBootTime  Go-Runtime (monotone Uhr) in librclone
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!--
+				1C8F.1: UserDefaults(suiteName: <App Group>) — der Sync-Status
+				wird zwischen App und Widget-Extension ausgetauscht.
+				CA92.1: Standard-Suite, von Flutter-Plugins genutzt.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+				E174.1: Vorprüfung, ob genug Platz für Downloads/Uploads frei
+				ist; bei zu wenig Platz verhält sich die App sichtbar anders
+				(Warnung statt Transfer). Der Wert verlässt das Gerät nicht.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+				C617.1: Metadaten (Größe, mtime) von Dateien im App-Container —
+				Grundlage des incrementellen Syncs.
+				3B52.1: Metadaten von Dateien, auf die der Nutzer der App
+				ausdrücklich Zugriff gegeben hat (Dateien-App, Mediathek-Export).
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+				<string>3B52.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+				35F9.1: Messung verstrichener Zeit (Laufzeiten, Timer). Wird
+				von der statisch eingebundenen Go-Runtime in librclone
+				referenziert; es findet kein Fingerprinting statt.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

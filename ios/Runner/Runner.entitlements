@@ -7,48 +7,27 @@
 		<string>group.com.example.fibu</string>
 	</array>
 	<!--
-		Associated Domains (webcredentials): iOS schlägt im Passwort-Autofill
-		(Schlüsselbund) nur Einträge vor, deren Webseiten-Domain hier gelistet
-		ist — und ordnet neu gespeicherte Zugänge diesen Domains zu.
-		Apex + Wildcard, damit Subdomains (accounts.google.com, login.live.com,
-		www.mega.nz, …) ebenfalls matchen.
+		KEINE `com.apple.developer.associated-domains` mehr.
+
+		Bisher standen hier webcredentials-Einträge für Drittanbieter-Domains
+		(*.google.com, *.dropbox.com, *.microsoftonline.com, *.yandex.ru, …).
+		Das war doppelt falsch:
+
+		1. Technisch wirkungslos. Shared Web Credentials verlangt, dass die
+		   Domain unter /.well-known/apple-app-site-association eine Datei
+		   hostet, die die eigene Team-ID + Bundle-ID auflistet. Keine dieser
+		   Domains tut das für Fibu — iOS verwirft die Zuordnung, der
+		   Passwort-Autofill-Vorschlag funktioniert über UITextContentType
+		   (AutofillHints.username/.password) auch ohne diese Entitlements.
+
+		2. Rechtlich problematisch. Die Einträge behaupten eine geprüfte
+		   Verbindung der App zu Marken Dritter (Google, Microsoft, Dropbox,
+		   Yandex, MEGA, Proton, Box, pCloud, Backblaze, Wasabi). Das ist eine
+		   kennzeichenrechtliche Benutzung fremder Marken ohne Berechtigung und
+		   ein Ablehnungsgrund nach App Store Review Guideline 4.1/5.2.2.
+
+		Wieder eintragen darf man hier nur Domains, die dem Projekt selbst
+		gehören und die eine passende AASA-Datei ausliefern.
 	-->
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>webcredentials:mega.nz</string>
-		<string>webcredentials:*.mega.nz</string>
-		<string>webcredentials:drive.google.com</string>
-		<string>webcredentials:accounts.google.com</string>
-		<string>webcredentials:google.com</string>
-		<string>webcredentials:*.google.com</string>
-		<string>webcredentials:www.dropbox.com</string>
-		<string>webcredentials:dropbox.com</string>
-		<string>webcredentials:*.dropbox.com</string>
-		<string>webcredentials:login.live.com</string>
-		<string>webcredentials:live.com</string>
-		<string>webcredentials:*.live.com</string>
-		<string>webcredentials:login.microsoftonline.com</string>
-		<string>webcredentials:microsoftonline.com</string>
-		<string>webcredentials:*.microsoftonline.com</string>
-		<string>webcredentials:my.pcloud.com</string>
-		<string>webcredentials:pcloud.com</string>
-		<string>webcredentials:*.pcloud.com</string>
-		<string>webcredentials:account.box.com</string>
-		<string>webcredentials:box.com</string>
-		<string>webcredentials:*.box.com</string>
-		<string>webcredentials:passport.yandex.com</string>
-		<string>webcredentials:yandex.com</string>
-		<string>webcredentials:*.yandex.com</string>
-		<string>webcredentials:yandex.ru</string>
-		<string>webcredentials:*.yandex.ru</string>
-		<string>webcredentials:proton.me</string>
-		<string>webcredentials:*.proton.me</string>
-		<string>webcredentials:secure.backblaze.com</string>
-		<string>webcredentials:backblaze.com</string>
-		<string>webcredentials:*.backblaze.com</string>
-		<string>webcredentials:console.wasabisys.com</string>
-		<string>webcredentials:wasabisys.com</string>
-		<string>webcredentials:*.wasabisys.com</string>
-	</array>
 </dict>
 </plist>

@@ -5,8 +5,10 @@ import 'package:path_provider/path_provider.dart';
 /// Liefert den PRIVATEN App-Support-Ordner (iOS: Library/Application Support).
 ///
 /// Nutzer sehen diesen Inhalt NICHT in der Dateien-App (im Gegensatz zum
-/// Dokumente-Ordner, der wegen `UIFileSharingEnabled` dort sichtbar ist).
-/// Genau deshalb wandern Config- und State-Dateien hierhin.
+/// Dokumente-Ordner, der wegen `UIFileSharingEnabled` dort sichtbar und
+/// exportierbar ist). Genau deshalb wandern Config-, State- und Log-Dateien
+/// hierhin: `rclone.conf` enthält Zugangsdaten, `fibu.log` Dateinamen und
+/// Albennamen — beides darf nicht offen im Dokumente-Ordner liegen.
 Future<Directory> appSupportRoot() async {
   final dir = await getApplicationSupportDirectory();
   if (!await dir.exists()) await dir.create(recursive: true);
@@ -17,7 +19,8 @@ Future<Directory> appSupportRoot() async {
 ///
 /// Existiert eine Alt-Datei gleichen Namens im öffentlichen Dokumente-Ordner
 /// (von älteren App-Versionen), wird sie einmalig kopiert und danach dort
-/// gelöscht – Nutzer sehen nur noch die Log-Datei in „Auf meinem iPhone".
+/// gelöscht — der Dokumente-Ordner ist über die Dateien-App sichtbar, der
+/// App-Support-Ordner nicht.
 Future<File> privateAppFile(String name) async {
   final support = await appSupportRoot();
   final target = File('${support.path}/$name');

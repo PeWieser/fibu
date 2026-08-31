@@ -1,5 +1,49 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-31 — Rechts-Audit: Befunde und Fixes
+
+Vollstaendige Pruefung auf Urheberrecht, DSGVO, App-Store-/Play-Store-
+Vorgaben, Distribution, Marken- und deutsches Recht. Alle 32 Befunde mit
+Datei/Zeile als Beleg in `docs/RECHTS_AUDIT.md`.
+
+### Kern-Erkenntnis (positiv)
+Die App hat **keinen Server**. Damit ist der Entwickler weder Verantwortlicher
+noch Auftragsverarbeiter fuer die gesicherten Inhalte — kein AVV noetig, und
+die Privacy Labels koennen auf „Data Not Collected" stehen. Was fehlte, waren
+die Formalien, nicht die Technik.
+
+### Behoben
+| Befund | Fix |
+|---|---|
+| L-01 `LICENSE` gehoerte Expo (650 Industries) | Eigene MIT mit `PeWieser (Fibu)` + Third-Party-Abschnitt fuer rclone und gomobile |
+| L-05 Keine Datenschutzerklaerung | Neue Ansicht `legal_documents_screen.dart` (Einstellungen → Rechtliches, alle 3 Plattformen) + `docs/DATENSCHUTZ.md` |
+| L-06 Logdatei lag offen im Dokumente-Ordner (Dateinamen = personenbezogene Daten, `UIFileSharingEnabled` macht ihn exportierbar) | Umzug nach `Library/Application Support` via `privateAppFile`, Migration der Alt-Datei |
+| L-07 OAuth-Proxy `rclone.org` nirgends offengelegt | Eigener Abschnitt in der Datenschutzerklaerung |
+| L-13 Kein Privacy Manifest | `ios/Runner/PrivacyInfo.xcprivacy` + Eintrag in `project.pbxproj` |
+| L-14 `webcredentials:`-Domains fuer 11 fremde Marken | Entitlement entfernt (war technisch wirkungslos und kennzeichenrechtlich heikel) |
+| L-15 Keine Export-Compliance | `ITSAppUsesNonExemptEncryption = false` |
+| L-30 Google Photos verlangte den Drive-Scope | Eigene `case` mit den drei Photos-Scopes |
+| — | Impressum-Ansicht + `docs/IMPRESSUM.md` (mit Platzhalter, siehe L-08) |
+
+### Offen — braucht Entscheidung oder persoenliche Daten
+1. **L-08** Name und ladungsfaehige Anschrift ins Impressum.
+2. **L-16** Bundle-ID `com.example.fibu` — nach der ersten Store-Einreichung
+   nicht mehr aenderbar.
+3. **L-24** DPMA-/EUIPO-Recherche fuer „Fibu" (Klassen 9, 42); zusaetzlich
+   Irrefuehrungsrisiko nach § 5 UWG, weil der Name Buchhaltung verspricht.
+4. **L-23** Vertriebsweg: Die CI veroeffentlicht eine unsignierte IPA in einem
+   oeffentlichen Repo. Um-signieren und Weitergabe verstoesst gegen das Apple
+   Developer Program License Agreement § 3.3.2.
+5. **L-29** Googles geteilte rclone-`client_id` wird 2026 abgeschaltet; der
+   restricted Scope `drive` zieht ab 100 Nutzern eine CASA-Pruefung nach sich.
+6. **L-20** `fibuoauth` fehlt im AndroidManifest → OAuth-Callback auf Android
+   kaputt (0 Treffer im grep).
+
+### Nicht pruefbar in dieser Umgebung
+Kein Flutter/Dart (nur CI), kein macOS/Xcode (kein Privacy Report), kein
+Registerzugriff (DPMA/EUIPO), kein Geraet (OAuth-Flows). Entsprechend
+gekennzeichnet in `docs/RECHTS_AUDIT.md`.
+
 ## 2026-08-30 — iOS 26 Liquid Glass: Stand und Grenzen
 
 ### Recherche-Ergebnis

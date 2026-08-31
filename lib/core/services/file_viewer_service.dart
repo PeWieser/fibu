@@ -24,7 +24,9 @@ class FileViewerService {
     required String remotePath,
   }) async {
     if (_rclone is IosRcloneService) {
-      return (_rclone as IosRcloneService).downloadToCache(remoteName, remotePath);
+      // Kein Cast noetig: _rclone ist final, und seit Dart 3.2 greift bei
+      // final-Feldern die Typpromotion nach einem is-Check.
+      return _rclone.downloadToCache(remoteName, remotePath);
     }
     return null;
   }

@@ -27,7 +27,7 @@ rechtliche Lage einfach — **der Entwickler ist weder Verantwortlicher noch
 Auftragsverarbeiter für die Inhalte**, die Nutzer sichern. Was gefehlt hat,
 waren die **Formalien**: fremde Lizenzdatei, keine Datenschutzerklärung, kein
 Privacy Manifest, falsche Marken-Associated-Domains, keine Export-Compliance.
-Von 32 Befunden sind 9 behoben, 4 brauchen deine Entscheidung oder deine
+Von 31 Befunden sind 8 behoben, 6 brauchen deine Entscheidung oder deine
 persönlichen Daten, der Rest ist dokumentiert oder unkritisch.
 
 | Kategorie | 🔴 | 🟠 | 🟡 | 🔵 | ✅ | Behoben |
@@ -39,7 +39,7 @@ persönlichen Daten, der Rest ist dokumentiert oder unkritisch.
 | E. Distribution | 0 | 1 | 0 | 0 | 0 | 0 |
 | F. Marke / Name | 0 | 0 | 1 | 1 | 0 | 0 |
 | G. Deutsches Recht | 0 | 0 | 1 | 1 | 0 | 0 |
-| H. Anbieter-Bedingungen | 0 | 2 | 1 | 1 | 0 | 1 |
+| H. Anbieter-Bedingungen | 0 | 2 | 2 | 0 | 0 | 1 |
 
 ---
 

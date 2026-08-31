@@ -784,6 +784,47 @@ class AppStrings {
   String get syncPhaseTombstones => isGerman ? 'Aufräumen' : 'Cleaning up';
   String get syncPhaseDownload => isGerman ? 'Herunterladen' : 'Downloading';
   String get syncPhaseDeleteLocal => isGerman ? 'Löschen' : 'Deleting';
+
+  // --- Statusleiste: genau drei Zustände (Vorgabe) ---
+  //
+  // Die Statusleiste kennt bewusst nur diese drei Texte. Alles vor dem ersten
+  // Transfer (Scan, Staging, Lösch-Erkennung) ist „Auf Änderungen überprüfen",
+  // alles nach dem letzten Transfer (Tombstones, lokale Löschungen, Zustand
+  // schreiben) ist „Abschließen".
+  String get syncStatusChecking =>
+      isGerman ? 'Auf Änderungen überprüfen' : 'Checking for changes';
+  String get syncStatusFinishing => isGerman ? 'Abschließen' : 'Finishing up';
+
+  /// „„IMG_0001.HEIC" auf „MEGA" übertragen" bzw. „… von „MEGA" übertragen".
+  String syncStatusTransfer(String file, String cloud, bool upload) => isGerman
+      ? '„$file“ ${upload ? 'auf' : 'von'} „$cloud“ übertragen'
+      : 'Transferring “$file” ${upload ? 'to' : 'from'} “$cloud”';
+
+  /// Restdauer ohne das Wort „ETA": „12 Minuten verbleibend".
+  /// Aufgerundet, damit die Anzeige nie „0 Minuten" zeigt, während noch
+  /// etwas läuft. Unter einer Minute wird in Sekunden gerechnet.
+  String etaRemaining(int seconds) {
+    if (seconds < 60) {
+      return isGerman
+          ? '$seconds ${seconds == 1 ? 'Sekunde' : 'Sekunden'} verbleibend'
+          : '$seconds ${seconds == 1 ? 'second' : 'seconds'} remaining';
+    }
+    if (seconds < 3600) {
+      final m = (seconds / 60).ceil();
+      return isGerman
+          ? '$m ${m == 1 ? 'Minute' : 'Minuten'} verbleibend'
+          : '$m ${m == 1 ? 'minute' : 'minutes'} remaining';
+    }
+    final h = (seconds / 3600).ceil();
+    return isGerman
+        ? '$h ${h == 1 ? 'Stunde' : 'Stunden'} verbleibend'
+        : '$h ${h == 1 ? 'hour' : 'hours'} remaining';
+  }
+
+  /// Solange noch keine brauchbare Geschwindigkeit gemessen wurde.
+  String get etaCalculating => isGerman
+      ? 'Restdauer wird berechnet …'
+      : 'Calculating remaining time …';
   String get syncAllUpToDate =>
       isGerman ? 'Alles aktuell.' : 'Everything up to date.';
   String syncDoneCounts(int uploaded, int downloaded) => isGerman

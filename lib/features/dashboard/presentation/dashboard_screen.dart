@@ -326,47 +326,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             SizedBox(height: theme.sm),
           ],
-          fluent.Text(
-            strings.activeTaskProgress,
-            style: fluent.FluentTheme.of(context).typography.subtitle,
-          ),
-          SizedBox(height: theme.sm),
-          fluent.Text(
-            '${strings.currentFile} ${job.currentFile.isEmpty ? strings.preparing : job.currentFile}',
-            style: fluent.FluentTheme.of(context).typography.body,
+          // Status: genau einer von drei Texten (siehe `_syncStatusText`).
+          Text(
+            _syncStatusText(job, strings),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: theme.textPrimary, fontSize: 14, height: 1.35),
           ),
           SizedBox(height: theme.sm),
           fluent.ProgressBar(
-            value: job.percentage,
-            activeColor: theme.accent,
-            backgroundColor: theme.secondary.withValues(alpha: 0.28),
+            value: job.percentage.clamp(0.0, 100.0),
+            activeColor: theme
+                .syncProgressFor(theme.surface.computeLuminance() < 0.25),
+            backgroundColor: theme.syncTrack,
           ),
-          // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
-          // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
-          SizedBox(height: theme.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Normales Flutter-Text statt fluent.Text: maxLines/overflow
-              // sind dort nicht überall verfügbar, und die Darstellung ist
-              // identisch (fluent.Text wrappt ohnehin Flutter-Text).
-              Expanded(
-                child: Text(
-                  job.itemsTotal > 0
-                      ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
-                      : strings.syncPhaseScan,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+          // Restdauer mittig unter dem Balken — ohne „ETA", ohne Prozentzahl.
+          if (job.isTransferring) ...[
+            SizedBox(height: theme.sm),
+            Center(
+              child: Text(
+                job.etaSeconds >= 0
+                    ? strings.etaRemaining(job.etaSeconds)
+                    : strings.etaCalculating,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: theme.textSecondary),
               ),
-              const SizedBox(width: 8),
-              fluent.Text('${job.percentage.toStringAsFixed(1)}%',
-                  style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
-            ],
-          ),
-          if (job.eta.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            fluent.Text('ETA: ${job.eta}'),
+            ),
           ],
         ],
       ),
@@ -377,44 +362,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isSyncing = job.status == RcloneJobStatus.syncing || job.status == RcloneJobStatus.pending;
     final theme = context.theme;
 
-    if (isSyncing) {
-      return fluent.Tooltip(
-        message: strings.cancelSync,
-        child: fluent.Button(
-          onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-          style: fluent.ButtonStyle(
-            backgroundColor: WidgetStatePropertyAll(theme.error),
-            foregroundColor: const WidgetStatePropertyAll(Color(0xffffffff)),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-            ),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(fluent.FluentIcons.cancel, size: 16, color: Color(0xffffffff), semanticLabel: 'Cancel'),
-                  const SizedBox(width: 8),
-                  Text(
-                    strings.cancelSync,
-                    style: const TextStyle(color: Color(0xffffffff), fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Sync erst erlauben, wenn tasks.json fertig gelesen ist UND eine
-    // Internetverbindung besteht.
+    // Sync erst erlauben, wenn tasks.json fertig gelesen ist, eine
+    // Internetverbindung besteht und kein Sync läuft.
     final tasksLoaded = ref.watch(tasksLoadedProvider);
     final online = ref.watch(networkStatusProvider).online;
     final canSync = tasksLoaded && online;
+    final enabled = canSync && !isSyncing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -423,7 +376,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ? strings.statusOffline
           : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
       child: fluent.FilledButton(
-        onPressed: canSync
+        // Während eines Laufs ausgegraut statt durch einen Abbrechen-Block
+        // ersetzt — die Aktion bleibt an derselben Stelle.
+        onPressed: enabled
             ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
             : null,
         child: ConstrainedBox(
@@ -433,9 +388,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Spinner statt stummem Grau, solange tasks.json lädt —
-                // der Button erklärt sich selbst.
-                if (!tasksLoaded)
+                // Spinner statt stummem Grau, solange tasks.json lädt oder
+                // ein Sync läuft — der Button erklärt sich selbst.
+                if (isSyncing || !tasksLoaded)
                   const SizedBox(
                       width: 16, height: 16, child: fluent.ProgressRing(strokeWidth: 2))
                 else
@@ -448,7 +403,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ),
         ),
+        if (isSyncing) _buildCancelLinkWindows(context, strings, theme),
       ],
+    );
+  }
+
+  /// Ruhiger Abbrechen-Link unter dem ausgegrauten Sync-Button (Windows).
+  Widget _buildCancelLinkWindows(
+      BuildContext context, AppStrings strings, AppThemeData theme) {
+    final blue =
+        theme.syncProgressFor(theme.surface.computeLuminance() < 0.25);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: theme.xs),
+            child: Center(
+              child: Text(
+                strings.cancel,
+                style: TextStyle(
+                  color: blue,
+                  fontSize: 14,
+                  decoration: TextDecoration.underline,
+                  decorationColor: blue,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -550,96 +537,68 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 _buildActiveJobPanelIOS(context, activeJob, strings),
                 SizedBox(height: theme.xl),
               ],
-              if (isSyncing)
-                Semantics(
-                  label: strings.cancelSync,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: cupertino.CupertinoButton(
-                      color: theme.error,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      borderRadius: BorderRadius.circular(theme.radiusSm),
-                      onPressed: () {
-                        IosHaptics.light();
-                        ref.read(activeJobProvider.notifier).cancelActiveSync();
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            cupertino.CupertinoIcons.stop_circle,
-                            color: cupertino.CupertinoColors.white,
-                            size: 20,
-                            semanticLabel: 'Cancel',
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            strings.cancelSync,
-                            style: const TextStyle(color: cupertino.CupertinoColors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Semantics(
-                  label: !online
-                      ? strings.statusOffline
-                      : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 44),
-                        child: cupertino.CupertinoButton(
-                          color: theme.accent,
-                          // Deutlich ausgegraut statt nur reduziert opak:
-                          // Offline/tastend-graue Fläche + gedimmter Text.
-                          disabledColor: theme.offline.withValues(alpha: 0.35),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          borderRadius: BorderRadius.circular(theme.radiusSm),
-                          // Eindeutig deaktiviert, bis tasks.json gelesen ist
-                          // UND eine Internetverbindung besteht.
-                          onPressed: canSync
-                              ? () {
-                                  IosHaptics.medium();
-                                  ref.read(activeJobProvider.notifier).triggerSyncAll();
-                                }
-                              : null,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Spinner + Klartext, solange die Aufgaben laden —
-                              // sonst wirkt der graue Button wie ein Fehler.
-                              if (!tasksLoaded)
-                                cupertino.CupertinoActivityIndicator(
-                                  color: theme.accentText
-                                      .withValues(alpha: canSync ? 1 : 0.7),
-                                )
-                              else
-                                Icon(
-                                  cupertino.CupertinoIcons.arrow_2_circlepath,
-                                  color: theme.accentText
-                                      .withValues(alpha: canSync ? 1 : 0.7),
-                                  size: 20,
-                                  semanticLabel: 'Sync',
-                                ),
-                              const SizedBox(width: 8),
-                              Text(
-                                tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
-                                style: TextStyle(
-                                  color: theme.accentText
-                                      .withValues(alpha: canSync ? 1 : 0.7),
-                                ),
+              // Der Sync-Button bleibt immer an derselben Stelle — während
+              // eines Laufs ausgegraut statt durch einen Abbrechen-Block
+              // ersetzt. Darunter erscheint der ruhige Abbrechen-Link.
+              Semantics(
+                label: !online
+                    ? strings.statusOffline
+                    : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: cupertino.CupertinoButton(
+                        color: theme.accent,
+                        // Deutlich ausgegraut statt nur reduziert opak:
+                        // Offline/tastend-graue Fläche + gedimmter Text.
+                        disabledColor: theme.offline.withValues(alpha: 0.35),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        borderRadius: BorderRadius.circular(theme.radiusSm),
+                        // Eindeutig deaktiviert, bis tasks.json gelesen ist,
+                        // eine Internetverbindung besteht und kein Sync läuft.
+                        onPressed: (canSync && !isSyncing)
+                            ? () {
+                                IosHaptics.medium();
+                                ref.read(activeJobProvider.notifier).triggerSyncAll();
+                              }
+                            : null,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Spinner während des Laufs und solange die
+                            // Aufgaben laden — sonst wirkt der graue Button
+                            // wie ein Fehler.
+                            if (isSyncing || !tasksLoaded)
+                              cupertino.CupertinoActivityIndicator(
+                                color: theme.accentText.withValues(
+                                    alpha: (canSync && !isSyncing) ? 1 : 0.7),
+                              )
+                            else
+                              Icon(
+                                cupertino.CupertinoIcons.arrow_2_circlepath,
+                                color: theme.accentText
+                                    .withValues(alpha: (canSync && !isSyncing) ? 1 : 0.7),
+                                size: 20,
+                                semanticLabel: 'Sync',
                               ),
-                            ],
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks,
+                              style: TextStyle(
+                                color: theme.accentText
+                                    .withValues(alpha: (canSync && !isSyncing) ? 1 : 0.7),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    if (isSyncing) _buildCancelLinkIOS(context, strings),
+                  ],
                 ),
+              ),
               _lastSyncInfo(context, strings),
               const SizedBox(height: 12),
               ],
@@ -781,9 +740,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               SizedBox(height: theme.sm),
             ],
-            Text(strings.syncActive, style: const TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: theme.sm),
-            Text(job.currentFile.isEmpty ? strings.preparing : job.currentFile, maxLines: 2, overflow: TextOverflow.ellipsis),
+            // Status: genau einer von drei Texten — „Auf Änderungen
+            // überprüfen", „„Datei" auf/von „Cloud" übertragen", „Abschließen".
+            Text(
+              _syncStatusText(job, strings),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: theme.textPrimary, fontSize: 14, height: 1.35),
+            ),
             SizedBox(height: theme.sm),
             ClipRRect(
               borderRadius: BorderRadius.circular(theme.radiusSm),
@@ -791,47 +756,86 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 height: 6,
                 child: Stack(
                   children: [
-                    Container(
-                        // Track in der zweiten Paletten-Charakterfarbe —
-                        // dekorativ, der Fortschritt selbst bleibt eindeutig.
-                        color: theme.secondary.withValues(alpha: 0.28)),
+                    Container(color: theme.syncTrack),
                     FractionallySizedBox(
-                      widthFactor: job.percentage / 100,
-                      child: Container(color: theme.accent),
+                      // Apples Systemblau, nicht der Paletten-Akzent: Der
+                      // Fortschritt ist eine Systemrückmeldung und soll auf
+                      // jedem Hintergrund gleich aussehen.
+                      widthFactor: (job.percentage / 100).clamp(0.0, 1.0),
+                      child: Container(
+                          color: theme.syncProgressFor(
+                              theme.surface.computeLuminance() < 0.25)),
                     ),
                   ],
                 ),
               ),
             ),
-            // Zähler UND Prozentzahl in EINER Zeile. Der Zähler ist immer
-            // sichtbar — vor dem ersten Transfer steht dort „Überprüfen"
-            // statt nichts, damit die Zeile nicht erst mitten im Sync
-            // „hineinploppt" und der Balken nicht springt.
-            SizedBox(height: theme.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    job.itemsTotal > 0
-                        ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
-                        : strings.syncPhaseScan,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: theme.textSecondary),
-                  ),
+            // Restdauer mittig unter dem Balken — ohne das Wort „ETA" und
+            // ohne Prozentzahl. Nur während eines echten Transfers, denn nur
+            // dort kennt die Engine eine Gesamtbytezahl.
+            if (job.isTransferring) ...[
+              SizedBox(height: theme.sm),
+              Center(
+                child: Text(
+                  job.etaSeconds >= 0
+                      ? strings.etaRemaining(job.etaSeconds)
+                      : strings.etaCalculating,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: theme.textSecondary),
                 ),
-                SizedBox(width: theme.sm),
-                Text('${job.percentage.toStringAsFixed(1)}%',
-                    style: TextStyle(fontSize: 12, color: theme.textSecondary, fontFeatures: const [FontFeature.tabularFigures()])),
-              ],
-            ),
-            if (job.eta.isNotEmpty) ...[
-              SizedBox(height: theme.xs),
-              Text('ETA: ${job.eta}',
-                  style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+              ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Der eine Status-Text der Statusleiste.
+  ///
+  /// Genau drei Zustände, aus der rohen Engine-Phase abgeleitet:
+  ///  * `upload`/`download` mit Dateinamen → „„Datei" auf/von „Cloud" übertragen"
+  ///  * `tombstones`/`delete-local`/`done`  → „Abschließen"
+  ///  * alles andere (Scan, Staging, Lösch-Erkennung) → „Auf Änderungen überprüfen"
+  String _syncStatusText(ActiveJobState job, AppStrings strings) {
+    if (job.phase == 'upload' || job.phase == 'download') {
+      if (job.fileName.isNotEmpty) {
+        return strings.syncStatusTransfer(
+            job.fileName, job.remoteLabel, job.phase == 'upload');
+      }
+    }
+    if (job.phase == 'tombstones' ||
+        job.phase == 'delete-local' ||
+        job.phase == 'done') {
+      return strings.syncStatusFinishing;
+    }
+    return strings.syncStatusChecking;
+  }
+
+  /// Ruhiger Abbrechen-Link unter dem ausgegrauten Sync-Button.
+  ///
+  /// Blau unterstrichen, ohne Hintergrund — kein roter Block mehr. Die
+  /// Trefferfläche bleibt 44 pt, auch wenn der Text klein ist.
+  Widget _buildCancelLinkIOS(BuildContext context, AppStrings strings) {
+    final theme = context.theme;
+    final blue =
+        theme.syncProgressFor(theme.surface.computeLuminance() < 0.25);
+    return Center(
+      child: cupertino.CupertinoButton(
+        padding: EdgeInsets.symmetric(horizontal: theme.md, vertical: theme.sm),
+        minSize: 44,
+        onPressed: () {
+          IosHaptics.light();
+          ref.read(activeJobProvider.notifier).cancelActiveSync();
+        },
+        child: Text(
+          strings.cancel,
+          style: TextStyle(
+            color: blue,
+            fontSize: 15,
+            decoration: TextDecoration.underline,
+            decorationColor: blue,
+          ),
         ),
       ),
     );
@@ -910,60 +914,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildActiveJobPanelAndroid(context, activeJob, strings),
               SizedBox(height: theme.xl),
             ],
-            if (isSyncing)
-              material.Tooltip(
-                message: strings.cancelSync,
-                child: material.ElevatedButton.icon(
-                  onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-                  icon: const Icon(material.Icons.stop_circle_outlined, semanticLabel: 'Cancel'),
-                  label: Text(strings.cancelSync),
-                  style: material.ElevatedButton.styleFrom(
-                    backgroundColor: theme.error,
-                    foregroundColor: material.Colors.white,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                  ),
-                ),
-              )
-            else
-              Builder(builder: (context) {
-                final online = ref.watch(networkStatusProvider).online;
-                final tasksLoaded = ref.watch(tasksLoadedProvider);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    material.Tooltip(
-                      message: !online
-                          ? strings.statusOffline
-                          : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
-                      child: material.ElevatedButton.icon(
-                        // Ausgegraut, bis tasks.json gelesen ist UND online.
-                        onPressed: tasksLoaded && online
-                            ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
-                            : null,
-                        icon: tasksLoaded
-                            ? const Icon(material.Icons.sync, semanticLabel: 'Sync')
-                            : const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: material.CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                        label: Text(tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
-                        style: material.ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          disabledBackgroundColor: theme.offline.withValues(alpha: 0.25),
-                          disabledForegroundColor: material.Colors.white.withValues(alpha: 0.7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-                        ),
+            // Der Sync-Button bleibt immer an derselben Stelle — während
+            // eines Laufs ausgegraut statt durch einen Abbrechen-Block
+            // ersetzt. Darunter erscheint der ruhige Abbrechen-Link.
+            Builder(builder: (context) {
+              final online = ref.watch(networkStatusProvider).online;
+              final tasksLoaded = ref.watch(tasksLoadedProvider);
+              final enabled = tasksLoaded && online && !isSyncing;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  material.Tooltip(
+                    message: !online
+                        ? strings.statusOffline
+                        : (tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                    child: material.ElevatedButton.icon(
+                      // Ausgegraut, bis tasks.json gelesen ist, online besteht
+                      // und kein Sync läuft.
+                      onPressed: enabled
+                          ? () => ref.read(activeJobProvider.notifier).triggerSyncAll()
+                          : null,
+                      icon: (tasksLoaded && !isSyncing)
+                          ? const Icon(material.Icons.sync, semanticLabel: 'Sync')
+                          : const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: material.CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                      label: Text(tasksLoaded ? strings.syncAll : strings.syncButtonWaitTasks),
+                      style: material.ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        disabledBackgroundColor: theme.offline.withValues(alpha: 0.25),
+                        disabledForegroundColor: material.Colors.white.withValues(alpha: 0.7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
                       ),
                     ),
-                  ],
-                );
-              }),
+                  ),
+                  if (isSyncing) _buildCancelLinkAndroid(context, strings, theme),
+                ],
+              );
+            }),
             _lastSyncInfo(context, strings),
             const SizedBox(height: 12),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Ruhiger Abbrechen-Link unter dem ausgegrauten Sync-Button (Android).
+  Widget _buildCancelLinkAndroid(
+      BuildContext context, AppStrings strings, AppThemeData theme) {
+    final blue =
+        theme.syncProgressFor(theme.surface.computeLuminance() < 0.25);
+    return material.TextButton(
+      onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+      style: material.TextButton.styleFrom(
+        minimumSize: const Size(0, 44),
+        foregroundColor: blue,
+        tapTargetSize: material.MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        strings.cancel,
+        style: TextStyle(
+          color: blue,
+          decoration: TextDecoration.underline,
+          decorationColor: blue,
         ),
       ),
     );
@@ -1002,49 +1019,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               SizedBox(height: theme.sm),
             ],
-            Text(strings.activeTaskProgress, style: material.Theme.of(context).textTheme.titleSmall),
-            SizedBox(height: theme.sm),
+            // Status: genau einer von drei Texten (siehe `_syncStatusText`).
             Text(
-              '${strings.currentFile} ${job.currentFile.isEmpty ? strings.preparing : job.currentFile}',
-              style: material.Theme.of(context).textTheme.bodyMedium,
-              maxLines: 1,
+              _syncStatusText(job, strings),
+              style: TextStyle(
+                  color: theme.textPrimary, fontSize: 14, height: 1.35),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: theme.sm),
             material.LinearProgressIndicator(
-              value: job.percentage / 100,
-              valueColor: material.AlwaysStoppedAnimation(theme.accent),
-              backgroundColor: theme.secondary.withValues(alpha: 0.28),
+              value: (job.percentage / 100).clamp(0.0, 1.0),
+              valueColor: material.AlwaysStoppedAnimation(theme
+                  .syncProgressFor(theme.surface.computeLuminance() < 0.25)),
+              backgroundColor: theme.syncTrack,
             ),
-            // Zähler und Prozentzahl in einer Zeile; Zähler immer sichtbar
-            // (vor dem ersten Transfer „Überprüfen"), damit nichts nachploppt.
-            SizedBox(height: theme.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    job.itemsTotal > 0
-                        ? strings.syncItemsProgress(job.itemsDone, job.itemsTotal)
-                        : strings.syncPhaseScan,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: material.Theme.of(context).textTheme.bodySmall,
-                  ),
+            // Restdauer mittig unter dem Balken — ohne „ETA", ohne Prozentzahl.
+            if (job.isTransferring) ...[
+              SizedBox(height: theme.sm),
+              Center(
+                child: Text(
+                  job.etaSeconds >= 0
+                      ? strings.etaRemaining(job.etaSeconds)
+                      : strings.etaCalculating,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: theme.textSecondary),
                 ),
-                SizedBox(width: theme.sm),
-                Text('${job.percentage.toStringAsFixed(1)}%',
-                    style: material.Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-              ],
-            ),
-            if (job.eta.isNotEmpty) ...[
-              SizedBox(height: theme.xs),
-              Text('ETA: ${job.eta}',
-                  style: material.Theme.of(context).textTheme.bodySmall),
-            ]
+              ),
+            ],
           ],
         ),
       ),

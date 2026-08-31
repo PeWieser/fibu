@@ -318,6 +318,8 @@ class WindowsRcloneService implements RcloneService {
           bytesTransferred: transferred,
           totalBytes: total,
           currentFile: currentFile,
+          phase: 'upload',
+          fileName: currentFile,
         ));
       }
     } catch (_) {

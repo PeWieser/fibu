@@ -85,6 +85,18 @@ class RcloneProgressEvent {
   /// leer = keine Warnung.
   final String warning;
 
+  /// Phase des Laufs, so wie die Sync-Engine sie meldet:
+  /// `scan`, `upload`, `download`, `tombstones`, `delete-local`.
+  /// Leer bei Pfaden, die keine Engine-Phasen kennen.
+  ///
+  /// Die UI bildet daraus genau drei Zustände ab (Änderungen prüfen /
+  /// Datei übertragen / Abschließen) — siehe `AppStrings.syncStatusText`.
+  final String phase;
+
+  /// Relativer Dateipfad des Elements, das gerade übertragen wird. Nur in
+  /// den Transferphasen gefüllt, sonst leer.
+  final String fileName;
+
   const RcloneProgressEvent({
     required this.jobId,
     required this.percentage,
@@ -96,6 +108,8 @@ class RcloneProgressEvent {
     this.itemsDone = 0,
     this.itemsTotal = 0,
     this.warning = '',
+    this.phase = '',
+    this.fileName = '',
   });
 }
 

@@ -33,6 +33,24 @@ class ActiveJobState {
   /// Nicht-blockierende Warnung des Laufs (z. B. Cloud/Gerät voll), leer = keine.
   final String warning;
 
+  /// Rohe Engine-Phase (`scan`, `upload`, `download`, `tombstones`,
+  /// `delete-local`, `done`). Die UI bildet daraus genau drei Zustände ab.
+  final String phase;
+
+  /// Relativer Pfad der Datei, die gerade übertragen wird (nur in den
+  /// Transferphasen gefüllt).
+  final String fileName;
+
+  /// Anzeigename des Cloud-Laufwerks, mit dem gerade synchronisiert wird.
+  final String remoteLabel;
+
+  /// Geschätzte Restdauer der aktuellen Transferphase in Sekunden.
+  /// `-1` = noch nicht berechenbar (keine brauchbare Geschwindigkeit).
+  final int etaSeconds;
+
+  /// Gemessene Transferrate in Byte/s (geglättet). `0` = unbekannt.
+  final double speedBytesPerSecond;
+
   const ActiveJobState({
     this.jobId,
     this.status = RcloneJobStatus.completed,
@@ -45,6 +63,11 @@ class ActiveJobState {
     this.bytesTransferred = 0,
     this.totalBytes = 0,
     this.warning = '',
+    this.phase = '',
+    this.fileName = '',
+    this.remoteLabel = '',
+    this.etaSeconds = -1,
+    this.speedBytesPerSecond = 0.0,
   });
 
   ActiveJobState copyWith({
@@ -59,6 +82,11 @@ class ActiveJobState {
     int? bytesTransferred,
     int? totalBytes,
     String? warning,
+    String? phase,
+    String? fileName,
+    String? remoteLabel,
+    int? etaSeconds,
+    double? speedBytesPerSecond,
   }) {
     return ActiveJobState(
       jobId: jobId ?? this.jobId,
@@ -72,8 +100,20 @@ class ActiveJobState {
       bytesTransferred: bytesTransferred ?? this.bytesTransferred,
       totalBytes: totalBytes ?? this.totalBytes,
       warning: warning ?? this.warning,
+      phase: phase ?? this.phase,
+      fileName: fileName ?? this.fileName,
+      remoteLabel: remoteLabel ?? this.remoteLabel,
+      etaSeconds: etaSeconds ?? this.etaSeconds,
+      speedBytesPerSecond: speedBytesPerSecond ?? this.speedBytesPerSecond,
     );
   }
+
+  /// Ob die Statusleiste gerade eine echte Dateiübertragung anzeigt.
+  bool get isTransferring =>
+      (phase == 'upload' || phase == 'download') && fileName.isNotEmpty;
+
+  /// Ob gerade hochgeladen (true) oder heruntergeladen (false) wird.
+  bool get isUploading => phase == 'upload';
 }
 
 /// StateNotifier handling the execution, status tracking, and progress reporting of backup tasks.
@@ -83,6 +123,69 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
   StreamSubscription? _globalStatusSub;
   StreamSubscription? _progressSub;
   bool _isCancelled = false;
+
+  // --- Geschwindigkeits- und Restdauer-Schätzung ---------------------------
+  //
+  // Die Engines melden je Datei nur übertragene und Gesamt-Bytes, keine Rate.
+  // Die Rate wird deshalb hier aus den Byte-Deltas zwischen zwei Events
+  // abgeleitet und exponentiell geglättet. Das ist ruhiger als der
+  // Momentanwert und reagiert trotzdem innerhalb von Sekunden.
+  int _speedLastBytes = 0;
+  DateTime? _speedLastSample;
+  double _smoothedSpeed = 0.0;
+
+  void _resetSpeedEstimate() {
+    _speedLastBytes = 0;
+    _speedLastSample = null;
+    _smoothedSpeed = 0.0;
+  }
+
+  /// Pflegt die geglättete Rate und liefert die Restdauer der aktuellen
+  /// Transferphase in Sekunden. `-1` = noch nicht berechenbar.
+  int _updateSpeedAndEta(int bytesTransferred, int totalBytes) {
+    final now = DateTime.now();
+    // Neue Transfer-Phase: Der Zähler beginnt bei 0, die alte Rate passt nicht.
+    if (bytesTransferred < _speedLastBytes) {
+      _speedLastBytes = 0;
+      _smoothedSpeed = 0.0;
+      _speedLastSample = null;
+    }
+    final prev = _speedLastSample;
+    if (prev != null) {
+      final dt = now.difference(prev).inMilliseconds / 1000.0;
+      // Unter 250 ms ist das Delta zu rauschig für eine brauchbare Rate.
+      if (dt >= 0.25) {
+        final delta = bytesTransferred - _speedLastBytes;
+        if (delta > 0) {
+          final instant = delta / dt;
+          _smoothedSpeed = _smoothedSpeed <= 0
+              ? instant
+              : _smoothedSpeed * 0.7 + instant * 0.3;
+        }
+        _speedLastBytes = bytesTransferred;
+        _speedLastSample = now;
+      }
+    } else {
+      _speedLastBytes = bytesTransferred;
+      _speedLastSample = now;
+    }
+
+    if (totalBytes <= 0 || _smoothedSpeed <= 0) return -1;
+    final remaining = totalBytes - bytesTransferred;
+    if (remaining <= 0) return 0;
+    return (remaining / _smoothedSpeed).ceil();
+  }
+
+  /// Anzeigename eines Cloud-Laufwerks; fällt auf die Kennung zurück.
+  Future<String> _remoteDisplayName(String remoteId) async {
+    try {
+      final entries = await _ref.read(remoteRegistryServiceProvider).entries();
+      for (final e in entries) {
+        if (e.id == remoteId && e.name.isNotEmpty) return e.name;
+      }
+    } catch (_) {}
+    return remoteId;
+  }
 
   ActiveJobNotifier(this._rcloneService, this._ref) : super(const ActiveJobState()) {
     // Listen globally to status updates
@@ -243,6 +346,9 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     final isEcho = task.syncMode == SyncMode.mirror;
     final modeLabel = isEcho ? 'Mirror-Sync (2-Wege)' : 'Incremental';
     final startMsg = '${_timestamp()} Task "${task.name}" ($modeLabel): starting sync to $remoteName:$remotePath...';
+    // Anzeigename des Ziellaufwerks für „… auf „MEGA“ übertragen".
+    final remoteLabel = await _remoteDisplayName(remoteName);
+    _resetSpeedEstimate();
     state = state.copyWith(
       percentage: 0.0,
       itemsDone: 0,
@@ -251,6 +357,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       totalBytes: 0,
       warning: '',
       currentFile: strings.startingTask(task.name),
+      remoteLabel: remoteLabel,
+      phase: 'scan',
+      fileName: '',
+      etaSeconds: -1,
+      speedBytesPerSecond: 0.0,
       logs: [...state.logs, startMsg],
     );
 
@@ -299,6 +410,14 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
                   .toDouble()
               : event.percentage;
 
+          // Restdauer nur in den Transferphasen sinnvoll — dort kennt die
+          // Engine eine Gesamtbytezahl. Außerhalb bleibt sie ausgeblendet.
+          final isTransfer =
+              event.phase == 'upload' || event.phase == 'download';
+          final etaSecs = isTransfer
+              ? _updateSpeedAndEta(event.bytesTransferred, event.totalBytes)
+              : -1;
+
           state = state.copyWith(
             percentage: effectivePct,
             currentFile: '[${task.name}] ${event.currentFile}',
@@ -308,6 +427,10 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
             bytesTransferred: event.bytesTransferred,
             totalBytes: event.totalBytes,
             warning: event.warning,
+            phase: event.phase,
+            fileName: event.fileName,
+            etaSeconds: etaSecs,
+            speedBytesPerSecond: _smoothedSpeed,
             logs: newLogs,
           );
         }

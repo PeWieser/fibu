@@ -124,6 +124,20 @@ class AppThemeData {
   /// Hintergrund-Waschung aus [primary] für den Modus [PrimaryUsage.wash].
   Color get primaryWash => primary.withValues(alpha: 0.10);
 
+  /// Apples Systemblau — die Farbe des Sync-Fortschrittsbalkens.
+  ///
+  /// Bewusst **nicht** [accent]: Der Fortschritt ist eine systemische
+  /// Betriebssystem-Rückmeldung und soll auf jedem Paletten-Hintergrund
+  /// identisch aussehen. Die Werte sind exakt `CupertinoColors.systemBlue`
+  /// (#007AFF hell, #0A84FF dunkel) und gegen [canvas]/[surface] in allen
+  /// Paletten ≥ 3:1 — der Balken ist ein großes Flächenelement, dafür gilt
+  /// die WCAG-Grenze für Nicht-Text.
+  Color syncProgressFor(bool isDark) =>
+      isDark ? const Color(0xff0a84ff) : const Color(0xff007aff);
+
+  /// Passendes Track-Grau hinter dem Fortschrittsbalken.
+  Color get syncTrack => textSecondary.withValues(alpha: 0.22);
+
   /// Haarlinie zur Abtrennung transluzenter Leisten vom Inhalt.
   ///
   /// Nur unter iOS 26 sinnvoll: Dort ist die Leiste natives, transluzentes

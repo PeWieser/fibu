@@ -649,6 +649,7 @@ class IosRcloneService implements RcloneService {
           speedBytesPerSecond: 0,
           itemsDone: done,
           itemsTotal: total,
+          phase: 'scan',
         ));
       });
 
@@ -664,6 +665,7 @@ class IosRcloneService implements RcloneService {
             currentFile: AppStrings.current.syncMirrorRunning,
             eta: '',
             speedBytesPerSecond: 0,
+            phase: 'scan',
           ));
         }
 
@@ -685,6 +687,7 @@ class IosRcloneService implements RcloneService {
                   currentFile: AppStrings.current.syncDeletionScan,
                   eta: '',
                   speedBytesPerSecond: 0,
+                  phase: 'scan',
                 ));
               });
           for (final rel in localDeletions) {
@@ -738,6 +741,8 @@ class IosRcloneService implements RcloneService {
               speedBytesPerSecond: 0,
               itemsDone: showCounters ? done : 0,
               itemsTotal: showCounters && total > 0 ? total : 0,
+              phase: phase,
+              fileName: isTransfer ? item : '',
             ));
           },
         );
@@ -860,6 +865,9 @@ class IosRcloneService implements RcloneService {
           speedBytesPerSecond: speed,
           itemsDone: itemsDone,
           itemsTotal: itemsTotal,
+          // `sync/copy` ist immer lokal -> Cloud, also ein Upload.
+          phase: 'upload',
+          fileName: currentFile,
         ));
       }
 
@@ -878,6 +886,7 @@ class IosRcloneService implements RcloneService {
             currentFile: AppStrings.current.syncCompletedLabel,
             eta: '0s',
             speedBytesPerSecond: 0,
+            phase: 'done',
           ));
         }
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
@@ -1853,6 +1862,7 @@ class IosRcloneService implements RcloneService {
         speedBytesPerSecond: 0,
         itemsDone: done,
         itemsTotal: total,
+        phase: 'scan',
       ));
     }
 
@@ -2040,6 +2050,11 @@ class IosRcloneService implements RcloneService {
           speedBytesPerSecond: 0,
           itemsDone: showCounters ? done : 0,
           itemsTotal: showCounters && total > 0 ? total : 0,
+          // Phase und Dateiname gehen roh mit: Die UI baut daraus ihre drei
+          // Zustände und die Restdauer. `item` ist in den Transferphasen der
+          // relative Pfad, in der Scan-Phase ein Meldungstext.
+          phase: phase,
+          fileName: isTransfer ? item : '',
         ));
       },
     );
@@ -2064,6 +2079,7 @@ class IosRcloneService implements RcloneService {
         itemsDone: result.uploaded + result.downloaded,
         itemsTotal: result.uploaded + result.downloaded,
         warning: warn,
+        phase: 'done',
       ));
     }
     _statusController.add(

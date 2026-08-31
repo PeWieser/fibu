@@ -161,6 +161,8 @@ class MockRcloneService implements RcloneService {
           bytesTransferred: totalBytes,
           totalBytes: totalBytes,
           currentFile: mockFiles.last,
+          phase: 'done',
+          fileName: mockFiles.last,
         ));
         
         _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.completed));
@@ -179,6 +181,10 @@ class MockRcloneService implements RcloneService {
           bytesTransferred: currentBytes,
           totalBytes: totalBytes,
           currentFile: mockFiles[fileIndex],
+          // Mock ist ein reiner Upload — dieselbe Phase, die auch der echte
+          // incrementelle Pfad meldet (`sync/copy` = lokal -> Cloud).
+          phase: 'upload',
+          fileName: mockFiles[fileIndex],
         ));
       }
     });

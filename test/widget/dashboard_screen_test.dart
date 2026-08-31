@@ -282,9 +282,25 @@ void main() {
         // Status updates to Syncing
         expect(find.text(strings.syncActive), findsOneWidget);
         
-        // Expect active task panel to show up
+        // Die Statusleiste zeigt genau einen von drei Zuständen (Vorgabe):
+        // „Auf Änderungen überprüfen", „„Datei" auf/von „Cloud" übertragen"
+        // oder „Abschließen".
         await tester.pump(const Duration(milliseconds: 200));
-        expect(find.text(strings.activeTaskProgress), findsOneWidget);
+        bool isStatusText(String? data) {
+          if (data == null) return false;
+          if (data == strings.syncStatusChecking) return true;
+          if (data == strings.syncStatusFinishing) return true;
+          // Transfer-Zustand: Datei- und Cloud-Name kommen aus dem Mock,
+          // geprüft wird deshalb auf die feste Satzform.
+          return strings.isGerman
+              ? data.endsWith('übertragen')
+              : data.startsWith('Transferring ');
+        }
+
+        expect(
+          find.byWidgetPredicate((w) => w is Text && isStatusText(w.data)),
+          findsWidgets,
+        );
 
         // Die „ruhiger Balken"-Mindestanzeigedauer (2 s) aus
         // _syncTaskToRemote wird erst NACH Abschluss der Mock-Simulation

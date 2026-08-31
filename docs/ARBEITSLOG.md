@@ -1,5 +1,46 @@
 # Fibu — Arbeits-Log (Session)
 
+## 2026-08-31 — Statusleiste umgebaut
+
+Die Sync-Statusleiste zeigt jetzt genau drei Zustände statt eines Mischmaschs
+aus Phasenlabel, Dateizähler, Prozentzahl und roher rclone-ETA.
+
+| Vorher | Nachher |
+|---|---|
+| „Synchronisierung läuft" + aktueller Dateiname + Phasenlabel | Ein Text: „Auf Änderungen überprüfen" |
+| „12 von 45 Dateien" + „34,7 %" | „„IMG_0001.HEIC" auf „MEGA" übertragen" |
+| „ETA: 2m14s" (roh von rclone, im Spiegel-Sync leer) | „7 Minuten verbleibend" |
+| Balken in der Paletten-Akzentfarbe | Balken in Apples Systemblau |
+| Fetten roten „Sync abbrechen"-Block anstelle des Sync-Buttons | Sync-Button bleibt, ausgegraut; darunter ein ruhiger Abbrechen-Link |
+
+**Restdauer.** Die Engines melden je Datei nur übertragene und Gesamt-Bytes,
+keine Rate. Die Rate wird deshalb im `ActiveJobNotifier` aus den Byte-Deltas
+zwischen zwei Events abgeleitet und exponentiell geglättet (70/30). Das
+funktioniert für beide Richtungen — Upload und Download — weil beide dieselben
+`bytesDone`/`bytesTotal` melden. Solange keine brauchbare Rate vorliegt, steht
+dort „Restdauer wird berechnet …" statt einer erfundenen Zahl.
+
+**Warum die Rate nicht aus rclone kommt.** Der manifest-only Spiegel-Sync
+(`_runVirtualMirrorSync`) setzt `speedBytesPerSecond` überall auf 0 — er
+überträgt dateiweise über `copyFileToRemoteWithProgress`, nicht über einen
+rclone-Job. Eine eigene Berechnung aus den Deltas war der einzige Weg, der für
+beide Pfade funktioniert.
+
+**Neu im Datenmodell.** `RcloneProgressEvent.phase` und `.fileName` gehen roh
+von der Engine mit; `ActiveJobState` bekommt `phase`, `fileName`,
+`remoteLabel`, `etaSeconds` und `speedBytesPerSecond`. Die UI bildet aus der
+rohen Phase die drei Zustände ab (`_syncStatusText`).
+
+**Zum Abbrechen-Link.** Blau unterstrichen ohne Hintergrund, wie gewünscht.
+Anmerkung: Apple selbst nutzt für einfache Text-Buttons (`UIButton`
+`plain`-Konfiguration) Blau **ohne** Unterstreichung — Unterstrichen ist im
+iOS-Vokabular der Hyperlink. Die Trefferfläche bleibt 44 pt.
+
+**Test angepasst.** `dashboard_screen_test.dart` prüfte auf
+`strings.activeTaskProgress`, das es nicht mehr gibt; jetzt wird auf einen der
+drei Zustände geprüft.
+
+
 ## 2026-08-31 — Rechts-Audit: Befunde und Fixes
 
 Vollstaendige Pruefung auf Urheberrecht, DSGVO, App-Store-/Play-Store-

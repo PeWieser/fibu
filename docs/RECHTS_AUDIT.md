@@ -678,7 +678,19 @@ eigenen Commit mit Test.
 - **Kein macOS/Xcode.** Der Privacy Report (`Product → Archive → Generate
   Privacy Report`) kann nicht erzeugt werden; ob librclone tatsächlich
   `stat`/`mach_absolute_time` referenziert, ist deshalb Annahme, nicht Befund.
+- **Das CI-Artefakt ist aus der Sandbox nicht ladbar.** `gh run download`
+  bricht mit `EOF` gegen `productionresultssa3.blob.core.windows.net` ab
+  (dieselbe Netzgrenze wie bei den Step-Logs). Ob
+  `Payload/Runner.app/PrivacyInfo.xcprivacy` im fertigen Bundle liegt, ist
+  damit **nicht direkt** geprüft. Geprüft ist: die Resources-Phase
+  `97C146EC1CF9000F007C117D` gehört zum Target **Runner**, die Group
+  `Runner/` enthält die Dateireferenz, die Datei existiert unter
+  `ios/Runner/PrivacyInfo.xcprivacy`, und der CI-Schritt
+  „Build iOS App (Unsigned Release)" ist grün — ein unauffindbares Build-Input
+  hätte dort mit „Build input file cannot be found" abgebrochen.
 - **Kein Registerzugriff.** DPMA und EUIPO waren nicht erreichbar (L-24).
 - **Kein Gerät.** OAuth-Flows, Keychain-Verhalten und Permission-Dialoge sind
-  aus dem Code gelesen, nicht ausgeführt.
+  aus dem Code gelesen, nicht ausgeführt. Ebenso ist der neue
+  Google-Photos-Scope (L-30) aus der rclone-Dokumentation übernommen, nicht
+  gegen Google getestet.
 - **Keine Rechtsberatung.** Dieses Dokument ersetzt keinen Anwalt.

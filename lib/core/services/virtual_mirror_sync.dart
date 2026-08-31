@@ -5,6 +5,7 @@ import 'dart:io';
 import '../localization/app_strings.dart';
 import '../utils/format.dart';
 import 'app_log_service.dart';
+import 'change_journal_service.dart';
 import 'device_storage.dart';
 import 'mirror_sync_engine.dart';
 import 'rclone_service.dart';
@@ -105,8 +106,21 @@ class VirtualMirrorSyncEngine {
     required Future<File?> Function(VirtualMediaItem item) exportForUpload,
     required Future<void> Function(List<File> files, List<String> rels) importDownloaded,
     required Future<void> Function(List<Map<String, dynamic>> state) persistLocalState,
+    /// Zustand des VORHERIGEN Laufs (rel → Metadaten). Dient dem Verlauf
+    /// dazu, „neu" von „geändert" zu unterscheiden und bei Löschungen Größe
+    /// und Änderungszeit der zuletzt bekannten Fassung zu notieren.
+    Map<String, VirtualMediaItem>? lastKnownState,
+
     TrashService? trash,
     MirrorProgressCallback? onProgress,
+
+    /// Verlaufssenke: wird bei jeder tatsächlich ausgeführten Änderung
+    /// aufgerufen (hinzugefügt, geändert, gelöscht). Die Engine besitzt das
+    /// Journal bewusst nicht — Persistierung und Verdichten bleiben beim
+    /// Aufrufer, damit die Engine testbar bleibt.
+    void Function(ChangeKind kind, String rel,
+            {int sizeBytes, int modifiedMs, String? trashRef})?
+        onJournal,
 
     /// Billiger Größen-Mess-Callback für die Upload-Vorabvermessung
     /// (z. B. `asset.file` ohne Temp-Kopie). Fehlt er, wird über
@@ -140,6 +154,11 @@ class VirtualMirrorSyncEngine {
         'Virtual-Mirror-Analyse fertig: ${localItems.length} lokale Medien / ${remoteFiles.length} Cloud-Dateien');
 
     final localTombs = await _readTombs(_tombstoneFile(stateRoot));
+    // Letzter bekannter Stand je Pfad — Grundlage für „neu" vs. „geändert"
+    // im Verlauf. Leer beim allerersten Lauf.
+    final lastKnown = <String, VirtualMediaItem>{
+      ...?lastKnownState,
+    };
     final remoteContent = await _safeCat(remoteName, remotePath);
     final remoteTombs = _parseTombs(remoteContent);
 
@@ -173,6 +192,12 @@ class VirtualMirrorSyncEngine {
             deletedAt: now,
             deviceId: 'local',
           ));
+          // Verlauf: lokal gelöscht. Größe/Zeit aus dem letzten bekannten
+          // Zustand, falls der lokale Scan sie noch hat.
+          final known = lastKnown[rel];
+          onJournal?.call(ChangeKind.deleted, rel,
+              sizeBytes: known?.sizeBytes ?? 0,
+              modifiedMs: known?.modifiedMs ?? 0);
         }
         AppLog.info('sync',
             '${missingLocal.length} lokal gelöschte Medien → Tombstones (Cloud-Löschung, kein Re-Download)');
@@ -465,6 +490,14 @@ class VirtualMirrorSyncEngine {
         );
         uploadedRels.add(item.rel);
         sizeUpdates[item.rel] = localSize;
+        // Verlauf: neu in der Cloud oder dort überschrieben.
+        onJournal?.call(
+            lastKnown.containsKey(item.rel)
+                ? ChangeKind.modified
+                : ChangeKind.added,
+            item.rel,
+            sizeBytes: localSize,
+            modifiedMs: item.modifiedMs);
       } catch (e) {
         AppLog.warn('sync', 'Upload fehlgeschlagen: ${item.rel} → $e');
       } finally {
@@ -496,10 +529,16 @@ class VirtualMirrorSyncEngine {
         onProgress?.call('tombstones', tomb.path, tb, localTombs.length);
         if (remoteFiles.containsKey(tomb.path)) {
           var ok = false;
+          // Papierkorb-Bezug für den Verlauf: nur wenn die Datei wirklich im
+          // Fibu-Papierkorb landete, ist sie später wiederherstellbar.
+          String? trashRef;
           if (trash != null) {
             ok = await trash.moveToRemoteTrash(
               remoteName: remoteName, remotePath: remotePath, rel: tomb.path);
-            if (ok) trashedRemote++;
+            if (ok) {
+              trashedRemote++;
+              trashRef = trash.remoteTrashRef(remotePath, tomb.path);
+            }
           }
           if (!ok) {
             try {
@@ -509,6 +548,13 @@ class VirtualMirrorSyncEngine {
             } catch (e) {
               AppLog.warn('sync', 'Remote-Löschung fehlgeschlagen: ${tomb.path} → $e');
             }
+          }
+          if (ok) {
+            final known = lastKnown[tomb.path];
+            onJournal?.call(ChangeKind.deleted, tomb.path,
+                sizeBytes: known?.sizeBytes ?? 0,
+                modifiedMs: known?.modifiedMs ?? 0,
+                trashRef: trashRef);
           }
           // Auch bei Erfolg aus der In-Memory-Liste nehmen, damit Phase 4
           // (Download) die Datei nicht aus dem Scan-Stand von Laufbeginn holt.
@@ -558,6 +604,13 @@ class VirtualMirrorSyncEngine {
         final deletedSet = deletedRels.toSet();
         deletedLocal += deletedSet.length;
         for (final rel in deletedSet) {
+          final known = localItems[rel];
+          // Verlauf: in der Cloud gelöscht und die Löschung lokal nachgezogen.
+          // Kein Papierkorb-Bezug — die Datei kam aus der Cloud und ist dort
+          // bereits weg.
+          onJournal?.call(ChangeKind.deleted, rel,
+              sizeBytes: known?.sizeBytes ?? 0,
+              modifiedMs: known?.modifiedMs ?? 0);
           localItems.remove(rel);
         }
         // Vom Nutzer im Systemdialog abgelehnt → behalten, aber blockieren.
@@ -739,6 +792,14 @@ class VirtualMirrorSyncEngine {
           final actualSize = size > 0 ? size : await dest.length();
           downloadedBytes += actualSize;
           sizeUpdates[rel] = actualSize;
+          // Verlauf: aus der Cloud in die Mediathek geholt.
+          onJournal?.call(
+              lastKnown.containsKey(rel) ? ChangeKind.modified : ChangeKind.added,
+              rel,
+              sizeBytes: actualSize,
+              modifiedMs: DateTime.tryParse(entry.value.modTime)
+                      ?.millisecondsSinceEpoch ??
+                  0);
           onProgress?.call(
             'download',
             rel,

@@ -14,6 +14,7 @@ import 'virtual_mirror_sync.dart';
 import '../localization/app_strings.dart';
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
+import 'change_journal_service.dart';
 import 'pending_deletions_store.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
@@ -1528,6 +1529,20 @@ class IosRcloneService implements RcloneService {
   /// Folge: Lief Aufgabe B (Album „Reisen"), galten sämtliche Pfade aus
   /// Aufgabe A (Album „Urlaub") als „lokal gelöscht" → Tombstones →
   /// Cloud-Löschung der Dateien von A. Getrennte Scopes verhindern das.
+  /// Änderungs-Journal einer Aufgabe — Grundlage der Verlaufs-Ansicht und der
+  /// Zeitpunkt-Wiederherstellung (siehe docs/ZEITPUNKT_WIEDERHERSTELLUNG.md).
+  ///
+  /// Liegt im selben privaten Scope-Ordner wie `mirror_state.json`.
+  Future<ChangeJournal> changeJournal({
+    required String remoteName,
+    required String remotePath,
+    required String localPath,
+  }) async =>
+      ChangeJournal(await _virtualStateRoot(
+          remoteName: remoteName,
+          remotePath: remotePath,
+          localPath: localPath));
+
   Future<Directory> _virtualStateRoot({
     String remoteName = '',
     String remotePath = '',
@@ -1989,6 +2004,11 @@ class IosRcloneService implements RcloneService {
       }
     }
 
+    // Änderungs-Journal für die Zeitpunkt-Wiederherstellung. Liegt im
+    // selben privaten Scope-Ordner wie mirror_state.json. Geschrieben wird
+    // gebündelt am Ende des Laufs — pro Datei wäre zu viel I/O.
+    final journal = ChangeJournal(stateRoot);
+
     final result = await VirtualMirrorSyncEngine(this).sync(
       localItems: items,
       stateRoot: stateRoot.path,
@@ -1998,6 +2018,10 @@ class IosRcloneService implements RcloneService {
       adoptedRels: adopted,
       adoptOrphans: adoptOrphans,
       previouslySyncedRels: previousRels,
+      lastKnownState: {for (final i in state.items) i.rel: i},
+      onJournal: (kind, rel, {sizeBytes = 0, modifiedMs = 0, trashRef}) =>
+          journal.record(kind, rel,
+              sizeBytes: sizeBytes, modifiedMs: modifiedMs, trashRef: trashRef),
       librarySizes: librarySizes,
       isCancelled: () => _cancelledJobs.contains(jobId),
       deleteLocalAssets: deleteLocalAssets,
@@ -2061,6 +2085,11 @@ class IosRcloneService implements RcloneService {
 
     AppLog.info('sync',
         'Virtual-Mirror abgeschlossen: ↑${result.uploaded} ↓${result.downloaded} 🗑${result.trashedLocal}/${result.trashedRemote} Δ${result.deletedLocal}/${result.deletedRemote}${result.warnings.isNotEmpty ? ' — Warnungen: ${result.warnings.join('; ')}' : ''}');
+
+    // Verlauf erst NACH dem erfolgreichen Lauf festschreiben: Ein
+    // abgebrochener Sync soll keinen halben Zustand journalisieren.
+    await journal.flush();
+    await journal.compact();
     if (!progress.isClosed) {
       final warn = result.warnings.isNotEmpty ? result.warnings.first : '';
       progress.add(RcloneProgressEvent(

@@ -59,10 +59,19 @@ class TrashService {
   // heruntergeladen wird)
   // -------------------------------------------------------------------------
 
+  /// Name des Papierkorb-Ordners auf dem Laufwerk. Öffentlich, damit der
+  /// Verlauf einen stabilen Bezug auf eine verschobene Datei notieren kann.
+  static const String remoteTrashName = '.fibu-trash';
+
+  /// Papierkorb-Bezug einer Datei, wie ihn der Verlauf speichert:
+  /// `<Papierkorb-Ordner>/<relativer Pfad>`.
+  String remoteTrashRef(String remotePath, String rel) =>
+      '${_remoteTrashPath(remotePath)}/$rel';
+
   String _remoteTrashPath(String remotePath) {
     final seg = remotePath.split('/').where((s) => s.isNotEmpty).toList();
     final parent = seg.length > 1 ? seg.sublist(0, seg.length - 1).join('/') : '';
-    return parent.isEmpty ? '.fibu-trash' : '$parent/.fibu-trash';
+    return parent.isEmpty ? remoteTrashName : '$parent/$remoteTrashName';
   }
 
   /// Legt eine entfernte Datei in den Remote-Papierkorb und löscht dann das

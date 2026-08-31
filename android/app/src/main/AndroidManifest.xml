@@ -32,6 +32,32 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!--
+            OAuth-Callback für flutter_web_auth_2.
+
+            Ohne diese Activity kann der Anmeldevorgang auf Android nicht zur
+            App zurückkehren: iOS liefert den Callback über
+            ASWebAuthenticationSession an die öffnende App, Android braucht
+            dafür einen registrierten Intent-Filter. Das Scheme muss exakt
+            `OAuthService.callbackScheme` entsprechen
+            (lib/core/services/oauth_service.dart) und dem
+            CFBundleURLSchemes-Eintrag in ios/Runner/Info.plist.
+
+            taskAffinity="" ist Pflicht: flutter_web_auth_2 kehrt sonst in die
+            falsche Task zurück und der Browser bleibt offen stehen.
+        -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true"
+            android:taskAffinity="">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="fibuoauth" />
+            </intent-filter>
+        </activity>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

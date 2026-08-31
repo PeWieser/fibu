@@ -799,7 +799,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   ///  * alles andere (Scan, Staging, Lösch-Erkennung) → „Auf Änderungen überprüfen"
   String _syncStatusText(ActiveJobState job, AppStrings strings) {
     if (job.phase == 'upload' || job.phase == 'download') {
-      if (job.fileName.isNotEmpty) {
+      // Ohne Dateiname oder ohne Laufwerksnamen bleibt der neutrale Text —
+      // lieber weniger sagen als eine halbe oder falsche Zeile zeigen.
+      if (job.fileName.isNotEmpty && job.remoteLabel.isNotEmpty) {
         return strings.syncStatusTransfer(
             job.fileName, job.remoteLabel, job.phase == 'upload');
       }

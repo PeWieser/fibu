@@ -176,7 +176,13 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     return (remaining / _smoothedSpeed).ceil();
   }
 
-  /// Anzeigename eines Cloud-Laufwerks; fällt auf die Kennung zurück.
+  /// Anzeigename eines Cloud-Laufwerks — also der Name, den der Nutzer dem
+  /// Laufwerk gegeben hat, NICHT der Provider-Name und nicht die interne
+  /// Kennung.
+  ///
+  /// Liefert '' statt der Kennung, wenn die Registry nicht gelesen werden
+  /// kann: „auf „fibu-a1b2c3d4" übertragen" wäre schlechter als der
+  /// neutrale Prüftext, auf den die Statusleiste dann zurückfällt.
   Future<String> _remoteDisplayName(String remoteId) async {
     try {
       final entries = await _ref.read(remoteRegistryServiceProvider).entries();
@@ -184,7 +190,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         if (e.id == remoteId && e.name.isNotEmpty) return e.name;
       }
     } catch (_) {}
-    return remoteId;
+    return '';
   }
 
   ActiveJobNotifier(this._rcloneService, this._ref) : super(const ActiveJobState()) {

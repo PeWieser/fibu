@@ -51,8 +51,8 @@ void main() {
       //
       // Ein großes Testfenster macht ihn unabhängig davon: Die Seite passt
       // hinein, alle Reihen sind gebaut, es muss nicht gescrollt werden.
-      tester.view.surfaceSize = const Size(1200, 2000);
-      addTearDown(tester.view.resetSurfaceSize);
+      await tester.binding.setSurfaceSize(const material.Size(1200, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
       try {
         final container = ProviderContainer(overrides: [

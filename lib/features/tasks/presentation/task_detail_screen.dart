@@ -16,7 +16,6 @@ import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../dashboard/presentation/dashboard_controller.dart';
 import 'tasks_controller.dart';
-import 'tasks_screen.dart';
 
 /// Platform-adaptive Task Detail screen structured according to Apple Settings HIG.
 /// Displays complete configuration of a single backup task in organized, clean groups.
@@ -855,14 +854,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         Row(
           children: [
             for (final mode in SyncMode.values)
-              Padding(
-                padding: EdgeInsets.only(right: theme.md),
-                child: fluent.RadioButton(
-                  checked: _editSyncMode == mode,
-                  onChanged: (v) {
-                    if (v == true) setState(() => _editSyncMode = mode);
-                  },
-                  content: Text(_formatSyncMode(strings, mode)),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _editSyncMode = mode),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 32),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _editSyncMode == mode
+                              ? fluent.FluentIcons.radio_bullet
+                              : fluent.FluentIcons.radio_btn_off,
+                          size: 16,
+                          color: _editSyncMode == mode
+                              ? theme.accent
+                              : theme.textSecondary,
+                        ),
+                        SizedBox(width: theme.sm),
+                        Text(_formatSyncMode(strings, mode)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -1697,24 +1711,31 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 borderRadius: BorderRadius.circular(theme.radiusLg),
                 side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
               ),
-              child: material.ListTile(
-                leading: Icon(
-                  task.syncMode == SyncMode.mirror ? material.Icons.sync : material.Icons.arrow_upward,
-                  color: theme.accent,
-                ),
-                title: Text(strings.syncModeLabel),
-                subtitle: Text(_formatSyncModeDescription(
-                    strings, _isEditing ? _editSyncMode : task.syncMode)),
-                trailing: _isEditing
-                    ? null
-                    : Text(_formatSyncMode(strings, task.syncMode),
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Column(
+                children: [
+                  material.ListTile(
+                    leading: Icon(
+                      _editSyncMode == SyncMode.mirror
+                          ? material.Icons.sync
+                          : material.Icons.arrow_upward,
+                      color: theme.accent,
+                    ),
+                    title: Text(strings.syncModeLabel),
+                    subtitle: Text(_formatSyncModeDescription(
+                        strings, _isEditing ? _editSyncMode : task.syncMode)),
+                    trailing: _isEditing
+                        ? null
+                        : Text(_formatSyncMode(strings, task.syncMode),
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  if (_isEditing)
+                    Padding(
+                      padding:
+                          EdgeInsets.fromLTRB(theme.md, 0, theme.md, theme.md),
+                      child: _buildMaterialSyncModeEditor(strings, theme),
+                    ),
+                ],
               ),
-              if (_isEditing)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(theme.md, 0, theme.md, theme.md),
-                  child: _buildMaterialSyncModeEditor(strings, theme),
-                ),
             ),
             SizedBox(height: theme.lg),
 

@@ -830,6 +830,13 @@ class AppStrings {
   // schreiben) ist „Abschließen".
   /// Importierte Aufgabe ohne Quelle (Quelle eines anderen Geräts, z. B. eine
   /// iOS-Mediathek, die es hier nicht gibt).
+  // --- Autostart (Windows) ---
+  String get autostartLabel =>
+      isGerman ? 'Mit Windows starten' : 'Start with Windows';
+  String get autostartDescription => isGerman
+      ? 'Fibu startet im Hintergrund, sobald du dich anmeldest, und führt den Zeitplan auch aus, wenn du die App nicht geöffnet hast. Verpasste Läufe werden beim nächsten Start nachgeholt.'
+      : 'Fibu starts in the background when you sign in and runs the schedule even if you never open the app. Missed runs are caught up on the next start.';
+
   String get syncSourceMissing => isGerman
       ? 'Keine Quelle gewählt — bitte in der Aufgabe einen Ordner auswählen'
       : 'No source selected — please choose a folder in the task';

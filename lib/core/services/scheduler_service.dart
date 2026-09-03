@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../utils/app_paths.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'app_log_service.dart';
 import 'ios_rclone_service.dart';
 import 'rclone_service.dart';
+import 'scheduler_run_log.dart';
 import 'settings_service.dart';
 import 'widget_status_service.dart';
 
@@ -45,7 +48,24 @@ class SchedulerService {
   ///
   /// iOS runs a `BGProcessingTask` (wifi + charging friendly) roughly every
   /// two hours; actual per-task schedules are evaluated in [runScheduledSync].
+  ///
+  /// **Windows/Android:** `workmanager` hat dort keine bzw. eine andere
+  /// Implementierung. Früher lief der Aufruf trotzdem und die
+  /// `MissingPluginException` wurde still verschluckt — die Oberfläche zeigte
+  /// einen Zeitplan, der nie ausgeführt wurde. Auf Windows übernimmt jetzt
+  /// [startWindowsTimer] das Scheduling im laufenden Prozess.
   static Future<void> initialize() async {
+    final platform = defaultTargetPlatform;
+    if (kIsWeb ||
+        platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux ||
+        platform == TargetPlatform.macOS) {
+      startWindowsTimer();
+      return;
+    }
+    // Auch mobil: Was das Betriebssystem nicht auslösen konnte (Gerät aus,
+    // kein Netz, BGTaskScheduler zu selten), wird beim App-Start nachgeholt.
+    unawaited(runMissedSyncs());
     try {
       await Workmanager().initialize(fibuCallbackDispatcher);
       await Workmanager().registerPeriodicTask(
@@ -57,10 +77,133 @@ class SchedulerService {
         ),
         existingWorkPolicy: ExistingWorkPolicy.keep,
       );
-    } catch (_) {
-      // Background scheduling is best-effort; it must never crash the UI.
+    } catch (e) {
+      // Hintergrund-Scheduling ist best-effort und darf die UI nie kippen —
+      // aber still darf es nicht mehr sein.
+      AppLog.warn('scheduler',
+          'Hintergrund-Planer nicht verfügbar: $e');
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Desktop-Planer (Windows)
+  // -------------------------------------------------------------------------
+
+  static Timer? _desktopTimer;
+
+  /// Startet den Planer im laufenden Prozess.
+  ///
+  /// Zusammen mit dem Autostart ([AutostartService]) ergibt das einen echten
+  /// Zeitplan: Die App startet mit Windows, bleibt ohne Fenster offen und
+  /// prüft alle [tickInterval], ob eine Aufgabe fällig ist. Was während
+  /// ausgeschaltetem Rechner oder ohne Netz verpasst wurde, holt
+  /// [runMissedSyncs] beim Start nach.
+  static const Duration tickInterval = Duration(minutes: 5);
+
+  static void startWindowsTimer() {
+    if (_desktopTimer != null) return;
+    AppLog.info('scheduler',
+        'Desktop-Planer gestartet (Prüfung alle ${tickInterval.inMinutes} Minuten)');
+    // Sofort einmal nachholen, was seit dem letzten Lauf verpasst wurde —
+    // sonst wartet der erste Sync bis zum nächsten vollen Intervall.
+    unawaited(runMissedSyncs());
+    _desktopTimer = Timer.periodic(tickInterval, (_) {
+      unawaited(runDueSyncs());
+    });
+  }
+
+  static void stopWindowsTimer() {
+    _desktopTimer?.cancel();
+    _desktopTimer = null;
+  }
+
+  /// Prüft alle aktiven Aufgaben und startet die fälligen.
+  ///
+  /// Gemeinsamer Einstieg für den Desktop-Timer und den mobilen
+  /// Hintergrund-Callback.
+  static Future<void> runDueSyncs() => runScheduledSync();
+
+  // -------------------------------------------------------------------------
+  // Nachholen verpasster Läufe
+  // -------------------------------------------------------------------------
+
+  /// Holt Läufe nach, die seit dem letzten Erfolg fällig gewesen wären.
+  ///
+  /// Genau der Fall, den ein reiner Intervall-Timer nicht abdeckt: Rechner
+  /// aus, kein Netz, WLAN-only bei Mobilfunk — der Slot war da, der Sync fand
+  /// nicht statt. Beim nächsten Start wird verglichen, wann die Aufgabe
+  /// zuletzt *hätte* laufen sollen, und gegen den letzten Erfolg gestellt.
+  static Future<void> runMissedSyncs() async {
+    final tasks = await _loadTasks();
+    if (tasks.isEmpty) return;
+
+    var started = 0;
+    for (final task in tasks) {
+      if (!(task['isActive'] as bool? ?? false)) continue;
+      final id = task['id'] as String? ?? '';
+      if (id.isEmpty) continue;
+
+      final slot = mostRecentScheduledSlot(task, DateTime.now());
+      if (slot == null) continue; // 'Manual' oder kein Zeitplan
+
+      final lastSuccess = await SchedulerRunLog.lastSuccess(id);
+      if (lastSuccess != null && !lastSuccess.isBefore(slot)) {
+        continue; // Der letzte fällige Slot wurde erfolgreich bedient.
+      }
+
+      AppLog.info('scheduler',
+          'Aufgabe „${task['name']}": Lauf von '
+          '${_hhmm(slot)} wurde verpasst (letzter Erfolg: '
+          '${lastSuccess == null ? 'nie' : _hhmm(lastSuccess)}) — wird nachgeholt');
+      if (await _runOneTask(task, reason: 'missed')) started++;
+    }
+    if (started > 0) {
+      AppLog.info('scheduler', '$started verpasste Läufe nachgeholt');
+    }
+  }
+
+  /// Wann hätte diese Aufgabe zuletzt laufen sollen? Null, wenn sie keinen
+  /// automatischen Zeitplan hat.
+  static DateTime? mostRecentScheduledSlot(
+      Map<String, dynamic> task, DateTime now) {
+    final day = task['scheduleDay'] as String? ?? 'Daily';
+    final time = task['scheduleTime'] as String?;
+
+    int hour = 0, minute = 0;
+    if (time != null && time.contains(':')) {
+      final parts = time.split(':');
+      hour = int.tryParse(parts[0]) ?? 0;
+      minute = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    }
+
+    switch (day) {
+      case 'Manual':
+        return null;
+      case 'iOS System':
+      case 'System':
+        // Vom Betriebssystem getriggert, kein eigener Slot.
+        return null;
+      case 'Daily':
+        final today = DateTime(now.year, now.month, now.day, hour, minute);
+        return now.isBefore(today) ? today.subtract(const Duration(days: 1)) : today;
+      default:
+        final weekday = _weekdayIndex(day);
+        if (weekday < 0) return null;
+        // Tage zurückgehen, bis der gesuchte Wochentag erreicht ist.
+        var candidate = DateTime(now.year, now.month, now.day, hour, minute);
+        for (var i = 0; i <= 7; i++) {
+          if (candidate.weekday == weekday && !candidate.isAfter(now)) {
+            return candidate;
+          }
+          candidate = candidate.subtract(const Duration(days: 1));
+        }
+        return null;
+    }
+  }
+
+  static String _hhmm(DateTime t) =>
+      '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')}. '
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   /// Runs every scheduled, active backup task against the real rclone engine.
   ///
@@ -73,58 +216,114 @@ class SchedulerService {
     final tasks = await _loadTasks();
     if (tasks.isEmpty) return;
 
-    // Globale WLAN-only-Einstellung einmalig lesen.
+    final now = DateTime.now();
+    for (final task in tasks) {
+      if (!(task['isActive'] as bool? ?? false)) continue;
+      if (!_isScheduleDue(task, now)) continue;
+      await _runOneTask(task, reason: 'scheduled');
+    }
+  }
+
+  /// Führt eine einzelne Aufgabe aus und notiert den Ausgang im persistenten
+  /// Laufprotokoll — die Grundlage für [runMissedSyncs].
+  ///
+  /// Liefert true, wenn der Sync tatsächlich gestartet wurde.
+  static Future<bool> _runOneTask(
+    Map<String, dynamic> task, {
+    required String reason,
+  }) async {
+    final id = task['id'] as String? ?? '';
+    final name = task['name'] as String? ?? '(ohne Namen)';
+
+    final sourcePath = task['sourcePath'] as String? ?? '';
+    // Importierte Aufgaben können ohne Quelle dastehen (Quelle eines anderen
+    // Geräts). Ohne Prüfung würde der Sync still nichts tun und als Erfolg
+    // verbucht — genau das verbietet das Laufprotokoll.
+    if (sourcePath.trim().isEmpty) {
+      AppLog.warn('scheduler',
+          'Aufgabe „$name" übersprungen ($reason): keine Quelle gewählt');
+      if (id.isNotEmpty) {
+        await SchedulerRunLog.record(id, success: false, error: 'skipped');
+      }
+      return false;
+    }
+
+    final remotes = (task['targetRemotes'] as List<dynamic>? ?? const [])
+        .cast<String>()
+        .toList();
+    final remoteName = remotes.isNotEmpty ? remotes.first : null;
+    if (remoteName == null) {
+      AppLog.warn('scheduler',
+          'Aufgabe „$name" übersprungen ($reason): kein Ziellaufwerk');
+      if (id.isNotEmpty) {
+        await SchedulerRunLog.record(id, success: false, error: 'skipped');
+      }
+      return false;
+    }
+
+    // Netzwerk-Guard (global): Offline → überspringen; WLAN-only → nur Wi-Fi.
+    // Wichtig: Ein übersprungener Lauf wird NICHT als Erfolg gebucht, damit
+    // [runMissedSyncs] ihn beim nächsten Start nachholt.
     var wifiOnly = true;
     try {
       final settings = await SettingsService.loadSettings();
       if (settings != null) wifiOnly = settings.wifiOnlySync;
     } catch (_) {}
+    try {
+      final conn = await Connectivity().checkConnectivity();
+      if (!conn.any((r) => r != ConnectivityResult.none)) {
+        AppLog.info('scheduler',
+            'Aufgabe „$name" übersprungen ($reason): offline — wird nachgeholt');
+        if (id.isNotEmpty) {
+          await SchedulerRunLog.record(id, success: false, error: 'skipped');
+        }
+        return false;
+      }
+      if (wifiOnly && !conn.contains(ConnectivityResult.wifi)) {
+        AppLog.info('scheduler',
+            'Aufgabe „$name" übersprungen ($reason): nur WLAN erlaubt — wird nachgeholt');
+        if (id.isNotEmpty) {
+          await SchedulerRunLog.record(id, success: false, error: 'skipped');
+        }
+        return false;
+      }
+    } catch (_) {
+      // Konnte der Status nicht gelesen werden, lieber nicht syncen.
+      if (id.isNotEmpty) {
+        await SchedulerRunLog.record(id, success: false, error: 'skipped');
+      }
+      return false;
+    }
 
     final engine = IosRcloneService();
-    final now = DateTime.now();
-    for (final task in tasks) {
-      if (!(task['isActive'] as bool? ?? false)) continue;
-      if (!_isScheduleDue(task, now)) continue;
+    // Kein Start, solange ein anderer Lauf aktiv ist (manuell ausgelöst
+    // oder eine frühere Aufgabe dieser Runde) — sonst überlappen sich
+    // zwei Syncs auf demselben Mirror-Zustand.
+    if (engine.isSyncRunning) {
+      AppLog.info('scheduler',
+          'Aufgabe „$name" übersprungen ($reason): Es läuft bereits ein Sync');
+      return false;
+    }
 
-      final sourcePath = task['sourcePath'] as String? ?? 'all';
-      final remotes = (task['targetRemotes'] as List<dynamic>? ?? const [])
-          .cast<String>()
-          .toList();
-      final remoteName = remotes.isNotEmpty ? remotes.first : null;
-      if (remoteName == null) continue;
+    final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';
+    final isEcho = task['syncMode'] == 'mirror';
 
-      // Netzwerk-Guard (global): Offline → überspringen; WLAN-only → nur Wi-Fi.
-      try {
-        final conn = await Connectivity().checkConnectivity();
-        if (!conn.any((r) => r != ConnectivityResult.none)) continue;
-        if (wifiOnly && !conn.contains(ConnectivityResult.wifi)) continue;
-      } catch (_) {
-        // Konnte der Status nicht gelesen werden, lieber nicht syncen.
-        continue;
+    try {
+      await engine.startBackupJob(
+        localPath: sourcePath,
+        remoteName: remoteName,
+        remotePath: targetFolder,
+        options: SyncOptions(isEchoMode: isEcho, isBackground: true),
+      );
+      if (id.isNotEmpty) await SchedulerRunLog.record(id, success: true);
+      AppLog.info('scheduler', 'Aufgabe „$name" ausgeführt ($reason)');
+      return true;
+    } catch (e) {
+      if (id.isNotEmpty) {
+        await SchedulerRunLog.record(id, success: false, error: '$e');
       }
-
-      final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';
-      final isEcho = task['syncMode'] == 'mirror';
-
-      // Kein Start, solange ein anderer Lauf aktiv ist (manuell ausgelöst
-      // oder eine frühere Aufgabe dieser Runde) — sonst überlappen sich
-      // zwei Syncs auf demselben Mirror-Zustand.
-      if (engine.isSyncRunning) {
-        AppLog.info('scheduler',
-            'Aufgabe „${task['name']}“ übersprungen: Es läuft bereits ein Sync');
-        continue;
-      }
-
-      try {
-        await engine.startBackupJob(
-          localPath: sourcePath,
-          remoteName: remoteName,
-          remotePath: targetFolder,
-          options: SyncOptions(isEchoMode: isEcho, isBackground: true),
-        );
-      } catch (_) {
-        // Keep trying the remaining tasks.
-      }
+      AppLog.warn('scheduler', 'Aufgabe „$name" fehlgeschlagen ($reason): $e');
+      return false;
     }
   }
 

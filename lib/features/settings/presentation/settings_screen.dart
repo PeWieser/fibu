@@ -13,6 +13,7 @@ import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/sanzo_wada_palettes.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
+import '../../../core/services/autostart_service.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
 import 'debug_log_screen.dart';
@@ -217,6 +218,48 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+              SizedBox(height: theme.md),
+              // Autostart: ohne ihn läuft der Zeitplan nur, solange die App
+              // von Hand geöffnet ist. Der Schalter schreibt den Run-Schlüssel
+              // des eigenen Benutzerkontums (keine Admin-Rechte nötig).
+              fluent.Card(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(strings.autostartLabel,
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                            SizedBox(height: theme.xs / 2),
+                            Text(
+                              strings.autostartDescription,
+                              style: TextStyle(
+                                  color: theme.textSecondary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: theme.md),
+                      ref.watch(autostartEnabledProvider).when(
+                            data: (on) => fluent.ToggleSwitch(
+                              checked: on,
+                              onChanged: (val) =>
+                                  setAutostartEnabled(ref, val),
+                            ),
+                            loading: () => const fluent.ProgressRing(
+                                strokeWidth: 2),
+                            error: (_, __) => Text(strings.error,
+                                style: TextStyle(
+                                    color: theme.error, fontSize: 11)),
+                          ),
+                    ],
                   ),
                 ),
               ),

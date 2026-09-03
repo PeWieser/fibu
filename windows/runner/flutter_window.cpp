@@ -1,8 +1,28 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <string>
+
+#include <windows.h>
 
 #include "flutter/generated_plugin_registrant.h"
+
+namespace {
+
+/// True, wenn die App mit `--background` gestartet wurde (Autostart).
+///
+/// Bewusst über die rohe Befehlszeile und nicht über die Dart-Argumente:
+/// Die Entscheidung, ob das Fenster überhaupt erscheint, fällt im nativen
+/// Startup-Pfad, lange bevor Dart läuft.
+bool IsBackgroundLaunch() {
+  const wchar_t* line = ::GetCommandLineW();
+  if (line == nullptr) {
+    return false;
+  }
+  return std::wstring(line).find(L"--background") != std::wstring::npos;
+}
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -28,7 +48,14 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    // Autostart-Modus: Wird die App mit `--background` gestartet (siehe
+    // lib/core/services/autostart_service.dart), bleibt das Fenster zu. Der
+    // Prozess läuft weiter und bedient den Zeitplan — genau das, was ein
+    // Hintergrund-Dienst tun soll. Ohne den Schalter verhält sich alles wie
+    // bisher.
+    if (!IsBackgroundLaunch()) {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is

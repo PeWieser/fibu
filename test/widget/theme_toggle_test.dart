@@ -53,8 +53,9 @@ void main() {
     // Die Funktion selbst ist unverändert und läuft; der zweite Test dieser
     // Gruppe (System-Sync-Schalter) bleibt aktiv.
     testWidgets('Toggling Wada Palettes changes theme configuration state',
-        skip: 'Label „System Light" wird nicht mehr gefunden — Ursache offen, '
-            'siehe Kommentar. Funktion selbst unverändert.',
+        // Grund steht im Kommentar oben; `skip` ist in dieser Flutter-Version
+        // ein bool?, kein String.
+        skip: true,
         (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 

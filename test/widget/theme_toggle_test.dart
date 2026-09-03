@@ -41,7 +41,19 @@ void main() {
 
     testWidgets('Toggling Wada Palettes changes theme configuration state', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-      
+
+      // Die Einstellungsseite ist länger als das Standard-Testfenster
+      // (800×600). Was außerhalb liegt, wird von den faulen Listen gar nicht
+      // erst gebaut — find.text findet dann nichts, und ensureVisible kann
+      // auch nicht helfen, weil es den Finder selbst braucht. Der Test hing
+      // damit an der exakten Scroll-Position und brach, sobald oben etwas
+      // dazukam.
+      //
+      // Ein großes Testfenster macht ihn unabhängig davon: Die Seite passt
+      // hinein, alle Reihen sind gebaut, es muss nicht gescrollt werden.
+      tester.view.surfaceSize = const Size(1200, 2000);
+      addTearDown(tester.view.resetSurfaceSize);
+
       try {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),

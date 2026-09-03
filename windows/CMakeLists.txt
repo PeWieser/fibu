@@ -32,6 +32,17 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# Workaround für flutter/flutter#186452: Visual Studio 18 (MSVC 14.51) hat die
+# experimentellen C++-Coroutine-Header entfernt und macht deren Benutzung zum
+# harten Fehler STL1011. `permission_handler_windows` bindet noch
+# <experimental/coroutine> ein und bricht damit den gesamten Windows-Build ab.
+#
+# Das Define steht hier auf Projektebene und VOR den Plugin-Unterverzeichnissen,
+# damit es an alle Plugin-Targets vererbt wird. Es unterdrückt nur die
+# Deprecation, nicht den Code selbst — sobald permission_handler auf die
+# C++20-Header umgestellt ist, kann diese Zeile wieder raus.
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

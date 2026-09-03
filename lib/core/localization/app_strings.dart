@@ -828,6 +828,12 @@ class AppStrings {
   // Transfer (Scan, Staging, Lösch-Erkennung) ist „Auf Änderungen überprüfen",
   // alles nach dem letzten Transfer (Tombstones, lokale Löschungen, Zustand
   // schreiben) ist „Abschließen".
+  /// Importierte Aufgabe ohne Quelle (Quelle eines anderen Geräts, z. B. eine
+  /// iOS-Mediathek, die es hier nicht gibt).
+  String get syncSourceMissing => isGerman
+      ? 'Keine Quelle gewählt — bitte in der Aufgabe einen Ordner auswählen'
+      : 'No source selected — please choose a folder in the task';
+
   String get syncStatusChecking =>
       isGerman ? 'Auf Änderungen überprüfen' : 'Checking for changes';
   String get syncStatusFinishing => isGerman ? 'Abschließen' : 'Finishing up';

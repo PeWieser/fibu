@@ -311,6 +311,20 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
   ) async {
     final parts = target.split(':');
     final remoteName = parts[0];
+
+    // Importierte Aufgaben können ohne Quelle ankommen: Zeigt eine von einem
+    // anderen Gerät importierte Aufgabe auf dessen Mediathek, wird die Quelle
+    // beim Import geleert (siehe TasksNotifier.importTasks). Ohne diese
+    // Prüfung würde der Sync still nichts tun und „fertig" melden.
+    if (task.sourcePath.trim().isEmpty) {
+      final t = _timestamp();
+      state = state.copyWith(
+        status: RcloneJobStatus.failed,
+        currentFile: strings.syncSourceMissing,
+        logs: [...state.logs, '$t Task "${task.name}": keine Quelle gewählt'],
+      );
+      return false;
+    }
     final targetFolder = task.targetFolderMode == TargetFolderMode.root
         ? ''
         : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/widget_status_service.dart';
 import '../../../core/utils/app_paths.dart';
@@ -384,11 +386,52 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
   /// Imports multiple tasks. Bereits vorhandene Aufgaben mit derselben ID
   /// werden ERSETZT statt dupliziert (wichtig beim erneuten Import einer
   /// Remote-Config nach dem Neu-Verbinden eines Laufwerks).
+  /// True, wenn [path] auf die Mediathek des Geräts zeigt — also etwas ist,
+  /// das es auf einem Desktop ohne PhotoKit/MediaStore nicht gibt.
+  static bool isMediaLibrarySource(String path) {
+    final p = path.trim();
+    if (p.isEmpty) return false;
+    if (p.startsWith('photos:') ||
+        p.startsWith('videos:') ||
+        p.startsWith('all:')) {
+      return true;
+    }
+    const bare = {'all', 'photos', 'videos', 'alles', 'alle fotos', 'alle videos'};
+    return bare.contains(p.toLowerCase());
+  }
+
+  /// True, wenn die Quelle auf dieser Plattform gewählt werden kann.
+  ///
+  /// Auf Desktop gibt es keine Mediathek im Sinn der mobilen App — dort muss
+  /// ein Ordner gewählt werden. Mobil bleibt alles beim Alten.
+  static bool canUseSourceOnThisPlatform(String path) {
+    if (!isMediaLibrarySource(path)) return true;
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+  }
+
   void importTasks(List<BackupTask> newTasks) {
     final incomingIds = newTasks.map((t) => t.id).toSet();
+
+    // Importierte Aufgaben stammen oft von einem anderen Gerät. Zeigt eine
+    // davon auf dessen Mediathek (z. B. „photos:Camera Roll" von iOS), ist
+    // diese Quelle hier bedeutungslos. Die Aufgabe wird übernommen, aber die
+    // Quelle bleibt leer und muss vor dem ersten Sync gewählt werden —
+    // lieber eine sichtbare Lücke als ein Pfad, der still ins Leere zeigt.
+    final adapted = <BackupTask>[];
+    for (final t in newTasks) {
+      if (canUseSourceOnThisPlatform(t.sourcePath)) {
+        adapted.add(t);
+        continue;
+      }
+      AppLog.warn('tasks',
+          'Importierte Aufgabe „${t.name}": Quelle „${t.sourcePath}" gibt es auf dieser Plattform nicht — Quelle geleert, muss gewählt werden');
+      adapted.add(t.copyWith(sourcePath: '', selectedAlbums: const []));
+    }
+
     state = [
       ...state.where((t) => !incomingIds.contains(t.id)),
-      ...newTasks,
+      ...adapted,
     ];
     _saveTasks();
   }

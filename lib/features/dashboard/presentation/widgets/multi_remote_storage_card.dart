@@ -24,7 +24,7 @@ class MultiRemoteStorageCard extends ConsumerWidget {
   /// Tippen auf die Speicherkarte öffnet die Laufwerksverwaltung — die Karte
   /// zeigt die Summe aller Laufwerke, also führt sie auch dorthin.
   void _openCloudDrives(BuildContext context, AppStrings strings) {
-    final screen = const CloudDrivesScreen();
+    const screen = CloudDrivesScreen();
     final platform = defaultTargetPlatform;
     final route = platform == TargetPlatform.windows
         ? fluent.FluentPageRoute(builder: (_) => screen)

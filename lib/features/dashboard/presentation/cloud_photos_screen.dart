@@ -29,7 +29,7 @@ class _Album {
   int bytes;
   DateTime? newest;
 
-  _Album({required this.name, required this.path, this.count = 0, this.bytes = 0, this.newest});
+  _Album({required this.name, required this.path});
 }
 
 /// Eine Datei in der Cloud.

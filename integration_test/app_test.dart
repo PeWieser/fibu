@@ -9,7 +9,8 @@ import 'package:fibu/core/localization/locale_provider.dart';
 import 'package:fibu/features/shell/presentation/shell_screen.dart';
 import 'package:fibu/features/dashboard/presentation/widgets/storage_card.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
-import 'package:fibu/features/dashboard/presentation/cloud_explorer_screen.dart';
+import 'package:fibu/features/dashboard/presentation/widgets/multi_remote_storage_card.dart';
+import 'package:fibu/features/settings/presentation/cloud_drives_screen.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -91,14 +92,15 @@ void main() {
         await tester.tap(cancelSyncButton);
         await tester.pumpAndSettle();
 
-        // 7. Navigate to Cloud Explorer from Dashboard (DASH-02 flow)
-        final exploreButton = find.byIcon(fluent.FluentIcons.cloud);
-        expect(exploreButton, findsOneWidget);
-        await tester.tap(exploreButton);
+        // 7. Die Speicherkarte ist antippbar und führt in die
+        //    Laufwerksverwaltung (der frühere Cloud-Dateiexplorer ist durch
+        //    den Fotos-Manager ersetzt und nicht mehr vom Dashboard erreichbar).
+        final storageCard = find.byType(MultiRemoteStorageCard);
+        expect(storageCard, findsOneWidget);
+        await tester.tap(storageCard);
         await tester.pumpAndSettle();
 
-        // Confirm CloudExplorerScreen loaded
-        expect(find.byType(CloudExplorerScreen), findsOneWidget);
+        expect(find.byType(CloudDrivesScreen), findsOneWidget);
 
         // Navigate back to Dashboard
         final backButton = find.byIcon(fluent.FluentIcons.back).first;

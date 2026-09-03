@@ -188,7 +188,9 @@ class DevicePairingService {
     }
 
     // Grobe Obergrenze, damit niemand den Speicher füllt.
-    if ((request.contentLength ?? 0) > _maxBundleBytes) {
+    // `contentLength` ist nicht nullable — bei unbekannter Länge liefert es -1,
+    // dann greift die Prüfung unten beim Mitschreiben.
+    if (request.contentLength > _maxBundleBytes) {
       response.statusCode = HttpStatus.requestEntityTooLarge;
       await response.close();
       return;
@@ -205,7 +207,8 @@ class DevicePairingService {
     }
 
     try {
-      final bundle = await _decryptBundle(bytes, _expectedSecret ?? '');
+      final bundle =
+          await _decryptBundle(Uint8List.fromList(bytes), _expectedSecret ?? '');
       completer.complete(bundle);
       response.statusCode = HttpStatus.ok;
       response.write('ok');

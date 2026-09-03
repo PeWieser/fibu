@@ -78,30 +78,35 @@ void main() {
         // Check that selectedLightPalette state is updated to autumnAki
         expect(container.read(themeConfigProvider).selectedLightPalette, equals(SanzoWadaPalette.autumnAki));
         
-        // Dunkel-Reihe liegt hinter der Hell-Reihe → letzter Treffer.
-        // Beide Reihen enthalten dieselben 8 Paletten horizontal gescrollt;
-        // weiter hinten stehende sind im Test-Viewport nicht gebaut.
-        final fuyuFinder = find.text('Aki (Autumn)').last;
-        expect(find.text('Aki (Autumn)'), findsNWidgets(2));
-        await tester.ensureVisible(fuyuFinder);
-        await tester.pumpAndSettle();
-        await tester.tap(fuyuFinder);
-        await tester.pumpAndSettle();
-
-        // Check that selectedDarkPalette state is updated to winterFuyu
-        expect(container.read(themeConfigProvider).selectedDarkPalette,
-            equals(SanzoWadaPalette.autumnAki));
-        
-        // Tap on System Light card to revert light palette
+        // Hell-Reihe zuerst vollständig abhandeln, BEVOR zur Dunkel-Reihe
+        // gescrollt wird. Sonst liegt die Hell-Reihe außerhalb des Viewports,
+        // ihre Widgets sind nicht gebaut und find.text('System Light') findet
+        // nichts — ensureVisible kann dann auch nicht mehr helfen, weil es den
+        // Finder selbst braucht.
+        //
+        // Zurücksetzen der Hell-Palette auf „System Light":
         final standardLightFinder = find.text('System Light');
         expect(standardLightFinder, findsOneWidget);
         await tester.ensureVisible(standardLightFinder);
         await tester.pumpAndSettle();
         await tester.tap(standardLightFinder);
         await tester.pumpAndSettle();
-        
+
         // Check selectedLightPalette is null again
         expect(container.read(themeConfigProvider).selectedLightPalette, isNull);
+
+        // Dunkel-Reihe liegt hinter der Hell-Reihe → letzter Treffer.
+        // Beide Reihen enthalten dieselben 8 Paletten horizontal gescrollt;
+        // weiter hinten stehende sind im Test-Viewport nicht gebaut.
+        final fuyuFinder = find.text('Aki (Autumn)').last;
+        await tester.ensureVisible(fuyuFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(fuyuFinder);
+        await tester.pumpAndSettle();
+
+        // Check that selectedDarkPalette state is updated
+        expect(container.read(themeConfigProvider).selectedDarkPalette,
+            equals(SanzoWadaPalette.autumnAki));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

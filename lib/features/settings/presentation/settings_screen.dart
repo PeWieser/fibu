@@ -14,6 +14,7 @@ import '../../../theme/sanzo_wada_palettes.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/autostart_service.dart';
+import 'device_pairing_screen.dart';
 import '../../../core/services/settings_service.dart';
 import 'cloud_drives_screen.dart';
 import 'debug_log_screen.dart';
@@ -39,6 +40,19 @@ class SettingsScreen extends ConsumerWidget {
       case AppLocaleMode.en:
         return 'English';
     }
+  }
+
+  /// Gerät-zu-Gerät-Übertragung der Konfiguration.
+  void _navigateToPairing(BuildContext context) {
+    const screen = DevicePairingScreen();
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => screen)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
+            : material.MaterialPageRoute(builder: (_) => screen));
+    if (platform == TargetPlatform.iOS) IosHaptics.selection();
+    Navigator.of(context).push(route);
   }
 
   void _navigateToCloudDrives(BuildContext context) {
@@ -183,6 +197,25 @@ class SettingsScreen extends ConsumerWidget {
                         Text(strings.manageCloudDrives, style: const TextStyle(fontWeight: FontWeight.bold)),
                         const Spacer(),
                         Icon(fluent.FluentIcons.chevron_right, size: 12, color: theme.textSecondary, semanticLabel: strings.manageCloudDrives),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: theme.sm),
+              fluent.Card(
+                child: GestureDetector(
+                  onTap: () => _navigateToPairing(context),
+                  behavior: HitTestBehavior.opaque,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Row(
+                      children: [
+                        Icon(fluent.FluentIcons.sync, color: theme.accent, size: 18, semanticLabel: strings.pairingTitle),
+                        const SizedBox(width: 12),
+                        Text(strings.pairingTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        Icon(fluent.FluentIcons.chevron_right, size: 12, color: theme.textSecondary),
                       ],
                     ),
                   ),
@@ -497,6 +530,18 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     onTap: () => _navigateToCloudDrives(context),
                   ),
+                  cupertino.CupertinoListTile(
+                    leading: Icon(cupertino.CupertinoIcons.arrow_2_squarepath,
+                        color: theme.accent, size: 22),
+                    title: Text(strings.pairingTitle,
+                        style: const TextStyle(fontSize: 16)),
+                    trailing: const Icon(
+                      cupertino.CupertinoIcons.chevron_forward,
+                      size: 18,
+                      color: cupertino.CupertinoColors.inactiveGray,
+                    ),
+                    onTap: () => _navigateToPairing(context),
+                  ),
                 ],
               ),
 
@@ -762,6 +807,23 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: Icon(material.Icons.chevron_right, color: theme.textSecondary, semanticLabel: strings.manageCloudDrives),
                 onTap: () => _navigateToCloudDrives(context),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
+              ),
+            ),
+            SizedBox(height: theme.sm),
+            material.Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(theme.radiusLg),
+                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: material.ListTile(
+                minTileHeight: 48,
+                leading: Icon(material.Icons.swap_horiz, color: theme.accent),
+                title: Text(strings.pairingTitle,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: Icon(material.Icons.chevron_right,
+                    color: theme.textSecondary),
+                onTap: () => _navigateToPairing(context),
               ),
             ),
             SizedBox(height: theme.xl),

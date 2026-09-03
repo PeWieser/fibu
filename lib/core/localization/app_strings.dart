@@ -830,6 +830,43 @@ class AppStrings {
   // schreiben) ist „Abschließen".
   /// Importierte Aufgabe ohne Quelle (Quelle eines anderen Geräts, z. B. eine
   /// iOS-Mediathek, die es hier nicht gibt).
+  // --- Gerät-zu-Gerät-Kopplung ---
+  String get pairingTitle =>
+      isGerman ? 'Konfiguration übertragen' : 'Transfer Configuration';
+  String get pairingReceiverIntro => isGerman
+      ? 'Dieses Gerät wartet auf die Konfiguration eines Mobilgeräts. Den Code unten mit der Fibu-App auf dem Handy öffnen — Laufwerke, Zugangsdaten und Aufgaben werden direkt über das lokale Netz übertragen, ohne Server dazwischen.'
+      : 'This device is waiting for the configuration of a mobile device. Open the code below with the Fibu app on your phone — drives, credentials and tasks transfer directly over the local network, with no server in between.';
+  String get pairingSenderIntro => isGerman
+      ? 'Gib die Adresse ein, die das andere Gerät anzeigt, und sende deine Konfiguration dorthin. Übertragen werden Laufwerke mit Zugangsdaten, Aufgaben und Einstellungen — verschlüsselt, direkt von Gerät zu Gerät.'
+      : 'Enter the address shown on the other device and send your configuration there. Drives with credentials, tasks and settings are transferred — encrypted, directly device to device.';
+  String get pairingStart =>
+      isGerman ? 'Code anzeigen' : 'Show Code';
+  String get pairingWaiting =>
+      isGerman ? 'Warte auf das andere Gerät …' : 'Waiting for the other device …';
+  String pairingOrEnterCode(String url) => isGerman
+      ? 'Ohne Kamera: Diese Adresse auf dem anderen Gerät eingeben\n$url'
+      : 'No camera? Enter this address on the other device\n$url';
+  String pairingReceived(String device, int remotes, int tasks) => isGerman
+      ? 'Konfiguration von „$device" übernommen: $remotes Laufwerke, $tasks Aufgaben. Aufgaben mit Mediathek-Quelle brauchen noch einen Ordner.'
+      : 'Configuration from “$device” applied: $remotes drives, $tasks tasks. Tasks with a library source still need a folder.';
+  String get pairingTimeout => isGerman
+      ? 'Zeit abgelaufen — es ist kein Gerät verbunden worden.'
+      : 'Timed out — no device connected.';
+  String get pairingNoNetwork => isGerman
+      ? 'Keine lokale Netzadresse gefunden. Ist das Gerät mit einem Netzwerk verbunden?'
+      : 'No local network address found. Is this device connected to a network?';
+  String get pairingUrlLabel =>
+      isGerman ? 'Adresse des anderen Geräts' : 'Address of the other device';
+  String get pairingUrlMissing =>
+      isGerman ? 'Bitte zuerst die Adresse eingeben.' : 'Enter the address first.';
+  String get pairingSend => isGerman ? 'Konfiguration senden' : 'Send Configuration';
+  String get pairingSending => isGerman ? 'Wird gesendet …' : 'Sending …';
+  String get pairingSent => isGerman
+      ? 'Konfiguration übertragen.' : 'Configuration transferred.';
+  String get pairingSendFailed => isGerman
+      ? 'Übertragung fehlgeschlagen. Läuft auf dem anderen Gerät noch die Kopplung, und seid ihr im selben Netz?'
+      : 'Transfer failed. Is the other device still pairing, and are you on the same network?';
+
   // --- Autostart (Windows) ---
   String get autostartLabel =>
       isGerman ? 'Mit Windows starten' : 'Start with Windows';

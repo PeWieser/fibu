@@ -40,6 +40,15 @@ dependencies:
   workmanager: ^0.5.2
   # iOS Home-Screen Quick Actions (long press app icon -> "Jetzt synchronisieren").
   quick_actions: ^1.1.0
+  # Geraet-zu-Geraet-Uebertragung der Konfiguration im lokalen Netz.
+  # Beide Pakete sind reines Dart ohne nativen Anteil — deshalb brauchen sie
+  # kein eigenes Privacy Manifest und aendern nichts an docs/RECHTS_AUDIT.md
+  # (L-13). Ein Kamera-Plugin zum Scannen waere nativ und wuerde dort wieder
+  # eine Kamera-Berechtigung plus Manifest-Eintrag aufmachen.
+  #   qr_flutter   -> Pairing-Code als QR auf dem Desktop anzeigen
+  #   cryptography -> AES-256-GCM fuer das Bundle (enthält Cloud-Zugangsdaten)
+  qr_flutter: ^4.1.0
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:

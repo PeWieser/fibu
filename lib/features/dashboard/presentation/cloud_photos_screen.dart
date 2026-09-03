@@ -25,8 +25,11 @@ const String kFibuPhotosRoot = '$kFibuBackupRoot/Photos';
 class _Album {
   final String name;
   final String path;
-  int count;
-  int bytes;
+
+  // Feldinitialisierung statt Konstruktorparameter: Die Werte werden erst
+  // nach der Auflistung des Albums gesetzt.
+  int count = 0;
+  int bytes = 0;
   DateTime? newest;
 
   _Album({required this.name, required this.path});

@@ -5,13 +5,14 @@ import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../dashboard/presentation/cloud_explorer_screen.dart';
+import '../../dashboard/presentation/cloud_photos_screen.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
@@ -566,6 +567,23 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   // --- Remote Deletion Confirmation (Destructive Action Rule 6) ---
   /// Aktionsmenü nach Tap auf einen Remote — Übersicht bleibt clean,
   /// Trennen passiert gezielt über das Aktionsblatt (kein Trash-Symbol mehr).
+  /// Öffnet den Fotos-Manager für ein bestimmtes Laufwerk.
+  ///
+  /// Ersetzt den früheren Dateiexplorer: Die Ordnerstruktur der Sicherung ist
+  /// nur noch Datenquelle, angezeigt werden Alben und nach Datum sortierte
+  /// Aufnahmen (siehe `cloud_photos_screen.dart`).
+  void _openCloudPhotos(BuildContext context, String remote) {
+    final screen = CloudPhotosScreen(initialRemote: remote);
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => screen)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
+            : material.MaterialPageRoute(builder: (_) => screen));
+    if (platform == TargetPlatform.iOS) IosHaptics.selection();
+    Navigator.of(context).push(route);
+  }
+
   Future<void> _showRemoteActions(
       BuildContext context, String remote, TargetPlatform platform) async {
     final strings = context.strings;
@@ -581,11 +599,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             cupertino.CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetCtx);
-                Navigator.push(
-                  context,
-                  cupertino.CupertinoPageRoute(
-                      builder: (context) => const CloudExplorerScreen()),
-                );
+                _openCloudPhotos(context, remote);
               },
               child: Text(strings.exploreRemoteFiles),
             ),
@@ -623,6 +637,15 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
               material.ListTile(title: Text(displayName)),
               const material.Divider(height: 1),
               material.ListTile(
+                leading: Icon(material.Icons.photo_library_outlined,
+                    color: theme.accent),
+                title: Text(strings.exploreRemoteFiles),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _openCloudPhotos(context, remote);
+                },
+              ),
+              material.ListTile(
                 leading: Icon(material.Icons.drive_file_rename_outline,
                     color: theme.accent),
                 title: Text(strings.renameDrive),
@@ -653,6 +676,16 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         builder: (dialogCtx) => fluent.ContentDialog(
           title: fluent.Text(displayName),
           actions: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
+                child: fluent.Button(
+                  onPressed: () => Navigator.pop(dialogCtx, 'photos'),
+                  child: Text(strings.exploreRemoteFiles),
+                ),
+              ),
+            ),
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: ConstrainedBox(
@@ -692,7 +725,10 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       );
       // `context` ist hier ein Methoden-Parameter, nicht State.context —
       // die mounted-Prüfung muss deshalb am BuildContext selbst erfolgen.
-      if (action == 'rename') {
+      if (action == 'photos') {
+        if (!context.mounted) return;
+        _openCloudPhotos(context, remote);
+      } else if (action == 'rename') {
         if (!context.mounted) return;
         await _showRenameDialog(context, remote, platform);
       } else if (action == 'disconnect') {

@@ -13,17 +13,15 @@ class WindowsRcloneService implements RcloneService {
       : _executablePath = customExecutablePath ?? _detectExecutable();
 
   static String _detectExecutable() {
-    const devPath = 'D:\\code gemini\\fibu win\\rclone.exe';
-    if (File(devPath).existsSync()) {
-      return devPath;
-    }
-    // Fallback to local running directory of the compiled app
-    final localPath = Platform.resolvedExecutable;
-    final localDir = Directory(localPath).parent.path;
-    final localBin = '$localDir\\rclone.exe';
+    // 1) Neben der eigenen EXE — so liefert es die CI aus
+    //    (.github/workflows/build-windows.yml legt rclone.exe beim Bauen dort
+    //    ab) und so funktioniert ein portables Verzeichnis.
+    final localDir = File(Platform.resolvedExecutable).parent.path;
+    final localBin = '$localDir${Platform.pathSeparator}rclone.exe';
     if (File(localBin).existsSync()) {
       return localBin;
     }
+    // 2) Im PATH — für alle, die rclone selbst installiert haben.
     return 'rclone.exe';
   }
 

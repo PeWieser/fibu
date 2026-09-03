@@ -52,7 +52,9 @@ class AppStrings {
   String get syncFailed => isGerman ? 'Synchronisierung fehlgeschlagen' : 'Sync Failed';
   String get syncAll => isGerman ? 'Alle synchronisieren' : 'Sync All Files';
   String get cancelSync => isGerman ? 'Sync abbrechen' : 'Cancel Sync';
-  String get exploreRemoteFiles => isGerman ? 'Cloud-Dateien durchsuchen' : 'Explore Remote Files';
+  /// Öffnet den Fotos-Manager des Laufwerks (früher: Dateiexplorer).
+  String get exploreRemoteFiles =>
+      isGerman ? 'Fotos in der Cloud ansehen' : 'View Photos in the Cloud';
   String get viewActivityLogs => isGerman ? 'Aktivitätsprotokoll anzeigen' : 'View Activity Logs';
   String get activityLogsTitle => isGerman ? 'Aktivitätsprotokoll' : 'Activity Logs';
   String get noActivityLogs => isGerman ? 'Keine Protokolleinträge vorhanden.' : 'No activity logs recorded.';
@@ -371,6 +373,41 @@ class AppStrings {
 
   // --- Cloud Explorer & File Details ---
   String get cloudExplorerTitle => isGerman ? 'Cloud-Dateiexplorer' : 'Cloud File Explorer';
+
+  // --- Cloud-Fotos (Fotos-Manager statt Dateiexplorer) ---
+  String get cloudPhotosTitle => isGerman ? 'Fotos in der Cloud' : 'Photos in the Cloud';
+  String get cloudPhotosAlbums => isGerman ? 'Alben' : 'Albums';
+  String get cloudPhotosRecent => isGerman ? 'Zuletzt' : 'Recents';
+  String cloudPhotosCount(int n) =>
+      isGerman ? '$n ${n == 1 ? 'Aufnahme' : 'Aufnahmen'}' : '$n ${n == 1 ? 'item' : 'items'}';
+  String get cloudPhotosEmptyShort => isGerman ? 'Leer' : 'Empty';
+  String get cloudPhotosEmptyTitle =>
+      isGerman ? 'Keine Aufnahmen gefunden' : 'No photos found';
+  String get cloudPhotosEmptyBody => isGerman
+      ? 'In diesem Laufwerk liegt noch keine gesicherte Mediathek unter '
+          '„fibu-backup/Photos". Sobald eine Sicherungsaufgabe gelaufen ist, '
+          'erscheinen hier die Alben.'
+      : 'This drive has no backed-up library under “fibu-backup/Photos” yet. '
+          'Once a backup task has run, the albums show up here.';
+  String get cloudPhotosUnknownDate =>
+      isGerman ? 'Ohne Datum' : 'No date';
+
+  /// Tagesüberschrift in der Aufnahmenliste, z. B. „23. September 2026".
+  /// Ohne `intl`-Paket — die Monatsnamen reichen hier und halten die
+  /// Abhängigkeiten klein.
+  String cloudPhotosDayLabel(DateTime day) {
+    const monthsDe = [
+      'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+    ];
+    const monthsEn = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final months = isGerman ? monthsDe : monthsEn;
+    final m = months[day.month - 1];
+    return isGerman ? '${day.day}. $m ${day.year}' : '$m ${day.day}, ${day.year}';
+  }
   String get remoteDriveSelectorLabel => isGerman ? 'Cloud-Laufwerk' : 'Remote Drive';
   String get emptyFolder => isGerman ? 'Dieser Ordner ist leer.' : 'This folder is empty.';
   String get noRemotesInExplorer => isGerman ? 'Keine Cloud-Laufwerke verbunden.' : 'No cloud drives connected.';

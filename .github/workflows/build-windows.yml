@@ -1,0 +1,181 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Läuft parallel zum iOS-Workflow (build-ios.yml) — eigener Name, eigene
+# concurrency-Gruppe, eigener Runner. Beide werden vom selben Push ausgelöst.
+#
+# contents:write wird für das Artefakt und den Commit-Kommentar gebraucht.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LOG_DIR: ci-logs
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Prepare log directory
+        shell: bash
+        run: mkdir -p "$LOG_DIR"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Windows desktop support
+        shell: bash
+        run: flutter config --enable-windows-desktop
+
+      - name: Install Flutter Dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter pub get 2>&1 | tee "$LOG_DIR/10-pub-get.log"
+
+      - name: Analyze (0 Errors, 0 Warnings)
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze 2>&1 | tee "$LOG_DIR/20-analyze.log"
+
+      - name: Build Windows App (Release)
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build windows --release 2>&1 | tee "$LOG_DIR/50-build-windows.log"
+
+      # Flutter hat das Ausgabeverzeichnis zwischen den Versionen verschoben
+      # (build/windows/runner/Release -> build/windows/x64/runner/Release).
+      # Einmal auflösen und für alle Folgeschritte exportieren, statt den Pfad
+      # an fünf Stellen zu raten.
+      - name: Resolve release directory
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ -d build/windows/x64/runner/Release ]; then
+            RELEASE_DIR=build/windows/x64/runner/Release
+          elif [ -d build/windows/runner/Release ]; then
+            RELEASE_DIR=build/windows/runner/Release
+          else
+            echo "::error::Kein Release-Verzeichnis gefunden — der Build ist fehlgeschlagen."
+            find build/windows -maxdepth 4 -type d 2>/dev/null || true
+            exit 1
+          fi
+          echo "RELEASE_DIR=$RELEASE_DIR" >> "$GITHUB_ENV"
+          echo "Release-Verzeichnis: $RELEASE_DIR"
+
+      # WindowsRcloneService ruft ein gebündeltes rclone.exe neben der eigenen
+      # EXE auf (lib/core/services/rclone_service_impl.dart). Ohne diese Datei
+      # startet die App, kann aber kein einziges Laufwerk ansprechen — der
+      # Build wäre also wertlos. Deshalb wird rclone hier offiziell
+      # heruntergeladen und dazugelegt.
+      - name: Bundle rclone.exe next to the app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri 'https://downloads.rclone.org/rclone-current-windows-amd64.zip' -OutFile 'rclone.zip'
+          Expand-Archive -Path 'rclone.zip' -DestinationPath 'rclone-tmp' -Force
+          $exe = Get-ChildItem -Path 'rclone-tmp' -Recurse -Filter 'rclone.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'rclone.exe im Download nicht gefunden' }
+          Copy-Item $exe.FullName -Destination $env:RELEASE_DIR
+          & "$env:RELEASE_DIR/rclone.exe" version | Tee-Object -FilePath "$env:LOG_DIR/55-rclone-version.log"
+
+      - name: Verify the bundle is complete
+        shell: bash
+        run: |
+          set -o pipefail
+          test -f "$RELEASE_DIR/fibu.exe" || {
+            echo "::error::fibu.exe fehlt in $RELEASE_DIR"
+            exit 1
+          }
+          test -f "$RELEASE_DIR/rclone.exe" || {
+            echo "::error::rclone.exe fehlt neben fibu.exe — die App hätte keine Engine"
+            exit 1
+          }
+          echo "Bundle vollständig:"
+          ls -la "$RELEASE_DIR" | tee "$LOG_DIR/56-bundle.log"
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Compress-Archive -Path "$env:RELEASE_DIR/*" -DestinationPath 'fibu-windows-x64.zip' -Force
+          Get-Item 'fibu-windows-x64.zip' | Select-Object Name, Length
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-app-release
+          path: fibu-windows-x64.zip
+          retention-days: 7
+
+      - name: Unit- und Widget-Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee "$LOG_DIR/60-tests.log"
+
+      # Gleicher Kanal wie im iOS-Workflow: Step-Logs sind aus
+      # agentenseitigen Sandboxes nicht erreichbar, api.github.com schon.
+      - name: Report failure as commit comment
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          OUT="$LOG_DIR/_report.md"
+          {
+            echo "## ❌ Windows-Build fehlgeschlagen"
+            echo
+            echo "Run: <https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}>"
+            echo "Commit: \`${{ github.sha }}\`"
+            echo
+            for f in "$LOG_DIR"/*.log; do
+              [ -s "$f" ] || continue
+              echo "### \`${f##*/}\` (letzte 200 Zeilen)"
+              echo '```'
+              tail -n 200 "$f"
+              echo '```'
+              echo
+            done
+          } > "$OUT"
+
+          if [ "$(wc -c < "$OUT")" -gt 60000 ]; then
+            head -c 60000 "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+            printf '\n```\n(gekürzt)\n' >> "$OUT"
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/commits/${{ github.sha }}/comments" \
+               -f body="$(cat "$OUT")" > /dev/null; then
+            echo "Fehlerbericht als Commit-Kommentar gepostet."
+          else
+            echo "::warning::Commit-Kommentar konnte nicht gepostet werden — Permissions prüfen (contents: write)."
+          fi
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-windows
+          path: ci-logs
+          retention-days: 7
+          if-no-files-found: ignore

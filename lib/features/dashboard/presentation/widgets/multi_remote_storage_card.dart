@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
+import 'package:flutter/cupertino.dart' as cupertino;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/rclone_provider.dart';
+import '../../../../core/utils/ios_haptics.dart';
+import '../../../settings/presentation/cloud_drives_screen.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/liquid_glass.dart';
 import '../../../../theme/theme.dart';
@@ -15,6 +20,20 @@ import '../../../../core/localization/app_strings.dart';
 ///    blasserem Akzent, freier Platz als Theme-Track (hell/dunkel adaptiv).
 class MultiRemoteStorageCard extends ConsumerWidget {
   const MultiRemoteStorageCard({super.key});
+
+  /// Tippen auf die Speicherkarte öffnet die Laufwerksverwaltung — die Karte
+  /// zeigt die Summe aller Laufwerke, also führt sie auch dorthin.
+  void _openCloudDrives(BuildContext context, AppStrings strings) {
+    final screen = const CloudDrivesScreen();
+    final platform = defaultTargetPlatform;
+    final route = platform == TargetPlatform.windows
+        ? fluent.FluentPageRoute(builder: (_) => screen)
+        : (platform == TargetPlatform.iOS
+            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
+            : material.MaterialPageRoute(builder: (_) => screen));
+    if (platform == TargetPlatform.iOS) IosHaptics.selection();
+    Navigator.of(context).push(route);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -101,7 +120,7 @@ class MultiRemoteStorageCard extends ConsumerWidget {
         );
 
         // iOS 26+: natives Liquid Glass; darunter opake Surface wie bisher.
-        return LiquidGlassPanel(
+        final panel = LiquidGlassPanel(
           padding: EdgeInsets.all(theme.lg),
           borderRadius: BorderRadius.circular(theme.radiusLg),
           fallback: Container(
@@ -114,6 +133,19 @@ class MultiRemoteStorageCard extends ConsumerWidget {
             child: body,
           ),
           child: body,
+        );
+
+        return Semantics(
+          button: true,
+          label: strings.cloudDrivesTitle,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openCloudDrives(context, strings),
+              child: panel,
+            ),
+          ),
         );
       },
     );

@@ -1,4 +1,4 @@
-name: Build Unsigned iOS App
+name: Build iOS App
 
 on:
   push:
@@ -158,7 +158,7 @@ jobs:
           set +e
           OUT="$LOG_DIR/_report.md"
           {
-            echo "## ❌ Build fehlgeschlagen"
+            echo "## ❌ iOS-Build fehlgeschlagen"
             echo
             echo "Run: <https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}>"
             echo "Commit: \`${{ github.sha }}\`"
@@ -190,7 +190,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-logs
+          name: ci-logs-ios
           path: ci-logs
           retention-days: 7
           if-no-files-found: ignore

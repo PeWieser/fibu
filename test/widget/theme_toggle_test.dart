@@ -66,6 +66,12 @@ void main() {
         // der Name kommt also zweimal vor. Die Hell-Reihe liegt zuerst.
         final akiFinder = find.text('Aki (Autumn)').first;
         expect(find.text('Aki (Autumn)'), findsNWidgets(2));
+        // Die Autostart-Karte sitzt im Windows-Layout vor dem
+        // Erscheinungsbild-Abschnitt und schiebt die Paletten-Reihen nach
+        // unten. Ohne ensureVisible liegt das Ziel außerhalb des
+        // Test-Viewports und der Tap geht ins Leere.
+        await tester.ensureVisible(akiFinder);
+        await tester.pumpAndSettle();
         await tester.tap(akiFinder);
         await tester.pumpAndSettle();
 

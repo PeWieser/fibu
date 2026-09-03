@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/localization/app_strings.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../../core/services/rclone_service.dart';
@@ -45,9 +46,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   SyncMode _editSyncMode = SyncMode.incremental;
   bool _editIsMediaSource = true;
 
+  /// Ordnerpfad für Quellen, die keine Mediathek sind — also alles auf
+  /// Desktop und Dateien-Aufgaben auf Mobil. Auf iOS/Android wird dort die
+  /// Albumliste gezeigt, auf Windows/Android ausschließlich dieses Feld.
+  final TextEditingController _folderCtrl = TextEditingController();
+
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _folderCtrl.dispose();
     super.dispose();
   }
 
@@ -59,6 +66,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     _editAlbumSelection
       ..clear()
       ..addAll(task.effectiveAlbums);
+    // Bei Dateien-Quellen steckt der Pfad hinter dem Präfix; bei einer
+    // geleerten Quelle (importiert von einem anderen Gerät) ist er leer und
+    // muss gewählt werden.
+    _folderCtrl.text = _isFilesSource(src) && src.contains(':')
+        ? src.substring(src.indexOf(':') + 1)
+        : (_isFilesSource(src) ? '' : src);
+  }
+
+  /// Ordner über den Systemdialog wählen (Desktop und Android-SAF).
+  Future<void> _pickEditFolder() async {
+    final path = await FilePicker.getDirectoryPath();
+    if (path != null) setState(() => _folderCtrl.text = path);
   }
 
   /// Dateien-Quellen (`files:`/`folders:`) sind im Inline-Edit bewusst
@@ -112,15 +131,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       ..addAll(task.effectiveAlbums);
   }
 
-  void _startInlineEdit(BackupTask task) {
-    // Während eines laufenden Syncs nicht bearbeiten: Der Lauf hat die
-    // Aufgabe beim Start gelesen. Eine Änderung wäre nur halb wirksam, und
-    // ein mitten im Lauf geänderter Zielordner/Albumsatz würde den
-    // Mirror-Zustand gegen die laufende Übertragung verschieben.
-    final job = ref.read(activeJobProvider);
-    if (job.status == RcloneJobStatus.syncing ||
-        job.status == RcloneJobStatus.pending) {
-      final strings = context.strings;
+  /// „Bearbeiten während eines Syncs ist gesperrt" — plattformneutral.
+  ///
+  /// War früher ein reiner Cupertino-Dialog und damit auf Windows und Android
+  /// ein Fremdkörper. Inhalt und Grund bleiben identisch.
+  void _showEditBlockedDialog() {
+    final strings = context.strings;
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.iOS) {
       cupertino.showCupertinoDialog<void>(
         context: context,
         builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
@@ -134,6 +152,48 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ],
         ),
       );
+      return;
+    }
+    if (platform == TargetPlatform.windows) {
+      fluent.showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => fluent.ContentDialog(
+          title: fluent.Text(strings.editBlockedDuringSyncTitle),
+          content: fluent.Text(strings.editBlockedDuringSyncMessage),
+          actions: [
+            fluent.FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.ok),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    material.showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => material.AlertDialog(
+        title: Text(strings.editBlockedDuringSyncTitle),
+        content: Text(strings.editBlockedDuringSyncMessage),
+        actions: [
+          material.TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(strings.ok),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startInlineEdit(BackupTask task) {
+    // Während eines laufenden Syncs nicht bearbeiten: Der Lauf hat die
+    // Aufgabe beim Start gelesen. Eine Änderung wäre nur halb wirksam, und
+    // ein mitten im Lauf geänderter Zielordner/Albumsatz würde den
+    // Mirror-Zustand gegen die laufende Übertragung verschieben.
+    final job = ref.read(activeJobProvider);
+    if (job.status == RcloneJobStatus.syncing ||
+        job.status == RcloneJobStatus.pending) {
+      _showEditBlockedDialog();
       return;
     }
     setState(() {
@@ -150,7 +210,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final newName = _nameCtrl.text.trim();
     String newSource = task.sourcePath;
     List<String> newAlbums = task.selectedAlbums;
-    if (_editIsMediaSource) {
+    if (!_editIsMediaSource) {
+      // Dateien-/Ordnerquelle: Der gewählte Pfad wird übernommen. Leer
+      // lassen ist erlaubt — die Aufgabe bleibt dann ohne Quelle und der
+      // Sync verweigert sich mit klarer Meldung statt still nichts zu tun.
+      final folder = _folderCtrl.text.trim();
+      newSource = folder.isEmpty ? '' : 'files:$folder';
+      newAlbums = const [];
+    } else if (_editIsMediaSource) {
       // Gleiche Kodierung wie der Task-Wizard: „all:A|B“ bzw. „all“.
       if (_editAlbumSelection.isEmpty) {
         newSource = 'all';
@@ -680,10 +747,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
-  void _openEditTask(BuildContext context, BackupTask task, TargetPlatform platform) {
-    showAddEditTaskDialog(context, ref, task, platform);
-  }
-
   String _formatSourcePath(AppStrings strings, String path) {
     if (path == 'all' || path == 'Alles') return strings.allMedia;
     if (path == 'photos' || path == 'Alle Fotos') return strings.allPhotos;
@@ -744,6 +807,70 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   // =========================================================================
   // WINDOWS (Fluent UI)
   // =========================================================================
+  /// Ordnerquelle im Inline-Edit (Windows): Pfadfeld plus Systemdialog.
+  ///
+  /// Auf Desktop gibt es keine Mediathek — die Quelle ist immer ein Ordner.
+  Widget _buildWindowsFolderEditor(AppStrings strings, AppThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(strings.sourcePrefix,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(height: theme.xs),
+        Row(
+          children: [
+            Expanded(
+              child: fluent.TextBox(
+                controller: _folderCtrl,
+                placeholder: strings.selectFolder,
+              ),
+            ),
+            SizedBox(width: theme.sm),
+            fluent.IconButton(
+              icon: Icon(fluent.FluentIcons.folder_open,
+                  semanticLabel: strings.selectFolder),
+              onPressed: _pickEditFolder,
+            ),
+          ],
+        ),
+        if (_folderCtrl.text.trim().isEmpty) ...[
+          SizedBox(height: theme.xs),
+          Text(
+            strings.syncSourceMissing,
+            style: TextStyle(color: theme.warning, fontSize: 11),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Sync-Modus im Inline-Edit (Windows).
+  Widget _buildWindowsSyncModeEditor(AppStrings strings, AppThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(strings.syncModeLabel,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(height: theme.xs),
+        Row(
+          children: [
+            for (final mode in SyncMode.values)
+              Padding(
+                padding: EdgeInsets.only(right: theme.md),
+                child: fluent.RadioButton(
+                  checked: _editSyncMode == mode,
+                  onChanged: (v) {
+                    if (v == true) setState(() => _editSyncMode = mode);
+                  },
+                  content: Text(_formatSyncMode(strings, mode)),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildWindows(BuildContext context, BackupTask task) {
     final theme = context.theme;
     final strings = context.strings;
@@ -764,10 +891,31 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         commandBar: fluent.CommandBar(
           mainAxisAlignment: MainAxisAlignment.end,
           primaryItems: [
+            // Kein Sprung in den Wizard mehr: Bearbeitet wird inline, genau
+            // wie auf iOS. Abbrechen verwirft, Fertig übernimmt.
+            if (_isEditing)
+              fluent.CommandBarButton(
+                icon: const Icon(fluent.FluentIcons.cancel,
+                    semanticLabel: 'Cancel'),
+                label: Text(strings.cancel),
+                onPressed: () => _cancelInlineEdit(task),
+              ),
             fluent.CommandBarButton(
-              icon: Icon(fluent.FluentIcons.edit, semanticLabel: strings.editTask),
-              label: Text(strings.editTask),
-              onPressed: () => _openEditTask(context, task, TargetPlatform.windows),
+              icon: Icon(
+                  _isEditing
+                      ? fluent.FluentIcons.completed
+                      : fluent.FluentIcons.edit,
+                  semanticLabel:
+                      _isEditing ? strings.doneEditing : strings.editTask),
+              label: Text(
+                  _isEditing ? strings.doneEditing : strings.editTaskInline),
+              onPressed: () {
+                if (_isEditing) {
+                  _finishInlineEdit(task);
+                } else {
+                  _startInlineEdit(task);
+                }
+              },
             ),
           ],
         ),
@@ -791,6 +939,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               // 1. Status Section
               fluent.Text(strings.generalSection, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
+              if (_isEditing) ...[
+                fluent.Card(
+                  child: fluent.TextBox(
+                    controller: _nameCtrl,
+                    placeholder: strings.taskNameHint,
+                  ),
+                ),
+                SizedBox(height: theme.md),
+              ],
               fluent.Card(
                 child: Row(
                   children: [
@@ -811,7 +968,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               fluent.Card(
                 child: Column(
                   children: [
-                    _buildWindowsInfoRow(strings.sourcePrefix, _formatSourcePath(strings, task.sourcePath), theme),
+                    if (_isEditing)
+                      _buildWindowsFolderEditor(strings, theme)
+                    else
+                      _buildWindowsInfoRow(strings.sourcePrefix, _formatSourcePath(strings, task.sourcePath), theme),
                     const SizedBox(height: 8),
                     const fluent.Divider(),
                     const SizedBox(height: 8),
@@ -844,10 +1004,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildWindowsInfoRow(strings.syncModeLabel, _formatSyncMode(strings, task.syncMode), theme),
+                    if (_isEditing)
+                      _buildWindowsSyncModeEditor(strings, theme)
+                    else
+                      _buildWindowsInfoRow(strings.syncModeLabel, _formatSyncMode(strings, task.syncMode), theme),
                     SizedBox(height: theme.xs),
                     Text(
-                      _formatSyncModeDescription(strings, task.syncMode),
+                      _formatSyncModeDescription(strings, _isEditing ? _editSyncMode : task.syncMode),
                       style: TextStyle(fontSize: 12, color: theme.textSecondary),
                     ),
                   ],
@@ -1333,18 +1496,96 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   // =========================================================================
   // ANDROID (Material 3 UI)
   // =========================================================================
+  /// Ordnerquelle im Inline-Edit (Android/Desktop).
+  Widget _buildMaterialFolderEditor(AppStrings strings, AppThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(strings.sourcePrefix,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(height: theme.xs),
+        Row(
+          children: [
+            Expanded(
+              child: material.TextField(
+                controller: _folderCtrl,
+                decoration: material.InputDecoration(
+                  hintText: strings.selectFolder,
+                  border: const material.OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            material.IconButton(
+              icon: Icon(material.Icons.folder_open, color: theme.accent),
+              tooltip: strings.selectFolder,
+              onPressed: _pickEditFolder,
+            ),
+          ],
+        ),
+        if (_folderCtrl.text.trim().isEmpty) ...[
+          SizedBox(height: theme.xs),
+          Text(strings.syncSourceMissing,
+              style: TextStyle(color: theme.warning, fontSize: 11)),
+        ],
+      ],
+    );
+  }
+
+  /// Sync-Modus im Inline-Edit (Android).
+  ///
+  /// Bewusst ListTile mit Häkchen statt `RadioListTile`: Dessen
+  /// `groupValue`/`onChanged` sind seit Flutter 3.32 zugunsten von `RadioGroup`
+  /// veraltet, und der Analyzer behandelt Deprecations als Warnungen — CI
+  /// läuft mit „0 Errors, 0 Warnings".
+  Widget _buildMaterialSyncModeEditor(AppStrings strings, AppThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final mode in SyncMode.values)
+          material.ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              _editSyncMode == mode
+                  ? material.Icons.radio_button_checked
+                  : material.Icons.radio_button_unchecked,
+              color: _editSyncMode == mode ? theme.accent : theme.textSecondary,
+            ),
+            title: Text(_formatSyncMode(strings, mode)),
+            onTap: () => setState(() => _editSyncMode = mode),
+          ),
+      ],
+    );
+  }
+
   Widget _buildAndroid(BuildContext context, BackupTask task) {
     final theme = context.theme;
     final strings = context.strings;
 
     return material.Scaffold(
       appBar: material.AppBar(
-        title: Text(task.name),
+        // Im Bearbeiten-Modus ersetzt „Abbrechen" den Zurück-Pfeil: Zurück
+        // würde die Eingaben still verwerfen, Abbrechen sagt es.
+        leading: _isEditing
+            ? material.IconButton(
+                icon: const Icon(material.Icons.close),
+                tooltip: strings.cancel,
+                onPressed: () => _cancelInlineEdit(task),
+              )
+            : null,
+        title: Text(_isEditing ? _nameCtrl.text : task.name),
         actions: [
-          material.IconButton(
-            icon: const Icon(material.Icons.edit_outlined),
-            onPressed: () => _openEditTask(context, task, TargetPlatform.android),
-            tooltip: strings.editTask,
+          // Kein Sprung in den Wizard mehr — bearbeitet wird inline wie auf iOS.
+          material.TextButton(
+            onPressed: () {
+              if (_isEditing) {
+                _finishInlineEdit(task);
+              } else {
+                _startInlineEdit(task);
+              }
+            },
+            child: Text(_isEditing ? strings.doneEditing : strings.editTaskInline),
           ),
         ],
       ),
@@ -1371,6 +1612,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
             // 1. Status Section
             Text(strings.generalSection, style: material.Theme.of(context).textTheme.titleSmall),
+            if (_isEditing) ...[
+              SizedBox(height: theme.sm),
+              material.TextField(
+                controller: _nameCtrl,
+                decoration: material.InputDecoration(
+                  labelText: strings.taskNameHint,
+                  border: const material.OutlineInputBorder(),
+                ),
+              ),
+            ],
             SizedBox(height: theme.md),
             material.Card(
               elevation: 0,
@@ -1398,11 +1649,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
               child: Column(
                 children: [
-                  material.ListTile(
-                    leading: Icon(material.Icons.folder_outlined, color: theme.accent),
-                    title: Text(strings.sourcePrefix),
-                    trailing: Text(_formatSourcePath(strings, task.sourcePath)),
-                  ),
+                  if (_isEditing)
+                    Padding(
+                      padding: EdgeInsets.all(theme.md),
+                      child: _buildMaterialFolderEditor(strings, theme),
+                    )
+                  else
+                    material.ListTile(
+                      leading: Icon(material.Icons.folder_outlined, color: theme.accent),
+                      title: Text(strings.sourcePrefix),
+                      trailing: Text(_formatSourcePath(strings, task.sourcePath)),
+                    ),
                   const material.Divider(height: 1),
                   material.ListTile(
                     leading: Icon(material.Icons.cloud_outlined, color: theme.accent),
@@ -1446,9 +1703,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   color: theme.accent,
                 ),
                 title: Text(strings.syncModeLabel),
-                subtitle: Text(_formatSyncModeDescription(strings, task.syncMode)),
-                trailing: Text(_formatSyncMode(strings, task.syncMode), style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(_formatSyncModeDescription(
+                    strings, _isEditing ? _editSyncMode : task.syncMode)),
+                trailing: _isEditing
+                    ? null
+                    : Text(_formatSyncMode(strings, task.syncMode),
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
+              if (_isEditing)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(theme.md, 0, theme.md, theme.md),
+                  child: _buildMaterialSyncModeEditor(strings, theme),
+                ),
             ),
             SizedBox(height: theme.lg),
 

@@ -253,8 +253,17 @@ class SettingsScreen extends ConsumerWidget {
                               onChanged: (val) =>
                                   setAutostartEnabled(ref, val),
                             ),
-                            loading: () => const fluent.ProgressRing(
-                                strokeWidth: 2),
+                            // Bewusst KEIN ProgressRing: Der ist eine
+                            // Endlos-Animation, an der pumpAndSettle in Tests
+                            // nie zur Ruhe kommt. Ein deaktivierter Schalter
+                            // springt außerdem nicht in der Breite.
+                            loading: () => const Opacity(
+                              opacity: 0.5,
+                              child: fluent.ToggleSwitch(
+                                checked: false,
+                                onChanged: null,
+                              ),
+                            ),
                             error: (_, __) => Text(strings.error,
                                 style: TextStyle(
                                     color: theme.error, fontSize: 11)),

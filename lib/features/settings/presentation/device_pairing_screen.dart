@@ -42,6 +42,10 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   String? _error;
   bool _sending = false;
 
+  /// Anzahl Aufgaben, deren Spiegelungs-Modus beim Import heruntergestuft
+  /// wurde — wird in der Erfolgsmeldung genannt, nicht still verschwiegen.
+  int _downgradedMirror = 0;
+
   final TextEditingController _urlCtrl = TextEditingController();
 
   /// Empfänger ist, wer kein Mobilgerät ist — dort gibt es keine Mediathek,
@@ -99,6 +103,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   /// übernommen, aber ihre Quelle geleert, wenn sie auf die Mediathek des
   /// anderen Geräts zeigt (dieselbe Regel wie beim Import aus der Cloud).
   Future<void> _importBundle(PairingBundle bundle) async {
+    var downgradedMirror = 0;
     try {
       final conf = await privateAppFile('rclone.conf');
       await conf.writeAsString(bundle.rcloneConf);
@@ -106,18 +111,34 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       final remotes = await privateAppFile('remotes.json');
       await remotes.writeAsString(_encode(bundle.remotes));
 
-      final mobileSource = RegExp(r'^(photos:|videos:|all:|all$|photos$|videos$)');
+      final mobileSource = RegExp(r'^(photos:|videos:|all:|all\$|photos\$|videos\$)');
       final adapted = bundle.tasks.map((t) {
         final src = (t['sourcePath'] as String? ?? '');
+        final next = Map<String, dynamic>.from(t);
+
+        // Quelle eines anderen Geräts: geleert, muss hier gewählt werden.
         if (mobileSource.hasMatch(src)) {
-          return {...t, 'sourcePath': '', 'selectedAlbums': const <String>[]};
+          next['sourcePath'] = '';
+          next['selectedAlbums'] = const <String>[];
         }
-        return t;
+
+        // „Spiegelung" vom Mobilgerät ist ein echter 2-Wege-Algorithmus mit
+        // Zustand, Tombstones und Sicherheitsbremse. Der Desktop hat nichts
+        // davon — dort ist es `rclone sync`, also 1-Weg mit Löschrecht. Auf
+        // einem geteilten Zielordner würde das die Dateien des anderen Geräts
+        // löschen (docs/TESTMATRIX_IOS_WINDOWS.md, B9). Deshalb wird der Modus
+        // beim Import auf den Desktop heruntergestuft.
+        if (next['syncMode'] == 'mirror') {
+          next['syncMode'] = 'incremental';
+          downgradedMirror++;
+        }
+        return next;
       }).toList();
       final tasks = await privateAppFile('tasks.json');
       await tasks.writeAsString(_encode(adapted));
 
       if (!mounted) return;
+      _downgradedMirror = downgradedMirror;
       setState(() {
         _received = bundle;
         _phase = _PairingPhase.received;
@@ -269,7 +290,10 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
             strings.pairingReceived(
                 _received!.deviceName,
                 _received!.remotes.length,
-                _received!.tasks.length),
+                _received!.tasks.length) +
+                (_downgradedMirror > 0
+                    ? '\n\n' + strings.pairingMirrorDowngraded(_downgradedMirror)
+                    : ''),
             isError: false,
           ),
         if (_error != null) ...[

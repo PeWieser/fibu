@@ -203,6 +203,16 @@ class WindowsRcloneService implements RcloneService {
     for (var filter in options.excludeFilters) {
       args.addAll(['--exclude', filter]);
     }
+
+    // Fibus eigene Ordner liegen IM Sync-Ziel: `.fibu/config.json` ist die
+    // geräteübergreifende Aufgaben-Konfiguration, `.fibu/manifest.json` der
+    // Katalog, `.fibu-trash/` der Papierkorb. Ein `sync`-Lauf würde sie
+    // löschen, weil die lokale Quelle sie nicht enthält — und damit die
+    // Konfiguration aller Geräte zerstören. Siehe
+    // docs/TESTMATRIX_IOS_WINDOWS.md, Befund C1.
+    for (final protectedPath in const ['.fibu/**', '.fibu-trash/**']) {
+      args.addAll(['--exclude', protectedPath]);
+    }
     if (options.includeFilters.isNotEmpty || options.excludeFilters.isNotEmpty) {
       // Groß-/Kleinschreibung der Endungen ignorieren (IMG_0001.JPG ↔ *.jpg).
       args.add('--ignore-case');

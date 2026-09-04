@@ -332,10 +332,38 @@ class AppStrings {
   String get syncModeIncrementalDescription => isGerman
       ? 'Nur neue und geänderte Dateien hochladen. In der Cloud vorhandene Dateien bleiben immer erhalten (sicher).'
       : 'Upload only new and modified files. Remote cloud files are always preserved (safe).';
-  String get syncModeMirror => isGerman ? 'Spiegelung (2-Wege Mirror-Sync)' : 'Mirror Sync (two-way)';
-  String get syncModeMirrorDescription => isGerman
-      ? 'Exakte 2-Wege-Spiegelung: Neue Dateien aus der Cloud werden auch lokal heruntergeladen. Dateien, die du lokal löschst, werden auch in der Cloud gelöscht!'
-      : 'Exact 2-way mirror: New files from cloud are downloaded locally. Files deleted locally will also be deleted in the cloud!';
+  /// „Spiegelung" bedeutet auf den Plattformen nicht dasselbe — und die
+  /// Beschriftung muss das sagen. Vorher stand auf allen Plattformen derselbe
+  /// 2-Wege-Text; auf Windows wäre das eine falsche Versprechung gewesen.
+  bool get _hasTwoWayMirror =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+
+  String get syncModeMirror => isGerman
+      ? (_hasTwoWayMirror
+          ? 'Spiegelung (2-Wege Mirror-Sync)'
+          : 'Spiegelung (1-Weg, löscht in der Cloud)')
+      : (_hasTwoWayMirror
+          ? 'Mirror Sync (two-way)'
+          : 'Mirror (one-way, deletes in cloud)');
+
+  String get syncModeMirrorDescription => _hasTwoWayMirror
+      ? (isGerman
+          ? 'Exakte 2-Wege-Spiegelung: Neue Dateien aus der Cloud werden auch '
+              'lokal heruntergeladen. Dateien, die du lokal löschst, werden '
+              'auch in der Cloud gelöscht!'
+          : 'Exact 2-way mirror: New files from cloud are downloaded locally. '
+              'Files deleted locally will also be deleted in the cloud!')
+      : (isGerman
+          ? 'Ein-Weg-Spiegelung: Dein Ordner wird in die Cloud gespiegelt. '
+              'Alles, was dort liegt und nicht in deinem Ordner ist, wird '
+              'gelöscht — auch Dateien, die ein anderes Gerät hochgeladen hat. '
+              'Es wird nichts heruntergeladen. Für einen geteilten Zielordner '
+              'nicht geeignet; nimm dafür „Inkrementell".'
+          : 'One-way mirror: your folder is mirrored into the cloud. Anything '
+              'there that is not in your folder gets deleted — including files '
+              'another device uploaded. Nothing is downloaded. Not suitable for '
+              'a shared target folder; use “Incremental” for that.');
   String get syncModeBadgeIncremental => isGerman ? 'Inkrementell' : 'Incremental';
   String get syncModeBadgeMirror => isGerman ? 'Spiegelung' : 'Mirror Sync';
   String get syncModeTooltipIncremental => isGerman
@@ -850,6 +878,10 @@ class AppStrings {
   String pairingReceived(String device, int remotes, int tasks) => isGerman
       ? 'Konfiguration von „$device" übernommen: $remotes Laufwerke, $tasks Aufgaben. Aufgaben mit Mediathek-Quelle brauchen noch einen Ordner.'
       : 'Configuration from “$device” applied: $remotes drives, $tasks tasks. Tasks with a library source still need a folder.';
+  String pairingMirrorDowngraded(int n) => isGerman
+      ? '$n ${n == 1 ? 'Aufgabe wurde' : 'Aufgaben wurden'} von „Spiegelung" auf „Inkrementell" umgestellt: Der Desktop spiegelt nur in eine Richtung und würde sonst Dateien löschen, die dieses Gerät hochgeladen hat.'
+      : '$n ${n == 1 ? 'task was' : 'tasks were'} switched from “Mirror” to “Incremental”: the desktop only mirrors one way and would otherwise delete files this device uploaded.';
+
   String get pairingTimeout => isGerman
       ? 'Zeit abgelaufen — es ist kein Gerät verbunden worden.'
       : 'Timed out — no device connected.';

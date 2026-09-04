@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 
@@ -128,9 +127,9 @@ class Win {
   static Widget toggle({
     required AppThemeData theme,
     required String title,
-    required String? subtitle,
+    String? subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
     bool first = false,
     bool last = false,
   }) {
@@ -188,7 +187,7 @@ class Win {
   static Widget infoBar({
     required String title,
     String? message,
-    fluent.InfoBarSeverity severity = fluent.InfoBarSeverity.informational,
+    fluent.InfoBarSeverity severity = fluent.InfoBarSeverity.info,
     VoidCallback? onClose,
   }) {
     return Padding(

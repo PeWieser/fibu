@@ -287,13 +287,13 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         if (_phase == _PairingPhase.received && _received != null)
           _resultBox(
             theme,
-            strings.pairingReceived(
-                _received!.deviceName,
-                _received!.remotes.length,
-                _received!.tasks.length) +
-                (_downgradedMirror > 0
-                    ? '\n\n' + strings.pairingMirrorDowngraded(_downgradedMirror)
-                    : ''),
+            '${strings.pairingReceived(
+              _received!.deviceName,
+              _received!.remotes.length,
+              _received!.tasks.length,
+            )}${_downgradedMirror > 0
+                ? '\n\n${strings.pairingMirrorDowngraded(_downgradedMirror)}'
+                : ''}',
             isError: false,
           ),
         if (_error != null) ...[

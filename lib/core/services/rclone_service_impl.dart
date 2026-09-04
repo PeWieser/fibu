@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../utils/app_paths.dart';
 import 'app_log_service.dart';
 import 'filesystem_mirror_source.dart';
 import 'trash_service.dart';
@@ -202,7 +201,7 @@ class WindowsRcloneService implements RcloneService {
       return jobId;
     }
 
-    final command = 'copy';
+    const command = 'copy';
     
     // Build arguments. We use --use-json-log to parse progress on stderr.
     final List<String> args = [

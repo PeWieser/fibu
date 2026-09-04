@@ -204,9 +204,12 @@ class DevicePairingService {
       socket.broadcastEnabled = true;
       final completer = Completer<DiscoveredDevice?>();
 
-      final sub = socket!.listen((event) {
+      // Lokale finale Referenz: Innerhalb der Closure ist `socket` bereits
+      // promotet, ein `!` waere wirkungslos (unnecessary_non_null_assertion).
+      final bound = socket!;
+      final sub = bound.listen((event) {
         if (event != RawSocketEvent.read) return;
-        final datagram = socket!.receive();
+        final datagram = bound.receive();
         if (datagram == null) return;
         try {
           final decoded = jsonDecode(utf8.decode(datagram.data));

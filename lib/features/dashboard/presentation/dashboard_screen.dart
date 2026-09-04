@@ -811,6 +811,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             job.fileName, job.remoteLabel, job.phase == 'upload');
       }
     }
+    if (job.phase == 'conflict') {
+      // Ein Konflikt ist keine Zwischenstufe, die man übersehen darf: Beide
+      // Geräte haben dieselbe Datei geändert, beide Fassungen bleiben liegen.
+      // Ohne eigenen Text fiele das auf „Auf Änderungen überprüfen" zurück.
+      return strings.syncStatusConflict(job.fileName);
+    }
     if (job.phase == 'tombstones' ||
         job.phase == 'delete-local' ||
         job.phase == 'done') {

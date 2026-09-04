@@ -272,6 +272,12 @@ class MockRcloneService implements RcloneService {
   }
 
   @override
+  Future<void> moveRemoteFile(
+      String remoteName, String fromPath, String toPath) async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+
+  @override
   Future<void> deleteFile(String remoteName, String path) async {
     await Future.delayed(const Duration(milliseconds: 200));
   }

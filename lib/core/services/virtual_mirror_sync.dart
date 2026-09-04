@@ -174,6 +174,9 @@ class VirtualMirrorSyncEngine {
     final merged = <String, Tombstone>{};
     // Erfolgreich hochgeladene Pfade dieses Laufs (für den „gesynct“-Zustand).
     final uploadedRels = <String>{};
+    /// Pfade mit echtem Konflikt (beide Seiten geändert). Werden unter einem
+    /// Konflikt-Namen zusätzlich hochgeladen, damit keine Fassung verloren geht.
+    final conflictedRels = <String>{};
 
     // ---------- 0a) Lokale Löschungen → Tombstones (Mirror: lokal → Cloud) ---
     // Pfade, die zuletzt nachweislich gesynct waren und jetzt lokal fehlen,
@@ -357,12 +360,107 @@ class VirtualMirrorSyncEngine {
         uploadedRels.add(item.rel);
         continue;
       }
+
+      // 3-Way-Abgleich gegen die Basis (letzter共同 Stand beider Seiten).
+      // Ohne das entscheidet allein die Zeit — und bei gleicher Größe plus
+      // gleicher Zeit gilt die Datei als identisch, obwohl beide Seiten
+      // unterschiedliche Inhalte haben (docs/TESTMATRIX_IOS_WINDOWS.md, B13).
+      //
+      //   Basis == lokal,  Basis != remote  → remote geändert → holen
+      //   Basis != lokal,  Basis == remote  → lokal geändert  → senden
+      //   beide != Basis und untereinander  → KONFLIKT        → beide behalten
+      final base = lastKnown[item.rel];
+      final baseSize = base?.sizeBytes ?? 0;
+      final localChanged = baseSize > 0 && baseSize != knownSize && knownSize > 0;
+      final remoteChanged = baseSize > 0 && baseSize != m.info.size && m.info.size > 0;
+
+      if (localChanged && remoteChanged && knownSize != m.info.size) {
+        // Echter Konflikt: Beide Seiten haben seit dem letzten gemeinsamen
+        // Stand geändert, und die Inhalte unterscheiden sich. Nichts darf
+        // still verloren gehen — die lokale Fassung wird unter einem
+        // Konflikt-Namen hochgeladen, die Cloud-Fassung bleibt liegen.
+        final conflictRel = _conflictRelFor(item.rel);
+        if (!conflictedRels.contains(item.rel)) {
+          conflictedRels.add(item.rel);
+          needUpload.add(item.copyWith(rel: conflictRel));
+          onJournal?.call(ChangeKind.modified, conflictRel,
+              sizeBytes: knownSize, modifiedMs: item.modifiedMs);
+          onProgress?.call('conflict', item.rel, 0, 0);
+          AppLog.warn('sync',
+              'Konflikt erkannt: ${item.rel} wurde auf beiden Geräten geändert. '
+              'Lokale Fassung bleibt als $conflictRel erhalten, Cloud-Fassung bleibt liegen.');
+        }
+        uploadedRels.add(item.rel);
+        continue;
+      }
+
       if (cmp > 0) {
         needUpload.add(item);
       } else {
         // Remote neuer + andere Größe → später ersetzen (Download + Import).
         needDownloadReplace.add((local: item, remoteRel: m.rel, remote: m.info));
         uploadedRels.add(item.rel); // gilt als „paired“, kein Neu-Upload
+      }
+    }
+
+    // ---------- Rename-Erkennung: Umbenennen statt Löschen + Neu-Upload ----
+    //
+    // Ein umbenanntes Album erscheint als „alter Pfad fehlt lokal" plus
+    // „neuer Pfad ist neu". Ohne diese Erkennung würde das Tombstone plus
+    // vollständigen Neu-Upload bedeuten — bei einer Mediathek schnell
+    // Gigabyte, die umsonst wandern (docs/TESTMATRIX_IOS_WINDOWS.md, B4).
+    //
+    // Erkennung über Größe UND Änderungszeit aus dem letzten bekannten
+    // Zustand: Beides zusammen gleich ist bei Fotos praktisch nur dieselbe
+    // Datei. Ein Treffer wird serverseitig verschoben, nicht übertragen.
+    if (needUpload.isNotEmpty && localTombs.isNotEmpty) {
+      // Index über die Lösch-Kandidaten: (Größe, Zeit) → alter Pfad.
+      final byFingerprint = <String, String>{};
+      for (final tomb in localTombs) {
+        final known = lastKnown[tomb.path];
+        if (known == null || known.sizeBytes <= 0) continue;
+        byFingerprint['${known.sizeBytes}|${known.modifiedMs}'] = tomb.path;
+      }
+
+      if (byFingerprint.isNotEmpty) {
+        final movedFrom = <String>{};
+        final remaining = <VirtualMediaItem>[];
+        for (final item in needUpload) {
+          if (item.sizeBytes <= 0) {
+            remaining.add(item);
+            continue;
+          }
+          final fp = '${item.sizeBytes}|${item.modifiedMs}';
+          final from = byFingerprint[fp];
+          if (from == null || movedFrom.contains(from)) {
+            remaining.add(item);
+            continue;
+          }
+          try {
+            await _rclone.moveRemoteFile(
+                remoteName, _joinRemote(remotePath, from), _joinRemote(remotePath, item.rel));
+            movedFrom.add(from);
+            // Das Tombstone ist gegenstandslos: Die Datei ist nicht gelöscht,
+            // sondern umgezogen.
+            localTombs.removeWhere((t) => t.path == from);
+            uploadedRels.add(item.rel);
+            sizeUpdates[item.rel] = item.sizeBytes;
+            onJournal?.call(ChangeKind.modified, item.rel,
+                sizeBytes: item.sizeBytes, modifiedMs: item.modifiedMs);
+            AppLog.info('sync',
+                'Umbenennung erkannt: $from → ${item.rel} (serverseitig verschoben, kein Neu-Upload)');
+          } catch (e) {
+            // Provider ohne serverseitiges Move → zurück in die Upload-Liste.
+            AppLog.info('sync',
+                'Serverseitiges Verschieben nicht möglich ($e) — ${item.rel} wird normal hochgeladen');
+            remaining.add(item);
+          }
+        }
+        if (movedFrom.isNotEmpty) {
+          needUpload
+            ..clear()
+            ..addAll(remaining);
+        }
       }
     }
 
@@ -1045,5 +1143,26 @@ class VirtualMirrorSyncEngine {
   String _joinRemote(String remotePath, String rel) {
     if (remotePath.isEmpty) return rel;
     return '$remotePath/$rel';
+  }
+
+  /// Konflikt-Name für eine Datei, die auf beiden Geräten geändert wurde.
+  ///
+  /// `IMG_0001.HEIC` → `IMG_0001 (Konflikt 2026-09-04 14-03).HEIC`
+  ///
+  /// Bewusst mit Zeitstempel statt fortlaufender Nummer: Zwei Geräte können
+  /// denselben Konflikt unabhängig benennen, und ohne Zeitstempel würden sie
+  /// sich gegenseitig überschreiben. Die Fassung des anderen Geräts bleibt
+  /// unter dem Original-Namen liegen, keine der beiden geht verloren.
+  String _conflictRelFor(String rel) {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final stamp = '${now.year}-${two(now.month)}-${two(now.day)} '
+        '${two(now.hour)}-${two(now.minute)}';
+    final slash = rel.lastIndexOf('/');
+    final dir = slash >= 0 ? rel.substring(0, slash + 1) : '';
+    final name = slash >= 0 ? rel.substring(slash + 1) : rel;
+    final dot = name.lastIndexOf('.');
+    if (dot <= 0) return '$dir$name (Konflikt $stamp)';
+    return '$dir${name.substring(0, dot)} (Konflikt $stamp)${name.substring(dot)}';
   }
 }

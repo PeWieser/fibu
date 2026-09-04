@@ -930,6 +930,16 @@ class AppStrings {
 
   String get syncStatusChecking =>
       isGerman ? 'Auf Änderungen überprüfen' : 'Checking for changes';
+  /// Beide Geräte haben dieselbe Datei geändert. Keine Fassung wird
+  /// überschrieben — die lokale landet unter einem Konflikt-Namen.
+  String syncStatusConflict(String file) => file.isEmpty
+      ? (isGerman
+          ? 'Konflikt — beide Geräte haben dieselbe Datei geändert'
+          : 'Conflict — both devices changed the same file')
+      : (isGerman
+          ? 'Konflikt bei „$file" — beide Fassungen bleiben erhalten'
+          : 'Conflict on “$file” — both versions are kept');
+
   String get syncStatusFinishing => isGerman ? 'Abschließen' : 'Finishing up';
 
   /// „„IMG_0001.HEIC" auf „MEGA" übertragen" bzw. „… von „MEGA" übertragen".

@@ -248,6 +248,16 @@ abstract class RcloneService {
   /// Uploads a single file to the remote destination.
   Future<void> copyFileToRemote(String localFilePath, String remoteName, String remotePath);
 
+  /// Verschiebt eine Datei serverseitig innerhalb desselben Laufwerks.
+  ///
+  /// Für die Rename-Erkennung der Spiegel-Engine: Ein umbenanntes Album
+  /// erscheint als „alter Pfad fehlt, neuer Pfad ist neu". Ohne Move würde
+  /// das Löschen plus vollständigen Neu-Upload bedeuten — bei einer
+  /// Mediathek sind das schnell Gigabyte, die umsonst wandern
+  /// (docs/TESTMATRIX_IOS_WINDOWS.md, B4).
+  Future<void> moveRemoteFile(
+      String remoteName, String fromPath, String toPath);
+
   /// Uploads a single file and reports live transferred bytes via [onBytes].
   ///
   /// Wird von den Mirror-Engines genutzt, damit der Fortschrittsbalken in

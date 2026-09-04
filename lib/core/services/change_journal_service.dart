@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'rclone_service.dart';
+
 import 'app_log_service.dart';
 
 /// Art einer beobachteten Änderung.
@@ -60,6 +62,10 @@ class JournalEntry {
   /// dorthin verschoben wurde. Ohne Wert ist die Datei endgültig weg.
   final String? trashRef;
 
+  /// Welches Gerät die Änderung vorgenommen hat. Ohne das sieht jedes Gerät
+  /// nur seine eigenen Läufe (docs/TESTMATRIX_IOS_WINDOWS.md, C7).
+  final String deviceId;
+
   const JournalEntry({
     this.version = 1,
     required this.at,
@@ -68,6 +74,7 @@ class JournalEntry {
     this.sizeBytes = 0,
     this.modifiedMs = 0,
     this.trashRef,
+    this.deviceId = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -78,6 +85,7 @@ class JournalEntry {
         'size': sizeBytes,
         'mt': modifiedMs,
         if (trashRef != null && trashRef!.isNotEmpty) 'trash': trashRef,
+        if (deviceId.isNotEmpty) 'dev': deviceId,
       };
 
   static JournalEntry? fromJson(Object? raw) {
@@ -95,6 +103,7 @@ class JournalEntry {
       sizeBytes: (m['size'] as num?)?.toInt() ?? 0,
       modifiedMs: (m['mt'] as num?)?.toInt() ?? 0,
       trashRef: m['trash'] as String?,
+      deviceId: m['dev'] as String? ?? '',
     );
   }
 }
@@ -165,6 +174,13 @@ class ChangeJournal {
 
   File get _file => File('${scopeRoot.path}/$fileName');
 
+  /// Kennung dieses Geräts. Wird jedem Eintrag mitgegeben, damit ein anderes
+  /// Gerät beim Lesen unterscheiden kann, wer was getan hat.
+  String _deviceId = '';
+
+  /// Setzt die Gerätekennung. Aufgerufen vom Sync, bevor Einträge entstehen.
+  void setDeviceId(String id) => _deviceId = id;
+
   /// Merkt eine Änderung vor; auf Platte geht sie erst mit [flush].
   void record(
     ChangeKind kind,
@@ -173,6 +189,7 @@ class ChangeJournal {
     int modifiedMs = 0,
     String? trashRef,
     DateTime? at,
+    String? deviceId,
   }) {
     if (rel.isEmpty) return;
     _pending.add(JournalEntry(
@@ -181,6 +198,7 @@ class ChangeJournal {
       rel: rel,
       sizeBytes: sizeBytes,
       modifiedMs: modifiedMs,
+      deviceId: deviceId ?? _deviceId,
       trashRef: trashRef,
     ));
   }
@@ -205,6 +223,79 @@ class ChangeJournal {
     } catch (e) {
       AppLog.warn('journal', 'Verlauf konnte nicht geschrieben werden: $e');
     }
+  }
+
+  /// Lädt den eigenen Verlauf ins Cloud-Ziel hoch.
+  ///
+  /// Jedes Gerät schreibt seine Datei unter `.fibu/journal/<deviceId>.jsonl`.
+  /// Zusammen mit [readAllDevices] ergibt das einen geräteübergreifenden
+  /// Verlauf, ohne dass ein Server dazwischensteht (C7).
+  ///
+  /// Bewusst fail-open: Der Verlauf ist ein Zusatz. Scheitert der Upload,
+  /// bleibt der lokale Verlauf gültig und der nächste Lauf versucht es erneut.
+  Future<void> publishTo(
+    RcloneService rclone,
+    String remoteName,
+    String remotePath, {
+    required String deviceId,
+  }) async {
+    if (deviceId.isEmpty) return;
+    final f = _file;
+    if (!await f.exists()) return;
+    try {
+      final base = remotePath.replaceAll(RegExp(r'/$'), '');
+      final dest = base.isEmpty
+          ? '.fibu/journal/$deviceId.jsonl'
+          : '$base/.fibu/journal/$deviceId.jsonl';
+      await rclone.copyFileToRemote(f.path, remoteName, dest);
+      AppLog.info('journal', 'Verlauf ins Ziel geladen: $dest');
+    } catch (e) {
+      AppLog.info('journal',
+          'Verlauf konnte nicht ins Ziel geladen werden: $e — lokaler Verlauf bleibt gültig');
+    }
+  }
+
+  /// Liest die Verläufe aller Geräte aus dem Cloud-Ziel und vereinigt sie mit
+  /// dem lokalen. Doppelte Einträge (eigener Verlauf ist auch hochgeladen)
+  /// werden über Zeitpunkt + Pfad + Art erkannt.
+  Future<List<JournalEntry>> readAllDevices(
+    RcloneService rclone,
+    String remoteName,
+    String remotePath,
+  ) async {
+    final merged = <String, JournalEntry>{};
+    for (final e in await readAll()) {
+      merged['${e.at.toIso8601String()}|${e.rel}|${e.kind.wire}'] = e;
+    }
+
+    final base = remotePath.replaceAll(RegExp(r'/$'), '');
+    final dir = base.isEmpty ? '.fibu/journal' : '$base/.fibu/journal';
+    try {
+      final files = await rclone.listFiles(remoteName, dir);
+      for (final f in files) {
+        if (f.isDir || !f.name.endsWith('.jsonl')) continue;
+        final path = '$dir/${f.name}';
+        try {
+          final content = await rclone.catFile(remoteName, path);
+          if (content == null || content.trim().isEmpty) continue;
+          for (final line in const LineSplitter().convert(content)) {
+            if (line.trim().isEmpty) continue;
+            try {
+              final entry = JournalEntry.fromJson(jsonDecode(line));
+              if (entry == null) continue;
+              merged['${entry.at.toIso8601String()}|${entry.rel}|${entry.kind.wire}'] =
+                  entry;
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    } catch (_) {
+      // Kein Cloud-Verlauf lesbar — der lokale gilt trotzdem.
+    }
+
+    final out = merged.values.toList()
+      ..sort((a, b) => a.at.compareTo(b.at));
+    return out;
   }
 
   /// Liest alle Einträge, aufsteigend nach Zeitpunkt sortiert.

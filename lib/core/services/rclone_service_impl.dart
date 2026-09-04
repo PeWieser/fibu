@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'app_log_service.dart';
+import 'change_journal_service.dart';
+import 'device_identity_service.dart';
 import 'filesystem_mirror_source.dart';
 import 'trash_service.dart';
 import 'virtual_mirror_sync.dart';
@@ -318,6 +320,12 @@ class WindowsRcloneService implements RcloneService {
       final stateRoot = Directory(stateRootPath);
       final state = await _loadMirrorState(stateRoot);
 
+      // Verlauf je Scope, mit Gerätekennung, damit beide Seiten dieselbe
+      // Historie sehen (C7).
+      final journal = ChangeJournal(stateRoot);
+      final deviceId = await DeviceIdentity.id();
+      journal.setDeviceId(deviceId);
+
       AppLog.info('sync',
           'Dateisystem-Spiegel gestartet: $localPath → $remoteName:$remotePath');
 
@@ -345,6 +353,11 @@ class WindowsRcloneService implements RcloneService {
         persistLocalState: (entries) async {
           await _saveMirrorState(stateRoot, entries, state.blocked, state.adopted);
         },
+        // Verlauf wie auf iOS — sonst sieht der Desktop nur seine eigenen
+        // Läufe und die iOS-Seite wäre blind (C7).
+        onJournal: (kind, rel, {sizeBytes = 0, modifiedMs = 0, trashRef}) =>
+            journal.record(kind, rel,
+                sizeBytes: sizeBytes, modifiedMs: modifiedMs, trashRef: trashRef),
         onProgress: (phase, item, done, total,
             {bytesDone = 0, bytesTotal = 0}) {
           if (progress.isClosed) return;
@@ -367,6 +380,9 @@ class WindowsRcloneService implements RcloneService {
         },
       );
 
+      await journal.flush();
+      await journal.compact();
+      await journal.publishTo(this, remoteName, remotePath, deviceId: deviceId);
       await source.purgeTrash();
       AppLog.info('sync',
           'Dateisystem-Spiegel fertig: ↑${result.uploaded} ↓${result.downloaded} '
@@ -596,6 +612,20 @@ class WindowsRcloneService implements RcloneService {
     } catch (e) {
       throw Exception('Failed to delete file: $e');
     }
+  }
+
+  @override
+  Future<void> moveRemoteFile(
+      String remoteName, String fromPath, String toPath) async {
+    final result = await Process.run(_executablePath, [
+      'moveto',
+      '$remoteName:$fromPath',
+      '$remoteName:$toPath',
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception('moveto fehlgeschlagen: ${result.stderr}');
+    }
+    AppLog.info('remote', 'Remote-Datei verschoben: $remoteName:$fromPath → $toPath');
   }
 
   @override

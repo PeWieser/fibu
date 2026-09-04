@@ -15,6 +15,7 @@ import '../localization/app_strings.dart';
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
 import 'change_journal_service.dart';
+import 'device_identity_service.dart';
 import 'pending_deletions_store.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
@@ -241,6 +242,25 @@ class IosRcloneService implements RcloneService {
       '_config': _fastFailConfig,
     });
     AppLog.info('remote', 'Remote-Datei gelöscht: $remote:$path');
+  }
+
+  @override
+  Future<void> moveRemoteFile(
+      String remoteName, String fromPath, String toPath) async {
+    await _ensureEngine();
+    final remote = _normalizeRemoteName(remoteName);
+    // operations/movefile verschiebt serverseitig, ohne die Datei einmal
+    // durch das Gerät zu ziehen. Schlägt das fehl (Provider ohne
+    // Server-Side-Move), wirft es — der Aufrufer fällt auf Löschen +
+    // Neu-Upload zurück.
+    await _rc.rpc('operations/movefile', {
+      'srcFs': '$remote:',
+      'srcRemote': fromPath,
+      'dstFs': '$remote:',
+      'dstRemote': toPath,
+      '_config': _fastFailConfig,
+    });
+    AppLog.info('remote', 'Remote-Datei verschoben: $remote:$fromPath → $toPath');
   }
 
   @override
@@ -2008,6 +2028,10 @@ class IosRcloneService implements RcloneService {
     // selben privaten Scope-Ordner wie mirror_state.json. Geschrieben wird
     // gebündelt am Ende des Laufs — pro Datei wäre zu viel I/O.
     final journal = ChangeJournal(stateRoot);
+    // Gerätekennung mitgeben, damit ein anderes Gerät beim Lesen
+    // unterscheiden kann, wer was getan hat (C7).
+    final deviceId = await DeviceIdentity.id();
+    journal.setDeviceId(deviceId);
 
     final result = await VirtualMirrorSyncEngine(this).sync(
       localItems: items,
@@ -2090,6 +2114,9 @@ class IosRcloneService implements RcloneService {
     // abgebrochener Sync soll keinen halben Zustand journalisieren.
     await journal.flush();
     await journal.compact();
+    // Verlauf ins Ziel laden, damit auch andere Geräte ihn sehen. Fail-open:
+    // Scheitert das, bleibt der lokale Verlauf gültig.
+    await journal.publishTo(this, remoteName, remotePath, deviceId: deviceId);
     if (!progress.isClosed) {
       final warn = result.warnings.isNotEmpty ? result.warnings.first : '';
       progress.add(RcloneProgressEvent(

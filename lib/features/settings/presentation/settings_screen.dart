@@ -562,7 +562,8 @@ class SettingsScreen extends ConsumerWidget {
                     // Sprache gehoert hierher. Eine eigene Sektion mit genau
                     // einem Eintrag kostet Ueberschrift und Rahmen fuer nichts
                     // und zwingt zum Scrollen, wo eine Zeile gereicht haette.
-                    const Divider(height: 1),
+                    // Keine eigene Trennlinie: CupertinoListSection zieht sie
+                    // zwischen den Zeilen selbst.
                     cupertino.CupertinoListTile(
                       title: Text(strings.languageSection, style: const TextStyle(fontSize: 16)),
                       trailing: Row(

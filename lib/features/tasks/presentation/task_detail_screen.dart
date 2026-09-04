@@ -671,34 +671,25 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           title: fluent.Text(title),
           content: Text(message),
           actions: [
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
-                child: fluent.FilledButton(
-                  onPressed: () {
-                    ref.read(tasksListProvider.notifier).removeTask(task.id);
-                    Navigator.pop(dialogCtx);
-                    _showActionResult(
-                        context, strings.taskDeletedNotice(task.name));
-                    Navigator.pop(context);
-                  },
-                  child: Text(
-                    strings.delete,
-                    style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-                  ),
-                ),
+            // Fluent-Buttons bringen Cursor, Fokus und Semantik selbst mit —
+            // die MouseRegion/ConstrainedBox-Wrapper waren ueberfluessig.
+            fluent.FilledButton(
+              onPressed: () {
+                ref.read(tasksListProvider.notifier).removeTask(task.id);
+                Navigator.pop(dialogCtx);
+                _showActionResult(
+                    context, strings.taskDeletedNotice(task.name));
+                Navigator.pop(context);
+              },
+              child: Text(
+                strings.delete,
+                style: const TextStyle(
+                    color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
               ),
             ),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 80, minHeight: 44),
-                child: fluent.Button(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: Text(strings.cancel),
-                ),
-              ),
+            fluent.Button(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(strings.cancel),
             ),
           ],
         ),
@@ -864,33 +855,27 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         Text(strings.syncModeLabel,
             style: const TextStyle(fontWeight: FontWeight.bold)),
         SizedBox(height: theme.xs),
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ListTile statt MouseRegion + GestureDetector: bringt
+            // Tastaturfokus, Semantik und Fokus-Ring selbst mit. Eine
+            // Auswahl, die man nicht mit der Tastatur bedienen kann, ist
+            // keine Auswahl.
             for (final mode in SyncMode.values)
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _editSyncMode = mode),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 32),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _editSyncMode == mode
-                              ? fluent.FluentIcons.radio_bullet
-                              : fluent.FluentIcons.radio_btn_off,
-                          size: 16,
-                          color: _editSyncMode == mode
-                              ? theme.accent
-                              : theme.textSecondary,
-                        ),
-                        SizedBox(width: theme.sm),
-                        Text(_formatSyncMode(strings, mode)),
-                      ],
-                    ),
-                  ),
+              fluent.ListTile(
+                leading: Icon(
+                  _editSyncMode == mode
+                      ? fluent.FluentIcons.radio_bullet
+                      : fluent.FluentIcons.radio_btn_off,
+                  size: 16,
+                  color: _editSyncMode == mode
+                      ? theme.accent
+                      : theme.textSecondary,
                 ),
+                title: Text(_formatSyncMode(strings, mode)),
+                semanticLabel: _formatSyncMode(strings, mode),
+                onPressed: () => setState(() => _editSyncMode = mode),
               ),
           ],
         ),
@@ -1074,77 +1059,36 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
               SizedBox(height: theme.xl),
 
-              // 5. Action Buttons
-              Row(
-                children: [
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
-                      child: fluent.FilledButton(
-                        onPressed: _isSyncing ? null : () => _handleSyncNow(task),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isSyncing)
-                              const SizedBox(width: 16, height: 16, child: fluent.ProgressRing())
-                            else
-                              const Icon(fluent.FluentIcons.sync, size: 16, color: Color(0xFFFFFFFF)),
-                            SizedBox(width: theme.sm),
-                            Text(
-                              strings.syncTaskNow,
-                              style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: theme.md),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 140, minHeight: 44),
-                      child: fluent.Button(
-                        onPressed: () => _confirmDeleteTask(context, task, TargetPlatform.windows),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(fluent.FluentIcons.delete, size: 16, color: theme.error),
-                            SizedBox(width: theme.sm),
-                            Text(
-                              strings.deleteTask,
-                              style: TextStyle(color: theme.error, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+              // 5. Aktionen — native CommandBar statt handgebauter Reihen aus
+              // MouseRegion + ConstrainedBox + Button. CommandBar bringt
+              // Tastaturfokus, Semantik und korrektes Overflow-Verhalten
+              // selbst mit; die handgebauten Wrapper taten das nicht.
+              fluent.CommandBar(
+                mainAxisAlignment: MainAxisAlignment.start,
+                primaryItems: [
+                  fluent.CommandBarButton(
+                    icon: const Icon(fluent.FluentIcons.sync),
+                    label: Text(strings.syncTaskNow),
+                    // Während eines Laufs deaktiviert statt ausgeblendet —
+                    // die Aktion bleibt auffindbar.
+                    onPressed: _isSyncing ? null : () => _handleSyncNow(task),
                   ),
                 ],
-              ),
-              SizedBox(height: theme.sm),
-              Row(
-                children: [
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 220, minHeight: 44),
-                      child: fluent.Button(
-                        onPressed: () => _confirmAndPurgeRemoteFolder(context, task),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(fluent.FluentIcons.delete, size: 16, color: theme.error),
-                            SizedBox(width: theme.sm),
-                            Text(
-                              strings.deleteRemoteFolderLabel,
-                              style: TextStyle(color: theme.error, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                secondaryItems: [
+                  // Destruktive Aktionen gehören ins Overflow-Menü, nicht
+                  // neben den Primär-Button.
+                  fluent.CommandBarButton(
+                    icon: Icon(fluent.FluentIcons.delete, color: theme.error),
+                    label: Text(strings.deleteTask,
+                        style: TextStyle(color: theme.error)),
+                    onPressed: () =>
+                        _confirmDeleteTask(context, task, TargetPlatform.windows),
+                  ),
+                  fluent.CommandBarButton(
+                    icon: Icon(fluent.FluentIcons.delete, color: theme.error),
+                    label: Text(strings.deleteRemoteFolderLabel,
+                        style: TextStyle(color: theme.error)),
+                    onPressed: () => _confirmAndPurgeRemoteFolder(context, task),
                   ),
                 ],
               ),

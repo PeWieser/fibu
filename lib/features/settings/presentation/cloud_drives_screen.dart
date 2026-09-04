@@ -203,38 +203,28 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         final displayName = entry?.name ?? remote;
         final isDeleting = _deletingRemote == remote;
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: isDeleting
+        // Echte ListTile statt GestureDetector um eine Card: bringt
+        // Tastaturfokus, Semantik und Fokus-Ring selbst mit. Vorher war ein
+        // Laufwerk mit der Tastatur nicht erreichbar.
+        return fluent.ListTile(
+          leading: Icon(fluent.FluentIcons.cloud,
+              color: theme.accent, size: 28),
+          title: Text(displayName,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: _remoteStorageInfo(theme, strings, remote),
+          trailing: isDeleting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: fluent.ProgressRing(strokeWidth: 2.5),
+                )
+              : Icon(fluent.FluentIcons.chevron_right,
+                  size: 14, color: theme.textSecondary),
+          semanticLabel: displayName,
+          // Beim Loeschen deaktiviert statt ausgeblendet.
+          onPressed: isDeleting
               ? null
               : () => _showRemoteActions(context, remote, TargetPlatform.windows),
-          child: fluent.Card(
-            padding: EdgeInsets.fromLTRB(theme.md, theme.md, theme.md + 4, theme.md),
-            child: Row(
-              children: [
-                Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 28, semanticLabel: 'Cloud Remote'),
-                SizedBox(width: theme.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(height: theme.xs),
-                      _remoteStorageInfo(theme, strings, remote),
-                    ],
-                  ),
-                ),
-                if (isDeleting)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: fluent.ProgressRing(strokeWidth: 2.5),
-                  )
-                else
-                  Icon(fluent.FluentIcons.chevron_right, size: 14, color: theme.textSecondary, semanticLabel: strings.openInDefaultApp),
-              ],
-            ),
-          ),
         );
       },
     );

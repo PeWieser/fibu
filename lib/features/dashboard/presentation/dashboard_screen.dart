@@ -193,6 +193,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ? const Icon(cupertino.CupertinoIcons.chevron_forward,
                 size: 16, color: cupertino.CupertinoColors.inactiveGray)
             : Icon(material.Icons.chevron_right, color: theme.textSecondary);
+    // Windows bekommt eine echte ListTile (Fokus, Semantik, Fokus-Ring).
+    // iOS und Android fallen unverändert auf den bestehenden Pfad darunter.
+    if (platform == TargetPlatform.windows) {
+      return fluent.ListTile(
+        title: Text(label),
+        trailing: chevron,
+        semanticLabel: label,
+        onPressed: onTap,
+      );
+    }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -413,26 +423,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       BuildContext context, AppStrings strings, AppThemeData theme) {
     final blue =
         theme.syncProgressFor(theme.surface.computeLuminance() < 0.25);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: theme.xs),
-            child: Center(
-              child: Text(
-                strings.cancel,
-                style: TextStyle(
-                  color: blue,
-                  fontSize: 14,
-                  decoration: TextDecoration.underline,
-                  decorationColor: blue,
-                ),
-              ),
-            ),
+    // HyperlinkButton statt GestureDetector + MouseRegion: bringt
+    // Tastaturfokus, Semantik und Fokus-Ring selbst mit. Vorher war der
+    // Abbrechen-Link mit der Tastatur nicht erreichbar — ausgerechnet die
+    // Aktion, mit der man einen laufenden Sync stoppt.
+    return Center(
+      child: fluent.HyperlinkButton(
+        onPressed: () => ref.read(activeJobProvider.notifier).cancelActiveSync(),
+        style: fluent.ButtonStyle(
+          foregroundColor: fluent.WidgetStatePropertyAll(blue),
+        ),
+        child: Text(
+          strings.cancel,
+          style: const TextStyle(
+            fontSize: 14,
+            decoration: TextDecoration.underline,
           ),
         ),
       ),

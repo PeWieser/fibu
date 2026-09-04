@@ -85,61 +85,58 @@ class TasksScreen extends ConsumerWidget {
               separatorBuilder: (_, __) => SizedBox(height: theme.sm),
               itemBuilder: (context, index) {
                 final task = tasks[index];
-                return MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: fluent.Card(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          fluent.FluentPageRoute(
-                            builder: (_) => TaskDetailScreen(taskId: task.id),
+                // Echte ListTile statt GestureDetector + MouseRegion +
+                // ConstrainedBox: bringt Tastaturfokus, Semantik und
+                // Fokus-Ring selbst mit. Vorher war die Zeile mit der
+                // Tastatur nicht erreichbar.
+                return fluent.ListTile(
+                  leading: Icon(fluent.FluentIcons.task_manager,
+                      size: 20, color: theme.accent),
+                  title: Text(task.name),
+                  subtitle: Text(
+                    strings.scheduleDescriptionFor(
+                        task.scheduleDay, task.scheduleTime),
+                    style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: theme.sm, vertical: theme.xs / 2),
+                        decoration: BoxDecoration(
+                          color: (task.isActive
+                                  ? theme.accent
+                                  : theme.textSecondary)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(theme.radiusSm),
+                        ),
+                        child: Text(
+                          task.isActive
+                              ? strings.statusActive
+                              : strings.statusInactive,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: task.isActive
+                                ? theme.accent
+                                : theme.textSecondary,
                           ),
-                        );
-                      },
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 44),
-                        child: Row(
-                          children: [
-                            Icon(
-                              fluent.FluentIcons.task_manager,
-                              size: 20,
-                              color: theme.accent,
-                              semanticLabel: strings.tasksTitle,
-                            ),
-                            SizedBox(width: theme.md),
-                            Expanded(
-                              child: Text(
-                                task.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                            ),
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs / 2),
-                              decoration: BoxDecoration(
-                                color: (task.isActive ? theme.accent : theme.textSecondary).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(theme.radiusSm),
-                              ),
-                              child: Text(
-                                task.isActive ? strings.statusActive : strings.statusInactive,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: task.isActive ? theme.accent : theme.textSecondary,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: theme.md),
-                            Icon(
-                              fluent.FluentIcons.chevron_right,
-                              size: 12,
-                              color: theme.textSecondary,
-                            ),
-                          ],
                         ),
                       ),
-                    ),
+                      SizedBox(width: theme.md),
+                      Icon(fluent.FluentIcons.chevron_right,
+                          size: 12, color: theme.textSecondary),
+                    ],
                   ),
+                  semanticLabel: task.name,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      fluent.FluentPageRoute(
+                        builder: (_) => TaskDetailScreen(taskId: task.id),
+                      ),
+                    );
+                  },
                 );
               },
             ),

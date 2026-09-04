@@ -878,6 +878,13 @@ class AppStrings {
   String pairingReceived(String device, int remotes, int tasks) => isGerman
       ? 'Konfiguration von „$device" übernommen: $remotes Laufwerke, $tasks Aufgaben. Aufgaben mit Mediathek-Quelle brauchen noch einen Ordner.'
       : 'Configuration from “$device” applied: $remotes drives, $tasks tasks. Tasks with a library source still need a folder.';
+  String get manageCloudDrivesSubtitle => isGerman
+      ? 'Laufwerke verbinden, umbenennen und trennen'
+      : 'Connect, rename and disconnect drives';
+  String get pairingSubtitle => isGerman
+      ? 'Konfiguration direkt von Gerät zu Gerät übertragen'
+      : 'Transfer configuration directly between devices';
+
   String get pairingRoleReceive =>
       isGerman ? 'Empfangen' : 'Receive';
   String get pairingRoleSend => isGerman ? 'Senden' : 'Send';

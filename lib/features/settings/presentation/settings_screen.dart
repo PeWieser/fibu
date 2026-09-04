@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/widgets/liquid_glass.dart';
+import '../../../core/widgets/windows_controls.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/sanzo_wada_palettes.dart';
@@ -182,297 +183,231 @@ class SettingsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. Cloud Drives
-              fluent.Text(strings.cloudStorage, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              fluent.Card(
-                child: GestureDetector(
-                  onTap: () => _navigateToCloudDrives(context),
-                  behavior: HitTestBehavior.opaque,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Row(
-                      children: [
-                        Icon(fluent.FluentIcons.cloud, color: theme.accent, size: 18, semanticLabel: strings.manageCloudDrives),
-                        const SizedBox(width: 12),
-                        Text(strings.manageCloudDrives, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        Icon(fluent.FluentIcons.chevron_right, size: 12, color: theme.textSecondary, semanticLabel: strings.manageCloudDrives),
-                      ],
-                    ),
+              Win.sectionHeader(strings.cloudStorage, theme),
+              Win.group(
+                theme: theme,
+                children: [
+                  // Echte ListTile statt GestureDetector: bringt Tastaturfokus,
+                  // Semantik und Fokus-Ring selbst mit.
+                  Win.tile(
+                    theme: theme,
+                    title: strings.manageCloudDrives,
+                    subtitle: strings.manageCloudDrivesSubtitle,
+                    leading: fluent.FluentIcons.cloud,
+                    trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
+                    onPressed: () => _navigateToCloudDrives(context),
+                    semanticLabel: strings.manageCloudDrives,
+                    first: true,
                   ),
-                ),
-              ),
-              SizedBox(height: theme.sm),
-              fluent.Card(
-                child: GestureDetector(
-                  onTap: () => _navigateToPairing(context),
-                  behavior: HitTestBehavior.opaque,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Row(
-                      children: [
-                        Icon(fluent.FluentIcons.sync, color: theme.accent, size: 18, semanticLabel: strings.pairingTitle),
-                        const SizedBox(width: 12),
-                        Text(strings.pairingTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        Icon(fluent.FluentIcons.chevron_right, size: 12, color: theme.textSecondary),
-                      ],
-                    ),
+                  Win.tile(
+                    theme: theme,
+                    title: strings.pairingTitle,
+                    subtitle: strings.pairingSubtitle,
+                    leading: fluent.FluentIcons.sync,
+                    trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
+                    onPressed: () => _navigateToPairing(context),
+                    semanticLabel: strings.pairingTitle,
+                    last: true,
                   ),
-                ),
+                ],
               ),
-              SizedBox(height: theme.xl),
 
               // 2. Network & Cellular
               fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
               SizedBox(height: theme.md),
-              fluent.Tooltip(
-                message: strings.tooltipNetwork,
-                child: fluent.Card(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              SizedBox(height: theme.xs / 2),
-                            ],
-                          ),
-                        ),
-                        fluent.ToggleSwitch(
-                          checked: ref.watch(wifiOnlySyncProvider),
-                          onChanged: (val) {
-                            ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                          },
-                        ),
-                      ],
-                    ),
+              Win.group(
+                theme: theme,
+                children: [
+                  Win.toggle(
+                    theme: theme,
+                    title: strings.wifiOnlySyncLabel,
+                    subtitle: strings.tooltipNetwork,
+                    value: ref.watch(wifiOnlySyncProvider),
+                    onChanged: (val) =>
+                        ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val),
+                    first: true,
                   ),
-                ),
-              ),
-              SizedBox(height: theme.md),
-              // Autostart: ohne ihn läuft der Zeitplan nur, solange die App
-              // von Hand geöffnet ist. Der Schalter schreibt den Run-Schlüssel
-              // des eigenen Benutzerkontums (keine Admin-Rechte nötig).
-              fluent.Card(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(strings.autostartLabel,
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                            SizedBox(height: theme.xs / 2),
-                            Text(
-                              strings.autostartDescription,
-                              style: TextStyle(
-                                  color: theme.textSecondary, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: theme.md),
-                      ref.watch(autostartEnabledProvider).when(
-                            data: (on) => fluent.ToggleSwitch(
-                              checked: on,
-                              onChanged: (val) =>
-                                  setAutostartEnabled(ref, val),
-                            ),
-                            // Bewusst KEIN ProgressRing: Der ist eine
-                            // Endlos-Animation, an der pumpAndSettle in Tests
-                            // nie zur Ruhe kommt. Ein deaktivierter Schalter
-                            // springt außerdem nicht in der Breite.
-                            loading: () => const Opacity(
-                              opacity: 0.5,
-                              child: fluent.ToggleSwitch(
-                                checked: false,
-                                onChanged: null,
-                              ),
-                            ),
-                            error: (_, __) => Text(strings.error,
-                                style: TextStyle(
-                                    color: theme.error, fontSize: 11)),
-                          ),
-                    ],
+                  // Autostart: ohne ihn läuft der Zeitplan nur, solange die App
+                  // von Hand geöffnet ist. Der Schalter schreibt den
+                  // Run-Schlüssel des eigenen Benutzerkontos (keine
+                  // Admin-Rechte nötig).
+                  Win.toggle(
+                    theme: theme,
+                    title: strings.autostartLabel,
+                    subtitle: strings.autostartDescription,
+                    value: ref.watch(autostartEnabledProvider).valueOrNull ?? false,
+                    // Solange der Registry-Wert noch nicht gelesen ist, ist der
+                    // Schalter deaktiviert — er soll keinen Zustand behaupten,
+                    // den er nicht kennt. Bewusst kein ProgressRing: Der ist
+                    // eine Endlos-Animation, an der pumpAndSettle in Tests nie
+                    // zur Ruhe kommt.
+                    onChanged: ref.watch(autostartEnabledProvider).isLoading
+                        ? null
+                        : (val) => setAutostartEnabled(ref, val),
+                    last: true,
                   ),
-                ),
+                ],
               ),
               SizedBox(height: theme.xl),
 
               // 3. Appearance & Design
-              fluent.Text(strings.appearanceSection, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              fluent.Tooltip(
-                message: strings.tooltipThemeMode,
-                child: fluent.Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 44),
-                        child: Row(
-                          children: [
-                            Text(strings.syncWithSystem),
-                            const Spacer(),
-                            fluent.ToggleSwitch(
-                              checked: config.syncWithSystem,
-                              onChanged: (val) {
-                                ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!config.syncWithSystem) ...[
-                        const SizedBox(height: 8),
-                        const fluent.Divider(),
-                        const SizedBox(height: 8),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 44),
-                          child: Row(
-                            children: [
-                              Text(strings.useDarkMode),
-                              const Spacer(),
-                              fluent.ToggleSwitch(
-                                checked: config.forceDarkMode,
-                                onChanged: (val) {
-                                  ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
+              Win.sectionHeader(strings.appearanceSection, theme),
+              Win.group(
+                theme: theme,
+                children: [
+                  Win.toggle(
+                    theme: theme,
+                    title: strings.syncWithSystem,
+                    subtitle: strings.tooltipThemeMode,
+                    value: config.syncWithSystem,
+                    onChanged: (val) => ref
+                        .read(themeConfigProvider.notifier)
+                        .setSyncWithSystem(val),
+                    first: true,
+                    last: config.syncWithSystem,
                   ),
-                ),
+                  // Eigener Hell/Dunkel-Schalter nur, wenn das System nicht
+                  // übernommen wird — sonst ist er wirkungslos und verwirrt.
+                  if (!config.syncWithSystem)
+                    Win.toggle(
+                      theme: theme,
+                      title: strings.useDarkMode,
+                      value: config.forceDarkMode,
+                      onChanged: (val) => ref
+                          .read(themeConfigProvider.notifier)
+                          .setForceDarkMode(val),
+                      last: true,
+                    ),
+                ],
               ),
-              SizedBox(height: theme.lg),
-              fluent.Tooltip(
-                message: strings.tooltipWadaPalette,
-                child: fluent.Text(strings.lightModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              // Paletten bleiben bewusst eigene Bereiche: Sie sind eine
+              // Auswahl aus acht Möglichkeiten, keine Ja/Nein-Entscheidung.
+              Win.expander(
+                theme: theme,
+                header: strings.lightModePalette,
+                subtitle: strings.tooltipWadaPalette,
+                leading: fluent.FluentIcons.photo2,
+                content: _buildWadaPaletteRow(context, ref, config, false, strings),
               ),
-              SizedBox(height: theme.sm),
-              _buildWadaPaletteRow(context, ref, config, false, strings),
-              SizedBox(height: theme.lg),
-              fluent.Tooltip(
-                message: strings.tooltipWadaPalette,
-                child: fluent.Text(strings.darkModePalette, style: fluent.FluentTheme.of(context).typography.bodyStrong),
+              Win.expander(
+                theme: theme,
+                header: strings.darkModePalette,
+                subtitle: strings.tooltipWadaPalette,
+                leading: fluent.FluentIcons.photo2,
+                content: _buildWadaPaletteRow(context, ref, config, true, strings),
               ),
-              SizedBox(height: theme.sm),
-              _buildWadaPaletteRow(context, ref, config, true, strings),
-              SizedBox(height: theme.xl),
 
               // 4. Language
-              fluent.Text(strings.appConfiguration, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              fluent.Tooltip(
-                message: strings.tooltipLanguage,
-                child: fluent.Card(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    child: Row(
-                      children: [
-                        Text(strings.languageSection),
-                        const Spacer(),
-                        fluent.ComboBox<AppLocaleMode>(
-                          value: currentLocaleMode,
-                          items: AppLocaleMode.values.map((mode) {
-                            return fluent.ComboBoxItem<AppLocaleMode>(
-                              value: mode,
-                              child: Text(_localeModeLabel(strings, mode)),
-                            );
-                          }).toList(),
-                          onChanged: (mode) {
-                            if (mode != null) {
-                              ref.read(localeModeProvider.notifier).setLocaleMode(mode);
-                            }
-                          },
-                        ),
-                      ],
+              Win.sectionHeader(strings.appConfiguration, theme),
+              Win.group(
+                theme: theme,
+                children: [
+                  Win.tile(
+                    theme: theme,
+                    title: strings.languageSection,
+                    subtitle: strings.tooltipLanguage,
+                    trailing: fluent.ComboBox<AppLocaleMode>(
+                      value: currentLocaleMode,
+                      items: AppLocaleMode.values.map((mode) {
+                        return fluent.ComboBoxItem<AppLocaleMode>(
+                          value: mode,
+                          child: Text(_localeModeLabel(strings, mode)),
+                        );
+                      }).toList(),
+                      onChanged: (mode) {
+                        if (mode != null) {
+                          ref.read(localeModeProvider.notifier).setLocaleMode(mode);
+                        }
+                      },
                     ),
+                    first: true,
+                    last: true,
                   ),
-                ),
+                ],
               ),
               SizedBox(height: theme.xl),
 
               // 5. About
-              fluent.Text(strings.aboutSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              fluent.Card(
-                child: Column(
-                  children: [
-                    _buildInfoRow(strings.appVersionLabel, strings.appVersionValue, theme),
-                    const SizedBox(height: 8),
-                    const fluent.Divider(),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(strings.developerLabel, strings.developerValue, theme),
-                    const SizedBox(height: 8),
-                    const fluent.Divider(),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(strings.cloudEngineLabel, strings.cloudEngineValue, theme),
-                    const SizedBox(height: 8),
-                    const fluent.Divider(),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(strings.licenseLabel, strings.licenseValue, theme),
-                    const SizedBox(height: 8),
-                    const fluent.Divider(),
-                    const SizedBox(height: 8),
-                    fluent.ListTile(
-                      title: fluent.Text(strings.debugLogTitle),
-                      subtitle: fluent.Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
-                      trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open log'),
-                      onPressed: () => _navigateToDebugLog(context),
-                    ),
-                  ],
-                ),
+              Win.sectionHeader(strings.aboutSectionTitle, theme),
+              Win.group(
+                theme: theme,
+                children: [
+                  Win.infoRow(
+                      theme: theme,
+                      label: strings.appVersionLabel,
+                      value: strings.appVersionValue),
+                  Win.infoRow(
+                      theme: theme,
+                      label: strings.developerLabel,
+                      value: strings.developerValue),
+                  Win.infoRow(
+                      theme: theme,
+                      label: strings.cloudEngineLabel,
+                      value: strings.cloudEngineValue),
+                  Win.infoRow(
+                      theme: theme,
+                      label: strings.licenseLabel,
+                      value: strings.licenseValue),
+                  Win.tile(
+                    theme: theme,
+                    title: strings.debugLogTitle,
+                    subtitle: strings.debugLogSubtitle,
+                    leading: fluent.FluentIcons.document,
+                    trailing:
+                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
+                    onPressed: () => _navigateToDebugLog(context),
+                    semanticLabel: strings.debugLogTitle,
+                    last: true,
+                  ),
+                ],
               ),
-              SizedBox(height: theme.xl),
 
               // 6. Rechtliches
-              fluent.Text(strings.legalSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              fluent.Card(
-                child: fluent.ListTile(
-                  title: fluent.Text(strings.openSourceLicenses),
-                  subtitle: fluent.Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
-                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open licenses'),
-                  onPressed: () => _openLicenses(context, strings, theme),
-                ),
-              ),
-              SizedBox(height: theme.sm),
-              fluent.Card(
-                child: fluent.ListTile(
-                  title: fluent.Text(strings.privacyNoticeTitle),
-                  subtitle: fluent.Text(strings.privacyNoticeSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
-                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open privacy policy'),
-                  onPressed: () => _openLegalDocument(
-                    context,
-                    strings.privacyNoticeTitle,
-                    LegalDocuments.privacy(strings.isGerman),
+              Win.sectionHeader(strings.legalSectionTitle, theme),
+              Win.group(
+                theme: theme,
+                children: [
+                  Win.tile(
+                    theme: theme,
+                    title: strings.openSourceLicenses,
+                    subtitle: strings.openSourceLicensesSubtitle,
+                    leading: fluent.FluentIcons.page,
+                    trailing:
+                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
+                    onPressed: () => _openLicenses(context, strings, theme),
+                    semanticLabel: strings.openSourceLicenses,
+                    first: true,
                   ),
-                ),
-              ),
-              SizedBox(height: theme.sm),
-              fluent.Card(
-                child: fluent.ListTile(
-                  title: fluent.Text(strings.imprintTitle),
-                  subtitle: fluent.Text(strings.imprintSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
-                  trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14, semanticLabel: 'Open imprint'),
-                  onPressed: () => _openLegalDocument(
-                    context,
-                    strings.imprintTitle,
-                    LegalDocuments.imprint(strings.isGerman),
+                  Win.tile(
+                    theme: theme,
+                    title: strings.privacyNoticeTitle,
+                    subtitle: strings.privacyNoticeSubtitle,
+                    leading: fluent.FluentIcons.red_eye,
+                    trailing:
+                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
+                    onPressed: () => _openLegalDocument(
+                      context,
+                      strings.privacyNoticeTitle,
+                      LegalDocuments.privacy(strings.isGerman),
+                    ),
+                    semanticLabel: strings.privacyNoticeTitle,
                   ),
-                ),
+                  Win.tile(
+                    theme: theme,
+                    title: strings.imprintTitle,
+                    subtitle: strings.imprintSubtitle,
+                    leading: fluent.FluentIcons.info,
+                    trailing:
+                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
+                    onPressed: () => _openLegalDocument(
+                      context,
+                      strings.imprintTitle,
+                      LegalDocuments.imprint(strings.isGerman),
+                    ),
+                    semanticLabel: strings.imprintTitle,
+                    last: true,
+                  ),
+                ],
               ),
               SizedBox(height: theme.xl),
             ],
@@ -1027,20 +962,6 @@ class SettingsScreen extends ConsumerWidget {
             SizedBox(height: theme.xl),
           ],
         ),
-      ),
-    );
-  }
-
-  // --- Helper Row for Windows Info Card ---
-  Widget _buildInfoRow(String label, String value, AppThemeData theme) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 28),
-      child: Row(
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Text(value, style: TextStyle(color: theme.textSecondary)),
-        ],
       ),
     );
   }

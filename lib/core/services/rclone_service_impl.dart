@@ -1,6 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import '../utils/app_paths.dart';
+import 'app_log_service.dart';
+import 'filesystem_mirror_source.dart';
+import 'trash_service.dart';
+import 'virtual_mirror_sync.dart';
 import 'rclone_service.dart';
 import 'pending_deletions_store.dart';
 
@@ -185,7 +191,18 @@ class WindowsRcloneService implements RcloneService {
     required SyncOptions options,
   }) async {
     final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
-    final command = options.isEchoMode ? 'sync' : 'copy';
+
+    // 2-Wege-Spiegelung läuft über dieselbe Engine wie iOS, nur mit
+    // Dateisystem-Quelle. Vorher war das hier `rclone sync` — das ist 1-Weg
+    // mit Löschrecht und hätte auf einem geteilten Zielordner die Dateien
+    // des anderen Geräts gelöscht (docs/TESTMATRIX_IOS_WINDOWS.md, B9).
+    if (options.isEchoMode) {
+      unawaited(_runFilesystemMirror(
+          jobId, localPath, remoteName, remotePath, options));
+      return jobId;
+    }
+
+    final command = 'copy';
     
     // Build arguments. We use --use-json-log to parse progress on stderr.
     final List<String> args = [
@@ -267,8 +284,186 @@ class WindowsRcloneService implements RcloneService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 2-Wege-Spiegelung über dieselbe Engine wie iOS
+  // ---------------------------------------------------------------------------
+
+  /// Läufe, die der Nutzer abgebrochen hat.
+  final Set<String> _cancelledMirrorJobs = {};
+
+  /// Führt eine echte 2-Wege-Spiegelung eines Ordners gegen die Cloud aus.
+  ///
+  /// Nutzt `VirtualMirrorSyncEngine` — dieselbe Engine wie iOS, mit
+  /// denselben Tombstones, derselben Anomalie-Bremse und demselben
+  /// Lösch-Papierkorb. Der einzige Unterschied ist die Quelle: ein Ordner
+  /// statt der Mediathek.
+  Future<void> _runFilesystemMirror(
+    String jobId,
+    String localPath,
+    String remoteName,
+    String remotePath,
+    SyncOptions options,
+  ) async {
+    final progress = StreamController<RcloneProgressEvent>.broadcast();
+    _progressControllers[jobId] = progress;
+    _statusController
+        .add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.syncing));
+
+    try {
+      final source = FilesystemMirrorSource(localPath);
+      final stateRootPath = await FilesystemMirrorSource.stateRootFor(
+        localRoot: localPath,
+        remoteName: remoteName,
+        remotePath: remotePath,
+      );
+      final stateRoot = Directory(stateRootPath);
+      final state = await _loadMirrorState(stateRoot);
+
+      AppLog.info('sync',
+          'Dateisystem-Spiegel gestartet: $localPath → $remoteName:$remotePath');
+
+      final engine = VirtualMirrorSyncEngine(this);
+      final result = await engine.sync(
+        localItems: await source.scan(),
+        stateRoot: stateRootPath,
+        remoteName: remoteName,
+        remotePath: remotePath,
+        // KEINE const-Mengen: Die Engine mutiert sie (add/removeWhere).
+        blockedRels: state.blocked,
+        adoptedRels: state.adopted,
+        previouslySyncedRels: state.items.map((i) => i.rel).toSet(),
+        lastKnownState: {for (final i in state.items) i.rel: i},
+        // Lokal „löschen" heißt auf dem Desktop: in den Papierkorb
+        // verschieben. Es gibt keinen Systemdialog wie bei der iOS-Fotos-App,
+        // also darf nichts hart gelöscht werden.
+        deleteLocalAssets: source.deleteLocal,
+        exportForUpload: source.exportForUpload,
+        importDownloaded: source.importDownloaded,
+        measureForUpload: source.measureForUpload,
+        librarySizes: await source.librarySizes(),
+        trash: TrashService(this),
+        isCancelled: () => _cancelledMirrorJobs.contains(jobId),
+        persistLocalState: (entries) async {
+          await _saveMirrorState(stateRoot, entries, state.blocked, state.adopted);
+        },
+        onProgress: (phase, item, done, total,
+            {bytesDone = 0, bytesTotal = 0}) {
+          if (progress.isClosed) return;
+          final isTransfer = phase == 'upload' || phase == 'download';
+          progress.add(RcloneProgressEvent(
+            jobId: jobId,
+            bytesTransferred: bytesDone,
+            totalBytes: bytesTotal,
+            percentage: isTransfer && bytesTotal > 0
+                ? (bytesDone / bytesTotal * 100.0).clamp(0.0, 100.0)
+                : 0.0,
+            currentFile: item,
+            eta: '',
+            speedBytesPerSecond: 0,
+            itemsDone: done,
+            itemsTotal: total,
+            phase: phase,
+            fileName: isTransfer ? item : '',
+          ));
+        },
+      );
+
+      await source.purgeTrash();
+      AppLog.info('sync',
+          'Dateisystem-Spiegel fertig: ↑${result.uploaded} ↓${result.downloaded} '
+          '🗑${result.trashedLocal}/${result.trashedRemote} '
+          'Δ${result.deletedLocal}/${result.deletedRemote}');
+
+      if (!progress.isClosed) await progress.close();
+      _progressControllers.remove(jobId);
+      _cancelledMirrorJobs.remove(jobId);
+      _statusController.add(RcloneJobEvent(
+        jobId: jobId,
+        status: _cancelledMirrorJobs.contains(jobId)
+            ? RcloneJobStatus.cancelled
+            : RcloneJobStatus.completed,
+      ));
+    } catch (e, st) {
+      AppLog.error('sync', 'Dateisystem-Spiegel fehlgeschlagen: $e\n$st');
+      if (!progress.isClosed) await progress.close();
+      _progressControllers.remove(jobId);
+      _cancelledMirrorJobs.remove(jobId);
+      _statusController.add(RcloneJobEvent(
+        jobId: jobId,
+        status: RcloneJobStatus.failed,
+        error: e.toString(),
+      ));
+    }
+  }
+
+  /// Liest den persistierten Spiegel-Zustand (items, blocked, adopted).
+  Future<
+      ({
+        List<VirtualMediaItem> items,
+        Set<String> blocked,
+        Set<String> adopted,
+      })> _loadMirrorState(Directory root) async {
+    final empty = (
+      items: <VirtualMediaItem>[],
+      blocked: <String>{},
+      adopted: <String>{},
+    );
+    try {
+      final f = File('${root.path}/mirror_state.json');
+      if (!await f.exists()) return empty;
+      final decoded = jsonDecode(await f.readAsString());
+      if (decoded is! Map) return empty;
+      final map = Map<String, dynamic>.from(decoded);
+      final items = <VirtualMediaItem>[];
+      final rawItems = map['items'];
+      if (rawItems is List) {
+        for (final e in rawItems) {
+          if (e is! Map) continue;
+          final item = VirtualMediaItem.fromJson(Map<String, dynamic>.from(e));
+          if (item.rel.isNotEmpty) items.add(item);
+        }
+      }
+      return (
+        items: items,
+        blocked: <String>{
+          for (final e in (map['blocked'] as List? ?? const []))
+            if (e is String && e.isNotEmpty) e,
+        },
+        adopted: <String>{
+          for (final e in (map['adopted'] as List? ?? const []))
+            if (e is String && e.isNotEmpty) e,
+        },
+      );
+    } catch (e) {
+      AppLog.warn('sync', 'Spiegel-Zustand nicht lesbar: $e');
+      return empty;
+    }
+  }
+
+  Future<void> _saveMirrorState(
+    Directory root,
+    List<Map<String, dynamic>> items,
+    Set<String> blocked,
+    Set<String> adopted,
+  ) async {
+    try {
+      if (!await root.exists()) await root.create(recursive: true);
+      await File('${root.path}/mirror_state.json').writeAsString(jsonEncode({
+        'writtenAt': DateTime.now().toIso8601String(),
+        'items': items,
+        'blocked': blocked.toList(),
+        'adopted': adopted.toList(),
+      }));
+    } catch (e) {
+      AppLog.warn('sync', 'Spiegel-Zustand nicht schreibbar: $e');
+    }
+  }
+
   @override
   Future<void> cancelBackupJob(String jobId) async {
+    // Spiegel-Läufe haben keinen Prozess — sie hoeren auf das Abbruch-Set,
+    // das die Engine zwischen den Dateien abfragt.
+    _cancelledMirrorJobs.add(jobId);
     final process = _activeProcesses[jobId];
     if (process != null) {
       process.kill();

@@ -15,38 +15,34 @@ Legende:
 
 ---
 
-## 0. Die Grundlage: Beide Plattformen tun NICHT dasselbe
+## 0. Die Grundlage: Beide Plattformen nutzen jetzt dieselbe Engine
 
-Das ist die wichtigste Erkenntnis der ganzen Matrix. „Spiegelung" bedeutet auf
-den beiden Plattformen etwas grundverschiedenes.
+**Stand: aktualisiert am 2026-09-04 gegen `main` @ `4316ac3`.** Jede Zeile ist
+gegen den Code geprüft, nicht fortgeschrieben.
 
-| | iOS (`virtual_mirror_sync.dart`) | Windows (`rclone_service_impl.dart`) |
+Ursprünglich bedeutete „Spiegelung" auf den beiden Plattformen etwas
+grundverschiedenes — Windows lief `rclone sync` (1-Weg mit Löschrecht, ohne
+Zustand). Das ist behoben: Beide Plattformen nutzen `VirtualMirrorSyncEngine`.
+
+| | iOS | Windows |
 |---|---|---|
-| Befehl | eigener Algorithmus | `isEchoMode ? 'sync' : 'copy'` (Zeile 188) |
-| Richtung | **2-Wege**: hoch **und** runter | **1-Weg**: nur hoch |
-| Download in die Mediathek | ja, `importDownloaded` (1955) | **nein, existiert nicht** |
-| Lösch-Erkennung | Tombstones + `previouslySyncedRels` | **keine** (grep: 0 Treffer) |
-| Zustand | `mirror_state.json` je Scope | **keiner** |
-| `.fibu/`-Schutz | ja (Zeile 646) | **nein** |
-| Anomalie-Bremse | ja (Zeile 593) | **nein** |
-| Papierkorb | ja, `.fibu-trash` | **nein** |
+| Engine | `VirtualMirrorSyncEngine` | **dieselbe** (`rclone_service_impl.dart:198`) |
+| Richtung | 2-Wege | 2-Wege |
+| Download | in die Mediathek (`PhotoKitBridge`) | in den Ordner (`FilesystemMirrorSource.importDownloaded`) |
+| Lösch-Erkennung | Tombstones + `previouslySyncedRels` | **dieselbe Logik** (gleiche Engine) |
+| Zustand | `mirror_state.json` je Scope | `mirror_state.json` je (Ordner, Laufwerk, Ziel) |
+| Anomalie-Bremse | 20 % + Obergrenze 25 | **dieselbe** (gleiche Engine, `virtual_mirror_sync.dart:83,613`) |
+| Lokales Löschen | Systemdialog der Fotos-App | **Papierkorb** `.fibu-trash`, 30 Tage, kein Dialog |
+| `.fibu/`-Schutz | ja | ja (`filesystem_mirror_source.dart:53-55`) |
+| Inkrementell | eigener Pfad | `rclone copy` — löscht nie (`rclone_service_impl.dart:204`) |
 
-**Beleg für die `sync`-Semantik** (rclone.org/commands/rclone_sync):
+**Warum das ging.** Die Engine liest `assetId` intern nie; sie verlangt nur
+vier Callbacks. Das war die einzige Kopplung an die Mediathek.
 
-> „Destination is updated to match source, **including deleting files if
-> necessary**. If you don't want to delete files from destination, use the
-> `copy` command instead. **Important: Since this can cause data loss**, test
-> first with the `--dry-run` flag."
-
-**Was die UI auf beiden Plattformen verspricht** (`app_strings.dart:336`):
-
-> „Exakte 2-Wege-Spiegelung: Neue Dateien aus der Cloud werden auch lokal
-> heruntergeladen. Dateien, die du lokal löschst, werden auch in der Cloud
-> gelöscht!"
-
-Auf Windows ist **beides falsch**: Es wird nichts heruntergeladen, und lokale
-Löschungen löschen über `rclone sync` die Cloud — ohne Bestätigung, ohne
-Papierkorb, ohne Bremse.
+**Ein bewusster Unterschied bleibt:** Auf dem Desktop gibt es keinen
+Systemdialog wie bei der iOS-Fotos-App, der eine Cloud-Löschung abfangen
+könnte. Deshalb wird lokal nie hart gelöscht, sondern in einen Papierkorb mit
+30 Tagen Aufbewahrung verschoben (`filesystem_mirror_source.dart:133,152`).
 
 ---
 
@@ -59,7 +55,7 @@ Papierkorb, ohne Bremse.
 | A3 | iOS zuerst, dann Windows **manuell** | ✅ | Getrennte `tasks.json`, getrennte Registry. Kein Konflikt solange die Zielordner verschieden sind |
 | A4 | iOS zuerst, dann Windows **per Kopplung** | ⚠️ | `rclone.conf`, `remotes.json`, `tasks.json` werden übernommen. Mediathek-Quelle wird geleert (`device_pairing_screen.dart:_importBundle`), **`syncMode: mirror` aber nicht** |
 | A5 | Windows zuerst, dann iOS manuell | ✅ | Symmetrisch zu A3 |
-| A6 | Windows zuerst, dann iOS **per Kopplung** | ❌ | **Richtung falsch gebaut.** Der Empfänger ist immer der Desktop; iOS ist nur Sender. Eine Windows→iOS-Übertragung existiert nicht (`_isReceiver` ist nur auf Desktop true) |
+| A6 | Windows zuerst, dann iOS **per Kopplung** | ✅ **gelöst**: Die Rolle ist ein Schalter auf jeder Plattform (`device_pairing_screen.dart:66,75`), nicht mehr plattform-abgeleitet. Der Startwert folgt nur der wahrscheinlicheren Richtung |
 | A7 | Beide, verschiedene Cloud-Konten | ✅ | Keine Berührung |
 | A8 | Beide, gleiches Konto, **verschiedene** Zielordner | ✅ | Voreinstellung: iOS `fibu-backup/Photos`, Windows-Wizard `Mediathek` |
 | A9 | Beide, gleiches Konto, **gleicher** Zielordner | ❌ | Siehe B9 — der gefährlichste Fall der ganzen Matrix |
@@ -83,18 +79,22 @@ Spalte „Modus" = Modus der **anderen** Plattform auf demselben Zielordner.
 
 ### B-I. Änderung auf iOS, danach läuft Windows
 
-| # | Was auf iOS passiert | Windows **inkrementell** (`copy`) | Windows **Spiegelung** (`sync`) |
+| # | Was auf iOS passiert | Windows **inkrementell** (`copy`) | Windows **Spiegelung** (Engine) |
 |---|---|---|---|
-| B1 | Foto **hinzugefügt** → landet in der Cloud | ✅ bleibt liegen | ❌ **wird gelöscht** — liegt nicht im Windows-Quellordner |
-| B2 | Foto **geändert** → neue Fassung in der Cloud | ✅ bleibt liegen | ❌ **wird durch die alte Windows-Fassung überschrieben** |
-| B3 | Foto **gelöscht** → Tombstone → Cloud-Löschung | ✅ korrekt, beide weg | ✅ korrekt, beide weg (zufällig richtig) |
-| B4 | Album **umbenannt** → Pfad ändert sich | ⚠️ alter Pfad bleibt als Waise liegen | ❌ alter Pfad wird gelöscht, neuer Pfad fehlt im Windows-Ordner und wird nie angelegt |
-| B5 | 500 Fotos neu | ✅ | ❌ alle 500 gelöscht |
+| B1 | Foto **hinzugefügt** → landet in der Cloud | ✅ bleibt liegen | ✅ **wird heruntergeladen** — echte 2-Wege-Spiegelung |
+| B2 | Foto **geändert** → neue Fassung in der Cloud | ✅ bleibt liegen | ✅ `contentCmp` (Größe+Modtime) erkennt es, Windows lädt die neue Fassung |
+| B3 | Foto **gelöscht** → Tombstone → Cloud-Löschung | ✅ korrekt, beide weg | ✅ korrekt, beide weg |
+| B4 | Album **umbenannt** → Pfad ändert sich | ⚠️ alter Pfad bleibt als Waise liegen | ⚠️ alter Pfad gilt als „lokal gelöscht" → Tombstone; neuer Pfad wird heruntergeladen. Ergebnis korrekt, aber einmal hin und her |
+| B5 | 500 Fotos neu | ✅ | ✅ alle 500 heruntergeladen |
 
-**Begründung B1/B2/B5:** `rclone sync` gleicht die Quelle gegen das Ziel ab und
-löscht im Ziel alles, was die Quelle nicht hat. Der Windows-Quellordner enthält
-die iOS-Dateien nicht. Es gibt keinen Zustand, der sie als „fremd, aber
-gewollt" markieren könnte — Windows hat keinen Zustand.
+**Was sich geändert hat.** Vorher lief hier `rclone sync` und löschte alles,
+was der Windows-Ordner nicht kannte. Jetzt entscheidet dieselbe Engine wie auf
+iOS über Zustand, Tombstones und Adoptions-Mengen.
+
+**Erster Windows-Lauf auf einem bereits gefüllten Zielordner:** Es gibt noch
+keinen Zustand, also keine `previouslySyncedRels` und damit keine
+Lösch-Kandidaten. Cloud-only-Dateien werden heruntergeladen, nicht gelöscht —
+korrektes Spiegel-Verhalten.
 
 ### B-II. Änderung auf Windows, danach läuft iOS
 
@@ -103,37 +103,42 @@ gewollt" markieren könnte — Windows hat keinen Zustand.
 | B6 | Datei **hinzugefügt** → in der Cloud | ✅ bleibt in der Cloud, iOS lädt sie nicht | ⚠️ iOS lädt sie und importiert sie **in die Mediathek** (`importDownloaded`, 1955) |
 | B7 | Datei **geändert** | ✅ | ⚠️ `contentCmp` vergleicht Größe+Modtime → iOS lädt die Windows-Fassung |
 | B8 | Datei **gelöscht** (`copy`-Modus löscht nie) | ✅ | ✅ bleibt liegen |
-| B9 | **Windows-Spiegelung löscht die iOS-Dateien** | — | 🔒 **Anomalie-Bremse greift**: `remoteFiles.isEmpty \|\| candidates*2 > prevCount` (Zeile 593) → lokale Löschung übersprungen |
+| B9 | Windows-Spiegelung auf geteiltem Zielordner | — | ✅ **gelöst**: Windows spiegelt jetzt 2-Wege und löscht keine fremden Dateien mehr. Die Anomalie-Bremse (20 % / Obergrenze 25) schützt zusätzlich die lokale Seite |
 
-**B9 im Detail — der wichtigste Fall der Matrix.**
+**B9 war der gefährlichste Fall der Matrix — und ist behoben.**
 
-Ablauf:
+Ursprünglicher Ablauf (vor `36f392c`):
 1. iOS sichert 800 Fotos nach `mega:fibu-backup/Photos/…`
 2. Auf Windows wird eine Aufgabe mit Quelle `C:\Users\…\Bilder` (20 Dateien)
    und **demselben Zielordner** im Modus „Spiegelung" angelegt
-3. Windows läuft → `rclone sync C:\Users\…\Bilder mega:fibu-backup/Photos`
-4. **780 Cloud-Dateien werden gelöscht.** Ohne Bestätigung, ohne Papierkorb
-5. iOS läuft als Nächstes → sieht 780 fehlende Dateien → **Bremse greift**, die
-   Mediathek bleibt erhalten
+3. Windows lief `rclone sync` → **780 Cloud-Dateien gelöscht**, ohne
+   Bestätigung, ohne Papierkorb
+4. Die iOS-Bremse schützte die Mediathek, aber die Sicherung war weg
 
-Ergebnis: **Die Mediathek auf iOS überlebt, die Cloud-Kopien sind weg.** Die
-Bremse schützt das Gerät, nicht die Sicherung. Genau dafür ist eine Sicherung
-aber da.
+**Heute:** Schritt 3 läuft durch dieselbe Engine wie iOS. Die 780 Dateien sind
+im Windows-Zustand nicht als „lokal gelöscht" bekannt, also gibt es keine
+Tombstones und keine Cloud-Löschung. Stattdessen werden sie heruntergeladen.
 
-Die Bremse hat außerdem eine Lücke: Sie greift nur bei `prevCount >= 10` und
-wenn **mehr als die Hälfte** fehlt. Löscht Windows 30 % der Dateien, läuft die
-lokale Löschung auf iOS **durch** — mit Systemdialog, aber der Nutzer sieht 240
-Löschvorschläge und wird sie vermutlich bestätigen.
+**Die Bremse ist trotzdem verschärft worden** (`virtual_mirror_sync.dart:83,613`),
+weil sie auch bei echtem Fremd-Eingriff schützen soll:
+
+| | vorher | jetzt |
+|---|---|---|
+| relative Grenze | > 50 % | **> 20 %** |
+| absolute Grenze | keine | **> 25 Dateien pro Lauf** |
+
+Die absolute Grenze deckt ab, was eine Prozentgrenze nicht kann: kleine
+Bibliotheken. Bei 12 Dateien wären 24 % erst drei Dateien.
 
 ### B-III. Beide ändern dasselbe
 
 | # | Szenario | Ergebnis |
 |---|---|---|
-| B10 | Beide fügen **gleichnamige** Datei hinzu, unterschiedlicher Inhalt | ⚠️ iOS erkennt das über `localSizesByBase` (Name **und** Größe, Zeile 670) — unterschiedliche Größe = unterschiedliche Datei. Windows hat diese Prüfung nicht |
+| B10 | Beide fügen **gleichnamige** Datei hinzu, unterschiedlicher Inhalt | ✅ beide über `localSizesByBase` (Name **und** Größe) — dieselbe Engine, Windows liefert die Größen über `FilesystemMirrorSource.librarySizes()` |
 | B11 | Beide **löschen** dieselbe Datei | ✅ idempotent |
-| B12 | iOS löscht, Windows ändert | ❌ Reihenfolge entscheidet. Läuft Windows zuerst, überschreibt es; läuft iOS zuerst, löscht es die Windows-Änderung |
-| B13 | Beide **ändern** dieselbe Datei | ⚠️ iOS: `contentCmp` = Größe+Modtime, **kein Hash** (`contentKey`, Zeile 61). Gleiche Größe + gleiche Zeit = unerkannt. Windows delegiert an rclone (Größe+Modtime oder MD5) |
-| B14 | Beide laufen **gleichzeitig** | ⚠️ Je Gerät gibt es eine Sperre (`isSyncRunning`), aber **keine geräteübergreifende**. Zwei parallele `rclone`-Läufe auf demselben Ziel sind nicht koordiniert |
+| B12 | iOS löscht, Windows ändert | ⚠️ Reihenfolge entscheidet weiterhin — das ist bei 2-Wege-Spiegelung ohne Konflikt-Versionierung inhärent. Wer zuletzt läuft, gewinnt. Kein Datenverlust, aber kein Mergen |
+| B13 | Beide **ändern** dieselbe Datei | ⚠️ `contentCmp` = Größe+Modtime, **kein Hash** (`virtual_mirror_sync.dart:61`). Gleiche Größe + gleiche Zeit = unerkannt. Gilt jetzt für **beide** Plattformen identisch |
+| B14 | Beide laufen **gleichzeitig** | ✅ **gelöst**: `.fibu/lock.json` im Zielordner (`sync_lock_service.dart`). Gilt für manuelle Läufe **und** geplante (`dashboard_controller.dart:392`, `scheduler_service.dart:320`). Herzschlag 60 s, verwaist nach 5 min |
 
 ---
 
@@ -141,18 +146,24 @@ Löschvorschläge und wird sie vermutlich bestätigen.
 
 | # | Szenario | Ergebnis | Beleg |
 |---|---|---|---|
-| C1 | `.fibu/config.json` bei Windows-Spiegelung | ❌ **wird gelöscht.** Liegt bei `<targetFolder>/.fibu/config.json` (`sync_config_service.dart:429`) — also **im** Sync-Ziel. Die Windows-Quelle hat kein `.fibu`, also räumt `sync` es weg | kein Schutz in `rclone_service_impl.dart` |
-| C2 | `.fibu/manifest.json` | ❌ dito (`sync_manifest_service.dart:139`) | dito |
-| C3 | Folge von C1 | ❌ Beim nächsten Verbindungsaufbau findet **kein** Gerät mehr die erkannten Aufgaben. Der Import-Vorschlag verschwindet still | `readRemoteConfig` liefert null |
-| C4 | iOS schützt `.fibu` | ✅ nur beim **Download** (Zeile 646). Gegen das Löschen durch Windows hilft das nicht | — |
-| C5 | Beide Geräte schreiben `.fibu/config.json` | ✅ seit `2a170d3` per `deviceId` getrennt, fremde Aufgaben bleiben | `writeConfigToRemote` |
-| C6 | `mirror_state.json` | ✅ je Gerät **und** je (Remote, Zielpfad, Quelle) — kein Konflikt. Aber: Windows schreibt gar keins | `_virtualStateRoot` |
-| C7 | Verlaufs-Journal | ✅ je Gerät lokal, kein Konflikt. Aber: Windows journalisiert nur, was der Desktop tut — iOS-Änderungen tauchen dort nie auf | `scheduler_run_log.dart` |
+| C1 | `.fibu/config.json` bei Windows-Spiegelung | ✅ **gelöst, doppelt abgesichert.** Spiegel läuft nicht mehr über `rclone sync`, und die Dateisystem-Quelle blendet `.fibu` aus (`filesystem_mirror_source.dart:53-55`). Zusätzlich liegt `--exclude .fibu/**` auf dem `copy`-Pfad (`rclone_service_impl.dart:238`) |
+| C2 | `.fibu/manifest.json` | ✅ dito |
+| C3 | Folge von C1 | ✅ entfällt |
+| C4 | iOS schützt `.fibu` | ✅ beim Download (`virtual_mirror_sync.dart:646`) |
+| C5 | Beide Geräte schreiben `.fibu/config.json` | ✅ per `deviceId` getrennt, fremde Aufgaben bleiben | `writeConfigToRemote` |
+| C6 | `mirror_state.json` | ✅ je Gerät **und** je Scope. Windows schreibt jetzt seins: `fs_<Ordner>_<Laufwerk>_<Ziel>` (`filesystem_mirror_source.dart:200`) |
+| C7 | Verlaufs-Journal | ⚠️ je Gerät lokal, kein Konflikt — aber jedes Gerät sieht nur seine eigenen Läufe. Ein geräteübergreifender Verlauf existiert nicht | `scheduler_run_log.dart` |
 
-**C1 ist der heimtückischste Befund.** Er braucht keinen Bedienfehler: Sobald
-eine Windows-Aufgabe im Modus „Spiegelung" auf einen Ordner zeigt, in dem
-`.fibu/` liegt, wird die gemeinsame Konfiguration zerstört. Und sie liegt per
-Voreinstellung genau da, wenn die iOS-Aufgabe per Kopplung übernommen wurde.
+**C1 war der heimtückischste Befund** — er brauchte keinen Bedienfehler und
+zerstörte die gemeinsame Konfiguration aller Geräte. Er ist jetzt doppelt
+abgesichert: Der Spiegel läuft über die Engine (kein Löschrecht), und der
+`copy`-Pfad hat den Ausschluss explizit.
+
+**Neu gefunden in dieser Runde:** Der Planer synct ohne Sperre
+(`scheduler_service.dart:314`). Die geräteübergreifende Sperre griff damit nur
+bei manuellen Läufen — ein geplanter Hintergrund-Lauf auf einem Gerät hätte
+einem manuellen Lauf auf einem anderen in denselben Zielordner geschrieben.
+Behoben: `scheduler_service.dart:320,347`.
 
 ---
 
@@ -172,78 +183,42 @@ Voreinstellung genau da, wenn die iOS-Aufgabe per Kopplung übernommen wurde.
 
 ---
 
-## Befunde, nach Schwere sortiert
+## Befunde — Stand nach der Umsetzung
 
-### ❌ 1 — Windows-Spiegelung löscht fremde Dateien (B1, B5, B9)
+Alle sechs ursprünglichen Befunde sind behoben. Die Belege stehen bei den
+einzelnen Matrix-Zeilen.
 
-`rclone sync` ist ein 1-Weg-Befehl mit Löschrecht. Auf einem geteilten
-Zielordner löscht er alles, was das andere Gerät hochgeladen hat.
+| # | Befund | Status | Beleg |
+|---|---|---|---|
+| 1 | Windows-Spiegelung löscht fremde Dateien (B1, B5, B9) | ✅ **behoben** | `rclone_service_impl.dart:198` leitet Spiegel durch `VirtualMirrorSyncEngine`; `filesystem_mirror_source.dart` liefert die vier Callbacks |
+| 2 | `.fibu/` liegt im Sync-Ziel (C1–C3) | ✅ **behoben, doppelt** | `filesystem_mirror_source.dart:53-55` blendet aus; `rclone_service_impl.dart:238` hat `--exclude` auf dem `copy`-Pfad |
+| 3 | Kopplung nur in eine Richtung (A6) | ✅ **behoben** | `device_pairing_screen.dart:66,75` — Rolle ist ein Schalter |
+| 4 | Kopplung übernimmt `syncMode: mirror` unverändert (A4) | ✅ **behoben** | `device_pairing_screen.dart` stuft nur herab, wenn der **Empfänger** ein Desktop ist |
+| 5 | Anomalie-Bremse zu schwach (B9) | ✅ **verschärft** | `virtual_mirror_sync.dart:83,613` — 20 % statt 50 %, plus Obergrenze 25 |
+| 6 | Kein geräteübergreifender Sync-Lock (B14) | ✅ **behoben** | `sync_lock_service.dart`; greift bei manuellen **und** geplanten Läufen |
 
-**Kurzfristige Absicherung (klein, wirksam):**
-- `.fibu/**` und `.fibu-trash/**` immer als `--exclude` mitgeben (fixt C1/C2)
-- Auf Windows den Modus „Spiegelung" **nicht** anbieten, solange die Quelle
-  ein Ordner und das Ziel geteilt ist — oder ihn klar als „Ein-Weg-Spiegelung
-  (löscht in der Cloud)" beschriften
-- Die Modus-Beschreibung plattformabhängig machen. Der Satz „Neue Dateien aus
-  der Cloud werden auch lokal heruntergeladen" ist auf Windows schlicht falsch
+### In dieser Runde neu gefunden und behoben
 
-**Richtig:** Windows bräuchte denselben manifest-basierten Algorithmus wie iOS —
-Zustand je Scope, Tombstones, Bremse. Das ist keine Kleinigkeit, aber die
-einzige Variante, bei der „Spiegelung" auf beiden Plattformen dasselbe
-bedeutet.
-
-### ❌ 2 — `.fibu/` liegt im Sync-Ziel (C1, C2, C3)
-
-Die gemeinsame Konfiguration liegt dort, wo gesynct wird. Jeder `sync`-Lauf
-räumt sie weg.
-
-**Fix:** `.fibu` und `.fibu-trash` in den Filtern ausschließen, **oder** die
-Konfiguration außerhalb des Zielordners ablegen (z. B. `<remote>/.fibu-global/`).
-Ersteres ist ein Einzeiler pro Aufrufstelle.
-
-### ❌ 3 — Kopplung nur in eine Richtung (A6)
-
-„Windows zuerst, dann iOS" ist nicht möglich. Entweder die Kopplung
-bidirektional machen (Mobil kann auch Empfänger sein) oder die Einschränkung
-klar benennen.
-
-### ⚠️ 4 — Kopplung übernimmt `syncMode: mirror` unverändert (A4)
-
-Die importierte Aufgabe behält den 2-Wege-Modus, den Windows nicht
-implementiert. Beim Import auf den Desktop sollte der Modus auf
-„inkrementell" fallen oder explizit abgefragt werden.
-
-### ⚠️ 5 — Anomalie-Bremse schützt das Gerät, nicht die Cloud (B9)
-
-Sie greift erst ab 50 % Schwund. Darunter läuft die lokale Löschung durch.
-
-### ⚠️ 6 — Kein geräteübergreifender Sync-Lock (B14)
-
-Zwei Geräte können gleichzeitig auf dasselbe Ziel schreiben.
+| Befund | Status |
+|---|---|
+| Der Planer synct ohne Sperre (`scheduler_service.dart:314`) — die Sperre griff nur bei manuellen Läufen | ✅ `scheduler_service.dart:320,347` |
+| Destruktive Aktionen lagen im CommandBar-Overflow und waren nicht auffindbar | ✅ zurück in `primaryItems` |
 
 ---
 
-## Empfohlene Reihenfolge
+## Was offen bleibt
 
-1. **`.fibu`-Ausschluss in den Filtern** — Einzeiler, verhindert C1/C2/C3
-2. **Modus-Beschreibung plattformabhängig** — beendet die falsche Versprechung
-3. **Spiegelung auf Windows sperren oder umbenennen** — verhindert B1/B5/B9
-4. **`syncMode` bei der Kopplung auf inkrementell setzen** — verhindert A4
-5. **Kopplung bidirektional** — ermöglicht A6
-6. **Manifest-basierter Spiegel für Windows** — die eigentliche Lösung
+| # | Punkt | Art |
+|---|---|---|
+| 1 | **B12/B13** — Konflikt ohne Versionierung. Wer zuletzt läuft, gewinnt; `contentCmp` nutzt Größe+Modtime, keinen Hash | inhärent bei 2-Wege ohne Versionen |
+| 2 | **C7** — jedes Gerät sieht nur seine eigenen Läufe im Verlauf | Erweiterung |
+| 3 | **B4** — Album-Umbenennung erzeugt einmal Tombstone + Neudownload statt einer Umbenennung | Optimierung |
+| 4 | **D8** — iOS importiert Windows-Dateien in die Mediathek, Album-Name kommt aus dem Pfad | Verhalten, geprüft |
+| 5 | **Kein Gerät getestet.** Alles ist aus dem Code abgeleitet. Analyzer und Tests sind grün (`4316ac3`, beide Workflows), aber das ist keine Laufzeit-Verifikation | Verifikation |
 
-Punkte 1–4 sind zusammen klein und schließen jeden Datenverlust-Pfad dieser
-Matrix. Punkt 6 ist die richtige, aber große Lösung.
+### Nicht mehr zutreffend
 
----
-
-## Was ich nicht prüfen konnte
-
-- **Kein Gerät, keine Cloud.** Alles ist aus dem Code und der
-  rclone-Dokumentation abgeleitet. Ob ein Anbieter `.fibu`-Ordner überhaupt
-  zulässt, ob `modTime` überall gesetzt wird, und wie sich `rclone sync` bei
-  einem konkreten Backend verhält, ist nicht am lebenden Objekt geprüft.
-- **Kein Flutter/Dart lokal.** Verifikation läuft über CI.
-- **Die Matrix beschreibt Soll-Verhalten aus dem Code**, nicht beobachtetes
-  Verhalten. Ein echter Testlauf mit zwei Geräten und einem Cloud-Konto würde
-  mehrere dieser Zeilen vermutlich bestätigen — und vielleicht eine widerlegen.
+Die frühere Empfehlung „Spiegelung auf Windows sperren oder umbenennen" ist
+überholt: Windows spiegelt jetzt echt 2-Wege. Die plattformabhängige
+Modus-Beschreibung (`app_strings.dart`) bleibt trotzdem richtig — sie
+beschreibt auf dem Desktop jetzt den Papierkorb statt des Systemdialogs.

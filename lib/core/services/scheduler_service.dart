@@ -10,6 +10,7 @@ import 'app_log_service.dart';
 import 'rclone_provider.dart';
 import 'rclone_service.dart';
 import 'scheduler_run_log.dart';
+import 'sync_lock_service.dart';
 import 'settings_service.dart';
 import 'widget_status_service.dart';
 
@@ -310,6 +311,22 @@ class SchedulerService {
     final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';
     final isEcho = task['syncMode'] == 'mirror';
 
+    // Geräteübergreifende Sperre — dieselbe wie beim manuellen Lauf.
+    // Ohne sie würde ein geplanter Hintergrund-Lauf auf einem Gerät einem
+    // manuellen Lauf auf einem anderen in denselben Zielordner schreiben.
+    // Bei einem Spiegel mit Löschrecht zieht sich das gegenseitig die
+    // Dateien weg (docs/TESTMATRIX_IOS_WINDOWS.md, B14).
+    final lockHolder =
+        await SyncLock.acquire(engine, remoteName, targetFolder);
+    if (lockHolder != null) {
+      AppLog.info('scheduler',
+          'Aufgabe „$name" übersprungen ($reason): $lockHolder synct gerade');
+      if (id.isNotEmpty) {
+        await SchedulerRunLog.record(id, success: false, error: 'skipped');
+      }
+      return false;
+    }
+
     try {
       await engine.startBackupJob(
         localPath: sourcePath,
@@ -326,6 +343,8 @@ class SchedulerService {
       }
       AppLog.warn('scheduler', 'Aufgabe „$name" fehlgeschlagen ($reason): $e');
       return false;
+    } finally {
+      await SyncLock.release(engine, remoteName, targetFolder);
     }
   }
 

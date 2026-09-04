@@ -79,10 +79,9 @@ class SyncLock {
       final isStale = heartbeat == null || now.difference(heartbeat) > staleAfter;
 
       if (!isMine && !isStale) {
-        final reason = '$holderName';
         AppLog.info('sync',
-            'Sync übersprungen: $reason hält die Sperre für $remoteName:$remotePath');
-        return reason;
+            'Sync übersprungen: $holderName hält die Sperre für $remoteName:$remotePath');
+        return holderName;
       }
       if (!isMine && isStale) {
         AppLog.info('sync',

@@ -297,33 +297,27 @@ class SettingsScreen extends ConsumerWidget {
                 content: _buildWadaPaletteRow(context, ref, config, true, strings),
               ),
 
-              // 4. Language
-              Win.sectionHeader(strings.appConfiguration, theme),
-              Win.group(
+              // Sprache gehoert zum Erscheinungsbild, nicht in eine eigene
+              // Sektion: Eine Sektion mit genau einem Eintrag kostet
+              // Ueberschrift und Rahmen fuer nichts.
+              Win.tile(
                 theme: theme,
-                children: [
-                  Win.tile(
-                    theme: theme,
-                    title: strings.languageSection,
-                    subtitle: strings.tooltipLanguage,
-                    trailing: fluent.ComboBox<AppLocaleMode>(
-                      value: currentLocaleMode,
-                      items: AppLocaleMode.values.map((mode) {
-                        return fluent.ComboBoxItem<AppLocaleMode>(
-                          value: mode,
-                          child: Text(_localeModeLabel(strings, mode)),
-                        );
-                      }).toList(),
-                      onChanged: (mode) {
-                        if (mode != null) {
-                          ref.read(localeModeProvider.notifier).setLocaleMode(mode);
-                        }
-                      },
-                    ),
-                    first: true,
-                    last: true,
-                  ),
-                ],
+                title: strings.languageSection,
+                subtitle: strings.tooltipLanguage,
+                trailing: fluent.ComboBox<AppLocaleMode>(
+                  value: currentLocaleMode,
+                  items: AppLocaleMode.values.map((mode) {
+                    return fluent.ComboBoxItem<AppLocaleMode>(
+                      value: mode,
+                      child: Text(_localeModeLabel(strings, mode)),
+                    );
+                  }).toList(),
+                  onChanged: (mode) {
+                    if (mode != null) {
+                      ref.read(localeModeProvider.notifier).setLocaleMode(mode);
+                    }
+                  },
+                ),
               ),
               SizedBox(height: theme.xl),
 
@@ -565,17 +559,10 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     SizedBox(height: theme.sm),
                     _buildWadaPaletteRow(context, ref, config, true, strings),
-                  ],
-                ),
-              ),
-
-              // 4. Language Section
-              Semantics(
-                label: strings.tooltipLanguage,
-                child: cupertino.CupertinoListSection.insetGrouped(
-                  backgroundColor: theme.surface,
-                  header: IosTheme.sectionHeader(strings.preferences, theme),
-                  children: [
+                    // Sprache gehoert hierher. Eine eigene Sektion mit genau
+                    // einem Eintrag kostet Ueberschrift und Rahmen fuer nichts
+                    // und zwingt zum Scrollen, wo eine Zeile gereicht haette.
+                    const Divider(height: 1),
                     cupertino.CupertinoListTile(
                       title: Text(strings.languageSection, style: const TextStyle(fontSize: 16)),
                       trailing: Row(
@@ -827,37 +814,28 @@ class SettingsScreen extends ConsumerWidget {
             ),
             SizedBox(height: theme.sm),
             _buildWadaPaletteRow(context, ref, config, true, strings),
-            SizedBox(height: theme.xl),
-
-            // 4. Language
-            Text(strings.preferences, style: material.Theme.of(context).textTheme.titleSmall),
-            SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
+            // Sprache gehoert zum Erscheinungsbild, nicht in eine eigene
+            // Sektion: Eine Sektion mit genau einem Eintrag kostet
+            // Ueberschrift und Rahmen fuer nichts.
+            material.ListTile(
+              minTileHeight: 48,
+              title: Text(strings.languageSection),
+              trailing: material.DropdownButton<AppLocaleMode>(
+                value: currentLocaleMode,
+                underline: const SizedBox.shrink(),
+                items: AppLocaleMode.values.map((mode) {
+                  return material.DropdownMenuItem(
+                    value: mode,
+                    child: Text(_localeModeLabel(strings, mode)),
+                  );
+                }).toList(),
+                onChanged: (mode) {
+                  if (mode != null) {
+                    ref.read(localeModeProvider.notifier).setLocaleMode(mode);
+                  }
+                },
               ),
-              child: material.ListTile(
-                minTileHeight: 48,
-                title: Text(strings.languageSection),
-                trailing: material.DropdownButton<AppLocaleMode>(
-                  value: currentLocaleMode,
-                  underline: const SizedBox.shrink(),
-                  items: AppLocaleMode.values.map((mode) {
-                    return material.DropdownMenuItem(
-                      value: mode,
-                      child: Text(_localeModeLabel(strings, mode)),
-                    );
-                  }).toList(),
-                  onChanged: (mode) {
-                    if (mode != null) {
-                      ref.read(localeModeProvider.notifier).setLocaleMode(mode);
-                    }
-                  },
-                ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
             ),
             SizedBox(height: theme.xl),
 

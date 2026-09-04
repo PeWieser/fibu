@@ -930,25 +930,66 @@ class AppStrings {
       ? 'Kein Zugriff auf Fotos & Mediathek (Berechtigung verweigert)'
       : 'No access to Photos library (permission denied)';
 
-  // --- Zeitplan-Beschreibung (lokalisiert, ersetzt Modell-Hardcodes) ---
+  // --- Zeitplan-Beschreibung (lokalisiert UND plattformabhängig) ---
+  //
+  // Wer den Zeitpunkt bestimmt, unterscheidet sich je Plattform — und die
+  // Beschreibung muss das sagen, sonst verspricht die App etwas Falsches:
+  //  * iOS:      BGProcessingTask. Das System entscheidet, wann es passt
+  //              (Laden, Ruhezustand, WLAN). Eine Uhrzeit zu nennen wäre
+  //              eine Lüge, deshalb steht dort keine.
+  //  * Desktop:  Der eingebaute Planer prüft alle 5 Minuten im laufenden
+  //              Prozess. Die Uhrzeit wird tatsächlich eingehalten — voraus-
+  //              gesetzt die App läuft, also Autostart an ist.
+  //
+  // Vorher stand hier unabhängig von der Plattform „von iOS gesteuert".
+  bool get _scheduleIsSystemDriven =>
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   String scheduleDescriptionFor(String scheduleDay, String scheduleTime) {
     if (scheduleDay == 'iOS System' || scheduleDay == 'System') {
       return isGerman ? 'Automatisch (iOS-System)' : 'Automatic (iOS system)';
     }
-    if (scheduleDay == 'Daily') {
-      // Keine Uhrzeit: iOS entscheidet selbst, wann der Hintergrundtask
-      // läuft. Eine feste Zeit zu versprechen wäre falsch.
-      return isGerman
-          ? 'Täglich (Hintergrundtask, von iOS gesteuert)'
-          : 'Daily (background task, scheduled by iOS)';
-    }
     if (scheduleDay == 'Manual') {
       return isGerman ? 'Manuell' : 'Manual';
     }
+    if (scheduleDay == 'Daily') {
+      if (_scheduleIsSystemDriven) {
+        return isGerman
+            ? 'Täglich (Hintergrundtask, von iOS gesteuert)'
+            : 'Daily (background task, scheduled by iOS)';
+      }
+      return isGerman
+          ? 'Täglich um $scheduleTime'
+          : 'Daily at $scheduleTime';
+    }
     final day = _weekdayLabel(scheduleDay);
+    if (_scheduleIsSystemDriven) {
+      return isGerman
+          ? 'Wöchentlich am $day (Hintergrundtask, von iOS gesteuert)'
+          : 'Weekly on $day (background task, scheduled by iOS)';
+    }
     return isGerman
-        ? 'Wöchentlich am $day (Hintergrundtask, von iOS gesteuert)'
-        : 'Weekly on ${day}s (background task, scheduled by iOS)';
+        ? 'Wöchentlich am $day um $scheduleTime'
+        : 'Weekly on $day at $scheduleTime';
+  }
+
+  /// Hinweis unter dem Zeitplan: Auf Desktop ist die Uhrzeit nur so gut wie
+  //  der Autostart. Das zu verschweigen wäre dasselbe Problem in grün.
+  String get schedulePlatformNote {
+    if (_scheduleIsSystemDriven) {
+      return isGerman
+          ? 'iOS entscheidet selbst, wann der Hintergrundtask läuft — bei '
+              'Ladebetrieb, Ruhezustand und WLAN.'
+          : 'iOS decides when the background task runs — while charging, idle '
+              'and on Wi-Fi.';
+    }
+    return isGerman
+        ? 'Der Zeitplan läuft, solange Fibu geöffnet ist. Mit „Mit Windows '
+            'starten" in den Einstellungen läuft er auch nach dem Anmelden '
+            'weiter. Verpasste Läufe werden beim nächsten Start nachgeholt.'
+        : 'The schedule runs while Fibu is open. Enable “Start with Windows” '
+            'in Settings to keep it running after sign-in. Missed runs are '
+            'caught up on the next start.';
   }
 
   String _weekdayLabel(String key) {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/widget_status_service.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -139,18 +140,6 @@ class BackupTask {
       ? _targetRemote
       : (_targetRemotes.isNotEmpty ? _targetRemotes.first : '');
 
-  String get scheduleDescription {
-    if (scheduleDay == 'iOS System' || scheduleDay == 'System') {
-      return 'Automatisch (iOS System)';
-    } else if (scheduleDay == 'Daily') {
-      return 'Daily at $scheduleTime';
-    } else if (scheduleDay == 'Manual') {
-      return 'Manual';
-    } else {
-      return 'Weekly on ${scheduleDay}s at $scheduleTime';
-    }
-  }
-
   static BackupTask createMediaMirrorPresetTask({
     required String remoteName,
     bool isIOS = false,
@@ -160,7 +149,11 @@ class BackupTask {
       name: 'Mediathek-Spiegelung (Fotos & Videos)',
       sourcePath: 'all',
       targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
-      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      // Derselbe lokalisierte, plattformabhängige Text wie in der Anzeige —
+      // vorher stand hier hardcodiertes „Daily at 02:00" unabhängig von
+      // Sprache und Plattform.
+      schedule: AppStrings.current.scheduleDescriptionFor(
+          isIOS ? 'iOS System' : 'Daily', '02:00'),
       scheduleDay: isIOS ? 'iOS System' : 'Daily',
       scheduleTime: '02:00',
       isActive: true,
@@ -181,7 +174,11 @@ class BackupTask {
       name: 'Medien-Sicherung (Inkrementell)',
       sourcePath: 'all',
       targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
-      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      // Derselbe lokalisierte, plattformabhängige Text wie in der Anzeige —
+      // vorher stand hier hardcodiertes „Daily at 02:00" unabhängig von
+      // Sprache und Plattform.
+      schedule: AppStrings.current.scheduleDescriptionFor(
+          isIOS ? 'iOS System' : 'Daily', '02:00'),
       scheduleDay: isIOS ? 'iOS System' : 'Daily',
       scheduleTime: '02:00',
       isActive: true,
@@ -202,7 +199,11 @@ class BackupTask {
       name: 'Dokumente & Dateien Backup',
       sourcePath: 'documents',
       targetRemotes: remoteName.isNotEmpty ? [remoteName] : const [],
-      schedule: isIOS ? 'Automatisch (iOS System)' : 'Daily at 02:00',
+      // Derselbe lokalisierte, plattformabhängige Text wie in der Anzeige —
+      // vorher stand hier hardcodiertes „Daily at 02:00" unabhängig von
+      // Sprache und Plattform.
+      schedule: AppStrings.current.scheduleDescriptionFor(
+          isIOS ? 'iOS System' : 'Daily', '02:00'),
       scheduleDay: isIOS ? 'iOS System' : 'Daily',
       scheduleTime: '02:00',
       isActive: true,

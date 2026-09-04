@@ -1015,7 +1015,8 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       if (presetType == 'media_mirror') {
         _nameController.text = strings.presetMediaMirrorTitle;
         _selectedSourceCategory = 'all';
-        _srcController.text = widget.platform == TargetPlatform.windows ? 'Pictures' : 'all';
+        // Windows: bewusst leer — der Ordner muss gewählt werden.
+        _srcController.text = widget.platform == TargetPlatform.windows ? '' : 'all';
         _selectedSyncMode = SyncMode.mirror;
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Mediathek';
@@ -1023,7 +1024,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       } else if (presetType == 'media_incremental') {
         _nameController.text = strings.presetMediaIncrementalTitle;
         _selectedSourceCategory = 'all';
-        _srcController.text = widget.platform == TargetPlatform.windows ? 'Pictures' : 'all';
+        _srcController.text = widget.platform == TargetPlatform.windows ? '' : 'all';
         _selectedSyncMode = SyncMode.incremental;
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Fotos';
@@ -1031,7 +1032,7 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       } else if (presetType == 'documents') {
         _nameController.text = strings.presetDocsTitle;
         _selectedSourceCategory = 'folders';
-        _srcController.text = widget.platform == TargetPlatform.windows ? 'Documents' : 'documents';
+        _srcController.text = widget.platform == TargetPlatform.windows ? '' : 'documents';
         _selectedSyncMode = SyncMode.incremental;
         _selectedTargetFolderMode = TargetFolderMode.newFolder;
         _targetFolderController.text = 'Dokumente';
@@ -1313,11 +1314,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
     }
 
     final String finalTime = _selectedScheduleDay == 'Manual' ? '12:00' : '$_selectedHour:$_selectedMinute';
-    final String finalSchedule = _selectedScheduleDay == 'iOS System'
-        ? strings.iosBackgroundScheduleBadge
-        : (_selectedScheduleDay == 'Daily'
-            ? 'Daily at $finalTime'
-            : (_selectedScheduleDay == 'Manual' ? 'Manual' : 'Weekly on ${_selectedScheduleDay}s at $finalTime'));
+    // Lokalisiert und plattformabhängig — dieselbe Funktion, die auch die
+    // Aufgaben-Detailansicht anzeigt. Vorher stand hier hardcodiertes
+    // Englisch („Daily at 02:00"), das im gespeicherten Feld landete und der
+    // Anzeige widersprach.
+    final String finalSchedule =
+        strings.scheduleDescriptionFor(_selectedScheduleDay, finalTime);
 
     String finalTargetFolder = _targetFolderController.text.trim();
     if (_selectedTargetFolderMode == TargetFolderMode.root) {

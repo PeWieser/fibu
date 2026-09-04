@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../localization/app_strings.dart';
 import 'device_identity_service.dart';
 import 'rclone_service.dart';
 import 'rclone_provider.dart';
@@ -272,9 +273,10 @@ class SyncConfigService {
       return BackupTask(
         id: t.taskId.isNotEmpty ? t.taskId : 'imported_${DateTime.now().millisecondsSinceEpoch}',
         name: t.name,
-        sourcePath: sourcePath.isNotEmpty ? sourcePath : 'folders:',
+        sourcePath: sourcePath,
         targetRemotes: resolvedRemotes,
-        schedule: 'Daily at 02:00',
+        // Lokalisiert und plattformabhängig, wie überall sonst auch.
+        schedule: AppStrings.current.scheduleDescriptionFor('Daily', '02:00'),
         scheduleDay: 'Daily',
         scheduleTime: '02:00',
         isActive: true,

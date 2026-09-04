@@ -57,20 +57,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     super.dispose();
   }
 
+  /// Gibt es auf dieser Plattform überhaupt eine Mediathek im Sinn der
+  /// mobilen App? Auf Desktop nicht — dort ist die Quelle immer ein Ordner.
+  ///
+  /// Vorher entschied allein das Pfad-Präfix (`files:`/`folders:`). Eine auf
+  /// Windows angelegte Aufgabe mit Quelle „Pictures" oder „C:\\…\\Bilder"
+  /// trägt kein Präfix, galt damit als Medienquelle, und `_finishInlineEdit`
+  /// lief in den Album-Zweig — der eingegebene Ordner wurde still verworfen.
+  static bool get _platformHasMediaLibrary {
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+  }
+
   // Aktuelle Aufgabenquelle in die Auswahl überführen.
   void _initEditSource(BackupTask task) {
     final src = task.sourcePath;
-    _editIsMediaSource = !_isFilesSource(src);
+    _editIsMediaSource = _platformHasMediaLibrary && !_isFilesSource(src);
     _editSyncMode = task.syncMode;
     _editAlbumSelection
       ..clear()
       ..addAll(task.effectiveAlbums);
-    // Bei Dateien-Quellen steckt der Pfad hinter dem Präfix; bei einer
-    // geleerten Quelle (importiert von einem anderen Gerät) ist er leer und
-    // muss gewählt werden.
-    _folderCtrl.text = _isFilesSource(src) && src.contains(':')
-        ? src.substring(src.indexOf(':') + 1)
-        : (_isFilesSource(src) ? '' : src);
+    // Bei codierten Dateien-Quellen steckt der Pfad hinter dem Präfix.
+    // Alles andere ist bereits ein Pfad — auch „Pictures" oder ein absoluter
+    // Windows-Pfad. Nur eine leere Quelle (importiert von einem anderen
+    // Gerät) bleibt leer und muss gewählt werden.
+    _folderCtrl.text = _isFilesSource(src)
+        ? (src.contains(':') ? src.substring(src.indexOf(':') + 1) : '')
+        : src;
   }
 
   /// Ordner über den Systemdialog wählen (Desktop und Android-SAF).
@@ -1043,6 +1056,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime),
                       theme,
                     ),
+                    SizedBox(height: theme.xs),
+                    Text(
+                      strings.schedulePlatformNote,
+                      style: TextStyle(fontSize: 12, color: theme.textSecondary, height: 1.4),
+                    ),
                     const SizedBox(height: 8),
                     const fluent.Divider(),
                     const SizedBox(height: 8),
@@ -1445,6 +1463,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               cupertino.CupertinoListSection.insetGrouped(
                 backgroundColor: theme.surface,
                 header: IosTheme.sectionHeader(strings.scheduleAndNetworkSection, theme),
+                footer: Text(strings.schedulePlatformNote),
                 children: [
                   cupertino.CupertinoListTile(
                     leading: Icon(cupertino.CupertinoIcons.clock, color: theme.accent, size: 22),
@@ -1754,6 +1773,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     leading: Icon(material.Icons.schedule, color: theme.accent),
                     title: Text(strings.scheduleLabel),
                     trailing: Text(strings.scheduleDescriptionFor(task.scheduleDay, task.scheduleTime)),
+                    subtitle: Text(
+                      strings.schedulePlatformNote,
+                      style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.4),
+                    ),
                   ),
                   const material.Divider(height: 1),
                   material.ListTile(

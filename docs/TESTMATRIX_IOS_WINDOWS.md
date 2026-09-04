@@ -206,15 +206,39 @@ einzelnen Matrix-Zeilen.
 
 ---
 
+## Zweite Runde: B12/B13, C7 und B4 sind umgesetzt
+
+Alle drei laufen ohne Nutzerinteraktion.
+
+| # | Vorher | Jetzt |
+|---|---|---|
+| **B12/B13** | `contentCmp` verglich nur Größe+Modtime. Gleiche Größe plus gleiche Zeit galt als „identisch", obwohl beide Geräte unterschiedliche Inhalte hatten. Wer zuletzt lief, gewann — still | **3-Way-Abgleich gegen die Basis** (`lastKnown`, war schon vorhanden). `Basis == lokal, Basis != remote` → remote holen. `Basis != lokal, Basis == remote` → lokal senden. **Beide ≠ Basis und untereinander → Konflikt** |
+| **C7** | Jedes Gerät sah nur seine eigenen Läufe | Jedes Gerät veröffentlicht sein Journal unter `<Ziel>/.fibu/journal/<deviceId>.jsonl`; `readAllDevices` liest die Vereinigung, dedupliziert über Zeit+Pfad+Art. Fail-open |
+| **B4** | Album-Umbenennung = Tombstone + vollständiger Neu-Upload | **Rename-Erkennung** über Größe **und** Modtime aus der Basis; serverseitiges `moveRemoteFile` statt Transfer. Provider ohne Server-Side-Move fallen auf den normalen Upload zurück |
+
+**Konflikt-Verhalten im Detail.** Bei echtem Konflikt geht nichts verloren: Die
+lokale Fassung wird unter einem Zeitstempel-Namen hochgeladen
+(`IMG_0001 (Konflikt 2026-09-04 14-03).HEIC`), die Cloud-Fassung bleibt liegen.
+Der Zeitstempel ist Absicht — zwei Geräte können denselben Konflikt unabhängig
+benennen, ohne sich zu überschreiben. Die Statuszeile bekommt einen eigenen
+Text, statt auf „Auf Änderungen überprüfen" zurückzufallen.
+
+**Was B13 nicht löst.** Der 3-Way-Abgleich erkennt Konflikte zuverlässig, aber
+er hash-t nicht. Zwei Dateien mit identischer Größe **und** identischer
+Änderungszeit **und** unterschiedlichem Inhalt bleiben unerkannt. In der Praxis
+ist das bei Fotos praktisch unmöglich, aber es ist keine kryptographische
+Garantie. Ein echter Hash wäre die vollständige Lösung — und bei einer
+Mediathek mit Gigabytes ein spürbarer Kostenpunkt.
+
+---
+
 ## Was offen bleibt
 
 | # | Punkt | Art |
 |---|---|---|
-| 1 | **B12/B13** — Konflikt ohne Versionierung. Wer zuletzt läuft, gewinnt; `contentCmp` nutzt Größe+Modtime, keinen Hash | inhärent bei 2-Wege ohne Versionen |
-| 2 | **C7** — jedes Gerät sieht nur seine eigenen Läufe im Verlauf | Erweiterung |
-| 3 | **B4** — Album-Umbenennung erzeugt einmal Tombstone + Neudownload statt einer Umbenennung | Optimierung |
-| 4 | **D8** — iOS importiert Windows-Dateien in die Mediathek, Album-Name kommt aus dem Pfad | Verhalten, geprüft |
-| 5 | **Kein Gerät getestet.** Alles ist aus dem Code abgeleitet. Analyzer und Tests sind grün (`4316ac3`, beide Workflows), aber das ist keine Laufzeit-Verifikation | Verifikation |
+| 1 | **B13-Rest** — kein Inhalts-Hash. Größe+Zeit+Inhalt gleichzeitig gleich bleibt unerkannt | inhärent ohne Hash |
+| 2 | **D8** — iOS importiert Windows-Dateien in die Mediathek, Album-Name kommt aus dem Pfad | Verhalten, geprüft |
+| 3 | **Kein Gerät getestet.** Alles ist aus dem Code abgeleitet. Analyzer und Tests sind grün (`a912ddd`, beide Workflows), aber das ist keine Laufzeit-Verifikation. Insbesondere Konflikt-Erkennung und Rename-Erkennung sind neu und nicht gegen echte Daten gelaufen | Verifikation |
 
 ### Nicht mehr zutreffend
 

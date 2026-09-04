@@ -7,7 +7,7 @@ import '../utils/app_paths.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'app_log_service.dart';
-import 'ios_rclone_service.dart';
+import 'rclone_provider.dart';
 import 'rclone_service.dart';
 import 'scheduler_run_log.dart';
 import 'settings_service.dart';
@@ -295,7 +295,9 @@ class SchedulerService {
       return false;
     }
 
-    final engine = IosRcloneService();
+    // Plattformgerecht — auf Windows ist das die EXE-basierte Engine, nicht
+    // der librclone-MethodChannel.
+    final engine = createRcloneServiceForPlatform();
     // Kein Start, solange ein anderer Lauf aktiv ist (manuell ausgelöst
     // oder eine frühere Aufgabe dieser Runde) — sonst überlappen sich
     // zwei Syncs auf demselben Mirror-Zustand.

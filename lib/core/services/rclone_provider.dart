@@ -6,27 +6,35 @@ import 'rclone_service_impl.dart';
 import 'ios_rclone_service.dart';
 import 'remote_registry_service.dart';
 
-/// Riverpod provider for the [RcloneService].
-/// Automatically swaps implementations depending on runtime platform or debug config.
-final rcloneServiceProvider = Provider<RcloneService>((ref) {
+/// Wählt die zur Plattform passende Engine — **ohne** Riverpod.
+///
+/// Brauchen alle Stellen, die keinen `Ref` haben: der Hintergrund-Planer und
+/// der Workmanager-Callback laufen außerhalb des Widget-Baums.
+///
+/// Vorher baute der Planer hardcoded `IosRcloneService()`. Der spricht den
+/// MethodChannel `fibu/rclone` an, den es nur auf iOS und Android gibt — auf
+/// Windows lief jeder geplante Sync in eine `MissingPluginException` und
+/// scheiterte still. Genau die Sorte Fehler, die niemand sieht, weil der
+/// Zeitplan in der UI trotzdem korrekt aussieht.
+RcloneService createRcloneServiceForPlatform() {
   const useMock = bool.fromEnvironment('USE_MOCK_RCLONE', defaultValue: false);
-  if (useMock) {
-    return MockRcloneService();
-  }
+  if (useMock) return MockRcloneService();
 
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
     return WindowsRcloneService();
   }
-
-  // iOS and Android are backed by the real gomobile `librclone` engine.
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android)) {
     return IosRcloneService();
   }
-
   return MockRcloneService();
-});
+}
+
+/// Riverpod provider for the [RcloneService].
+/// Automatically swaps implementations depending on runtime platform or debug config.
+final rcloneServiceProvider =
+    Provider<RcloneService>((ref) => createRcloneServiceForPlatform());
 
 /// Riverpod provider to load all remotes asynchronously.
 ///

@@ -75,6 +75,13 @@ class VirtualMirrorSyncEngine {
 
   static const String tombstonesFileName = 'tombstones.json';
 
+  /// Harte Obergrenze für automatisch gelöschte lokale Dateien pro Lauf.
+  ///
+  /// Schützt den Fall, den eine Prozentgrenze nicht abdeckt: kleine
+  /// Bibliotheken. Wer mehr löschen will, tut es bewusst in der Fotos-App —
+  /// der nächste Lauf spiegelt es dann in kleinen Schritten.
+  static const int maxAutoLocalDeletes = 25;
+
   /// [localItems]: rel → VirtualMediaItem (Metadaten, kein Dateiinhalt).
   /// [exportForUpload]: ein Asset on-demand als echte (temporäre) Datei liefern.
   /// [persistLocalState]: Zustandsliste speichern.
@@ -588,14 +595,32 @@ class VirtualMirrorSyncEngine {
     // wird aber nicht wieder hochgeladen und nicht erneut nachgefragt).
     if (remoteDeletedCandidates.isNotEmpty && deleteLocalAssets != null) {
       final prevCount = previouslySyncedRels?.length ?? 0;
-      // Sicherheitsbremse: leere/implausible Cloud-Listen (Ordner nicht
-      // gefunden, Ausfall) dürfen niemals die halbe Mediathek löschen.
-      final anomaly = remoteFiles.isEmpty ||
-          (prevCount >= 10 &&
-              remoteDeletedCandidates.length * 2 > prevCount);
+      // Sicherheitsbremse gegen Lösch-Wellen. Zwei unabhängige Grenzen, von
+      // denen jede allein auslösen kann:
+      //
+      //  * relativ: mehr als 20 % des letzten Stands (vorher 50 % — darunter
+      //    lief die lokale Löschung ungeprüft durch, siehe
+      //    docs/TESTMATRIX_IOS_WINDOWS.md, Befund 5)
+      //  * absolut: nie mehr als [maxAutoLocalDeletes] Dateien in einem Lauf.
+      //    Ein Prozentsatz schützt nicht, wenn die Bibliothek klein ist — bei
+      //    12 Dateien wären 24 % erst drei Dateien.
+      //
+      // Auslösen heißt überspringen, nicht abbrechen: Der nächste Lauf prüft
+      // erneut, und ein echtes Löschen bleibt über einen einzelnen, kleinen
+      // Lauf möglich.
+      final missing = remoteDeletedCandidates.length;
+      final relativeAnomaly =
+          prevCount >= 10 && missing * 5 > prevCount; // > 20 %
+      final absoluteAnomaly = missing > maxAutoLocalDeletes;
+      final anomaly = remoteFiles.isEmpty || relativeAnomaly || absoluteAnomaly;
       if (anomaly) {
+        final reason = remoteFiles.isEmpty
+            ? 'leere Cloud-Liste'
+            : (absoluteAnomaly
+                ? '$missing Dateien überschreiten die Obergrenze von $maxAutoLocalDeletes'
+                : '$missing/$prevCount überschreiten die 20-%-Grenze');
         AppLog.warn('sync',
-            'Remote-Löschungen (${remoteDeletedCandidates.length}/$prevCount) wirken wie ein Ausfall/Formatwechsel → lokale Löschung übersprungen (nächster Lauf prüft erneut)');
+            'Remote-Löschungen übersprungen ($reason) — wirkt wie Ausfall, Formatwechsel oder fremder Eingriff. Nächster Lauf prüft erneut.');
       } else {
         AppLog.info('sync',
             '${remoteDeletedCandidates.length} in der Cloud gelöschte Dateien → lokale Löschung (Systemdialog)');

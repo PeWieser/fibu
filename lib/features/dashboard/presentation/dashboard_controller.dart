@@ -5,6 +5,7 @@ import '../../../core/services/network_status_service.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
 import '../../../core/services/rclone_service.dart';
+import '../../../core/services/sync_lock_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/settings_service.dart';
 import '../../tasks/presentation/tasks_controller.dart';
@@ -385,6 +386,24 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       logs: [...state.logs, startMsg],
     );
 
+    // Geräteübergreifende Sperre: Ein anderes Gerät könnte gerade auf
+    // denselben Zielordner schreiben. Bei einem Spiegel-Lauf mit Löschrecht
+    // würde das bedeuten, dass wir uns gegenseitig die Dateien wegziehen.
+    final lockHolder = await SyncLock.acquire(
+        _rcloneService, remoteName, remotePath);
+    if (lockHolder != null) {
+      final t = _timestamp();
+      state = state.copyWith(
+        status: RcloneJobStatus.failed,
+        currentFile: strings.syncLockedByOtherDevice(lockHolder),
+        logs: [
+          ...state.logs,
+          '$t Task "${task.name}": übersprungen, $lockHolder synct gerade'
+        ],
+      );
+      return false;
+    }
+
     final startedAt = DateTime.now();
     try {
       final jobId = await _rcloneService.startBackupJob(
@@ -520,6 +539,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         logs: [...state.logs, failMsg],
       );
       return false;
+    } finally {
+      // Immer freigeben — auch bei Abbruch, Fehler oder einem `return` aus
+      // der `!mounted`-Prüfung. Eine hängengebliebene Sperre würde andere
+      // Geräte bis zum Verfallen blockieren.
+      await SyncLock.release(_rcloneService, remoteName, remotePath);
     }
   }
 

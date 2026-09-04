@@ -878,6 +878,10 @@ class AppStrings {
   String pairingReceived(String device, int remotes, int tasks) => isGerman
       ? 'Konfiguration von „$device" übernommen: $remotes Laufwerke, $tasks Aufgaben. Aufgaben mit Mediathek-Quelle brauchen noch einen Ordner.'
       : 'Configuration from “$device” applied: $remotes drives, $tasks tasks. Tasks with a library source still need a folder.';
+  String get pairingRoleReceive =>
+      isGerman ? 'Empfangen' : 'Receive';
+  String get pairingRoleSend => isGerman ? 'Senden' : 'Send';
+
   String pairingMirrorDowngraded(int n) => isGerman
       ? '$n ${n == 1 ? 'Aufgabe wurde' : 'Aufgaben wurden'} von „Spiegelung" auf „Inkrementell" umgestellt: Der Desktop spiegelt nur in eine Richtung und würde sonst Dateien löschen, die dieses Gerät hochgeladen hat.'
       : '$n ${n == 1 ? 'task was' : 'tasks were'} switched from “Mirror” to “Incremental”: the desktop only mirrors one way and would otherwise delete files this device uploaded.';
@@ -906,6 +910,12 @@ class AppStrings {
   String get autostartDescription => isGerman
       ? 'Fibu startet im Hintergrund, sobald du dich anmeldest, und führt den Zeitplan auch aus, wenn du die App nicht geöffnet hast. Verpasste Läufe werden beim nächsten Start nachgeholt.'
       : 'Fibu starts in the background when you sign in and runs the schedule even if you never open the app. Missed runs are caught up on the next start.';
+
+  /// Ein anderes Gerät hält die geräteübergreifende Sperre für diesen
+  /// Zielordner. Der Lauf wird übersprungen, nicht abgebrochen.
+  String syncLockedByOtherDevice(String device) => isGerman
+      ? 'Übersprungen — „$device" synchronisiert gerade in denselben Ordner'
+      : 'Skipped — “$device” is currently syncing to the same folder';
 
   String get syncSourceMissing => isGerman
       ? 'Keine Quelle gewählt — bitte in der Aufgabe einen Ordner auswählen'

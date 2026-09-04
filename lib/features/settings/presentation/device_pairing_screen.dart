@@ -46,14 +46,45 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   /// wurde — wird in der Erfolgsmeldung genannt, nicht still verschwiegen.
   int _downgradedMirror = 0;
 
+  /// Spiegelung mit Zustand, Tombstones und Bremse gibt es nur auf
+  /// iOS/Android. Empfängt ein Desktop, wird der Modus herabgestuft;
+  /// empfängt ein Mobilgerät, bleibt er erhalten.
+  static bool get _platformHasTwoWayMirror {
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+  }
+
   final TextEditingController _urlCtrl = TextEditingController();
 
-  /// Empfänger ist, wer kein Mobilgerät ist — dort gibt es keine Mediathek,
-  /// und dorthin soll die Konfiguration wandern.
-  bool get _isReceiver =>
-      defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.linux;
+  /// Wer empfängt, ist eine **Wahl**, keine Plattform-Eigenschaft.
+  ///
+  /// Vorher war der Desktop immer Empfänger und Mobil immer Sender — damit
+  /// war „Windows zuerst einrichten, dann aufs iPhone übertragen" schlicht
+  /// nicht möglich (docs/TESTMATRIX_IOS_WINDOWS.md, A6). Jetzt kann jedes
+  /// Gerät beide Rollen; der Startwert folgt nur der wahrscheinlicheren
+  /// Richtung.
+  late bool _isReceiver = _defaultRoleIsReceiver;
+
+  static bool get _defaultRoleIsReceiver {
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.windows ||
+        platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.linux;
+  }
+
+  void _setRole(bool receive) {
+    if (_isReceiver == receive) return;
+    // Rollenwechsel beendet eine laufende Empfangs-Sitzung, sonst bliebe der
+    // Port belegt und der QR-Code würde weiter etwas versprechen.
+    DevicePairingService.stopReceiver();
+    setState(() {
+      _isReceiver = receive;
+      _phase = _PairingPhase.idle;
+      _session = null;
+      _received = null;
+      _error = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -128,7 +159,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         // einem geteilten Zielordner würde das die Dateien des anderen Geräts
         // löschen (docs/TESTMATRIX_IOS_WINDOWS.md, B9). Deshalb wird der Modus
         // beim Import auf den Desktop heruntergestuft.
-        if (next['syncMode'] == 'mirror') {
+        if (next['syncMode'] == 'mirror' && !_platformHasTwoWayMirror) {
           next['syncMode'] = 'incremental';
           downgradedMirror++;
         }
@@ -189,9 +220,16 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: _isReceiver
-              ? _receiverBody(theme, strings)
-              : _senderBody(theme, strings),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _roleSwitch(theme, strings),
+              SizedBox(height: theme.xl),
+              _isReceiver
+                  ? _receiverBody(theme, strings)
+                  : _senderBody(theme, strings),
+            ],
+          ),
         ),
       ),
     );
@@ -229,6 +267,88 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       backgroundColor: theme.canvas,
       appBar: material.AppBar(title: Text(strings.pairingTitle)),
       body: body,
+    );
+  }
+
+  /// Umschalter Senden/Empfangen — auf jeder Plattform verfügbar.
+  Widget _roleSwitch(AppThemeData theme, AppStrings strings) {
+    final options = <bool, String>{
+      true: strings.pairingRoleReceive,
+      false: strings.pairingRoleSend,
+    };
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.iOS) {
+      return cupertino.CupertinoSlidingSegmentedControl<bool>(
+        groupValue: _isReceiver,
+        children: {
+          for (final entry in options.entries)
+            entry.key: Padding(
+              padding: EdgeInsets.symmetric(horizontal: theme.md),
+              child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+            ),
+        },
+        onValueChanged: (v) {
+          if (v != null) _setRole(v);
+        },
+      );
+    }
+    if (platform == TargetPlatform.windows) {
+      return Row(
+        children: [
+          for (final entry in options.entries)
+            Padding(
+              padding: EdgeInsets.only(right: theme.lg),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _setRole(entry.key),
+                  child: ConstrainedBox(
+                    // 44 px Trefferfläche: Der sichtbare Punkt ist 16 px, das
+                    // Ziel muss trotzdem groß sein (WCAG 2.5.8).
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isReceiver == entry.key
+                              ? fluent.FluentIcons.radio_bullet
+                              : fluent.FluentIcons.radio_btn_off,
+                          size: 16,
+                          color: _isReceiver == entry.key
+                              ? theme.accent
+                              : theme.textSecondary,
+                        ),
+                        SizedBox(width: theme.sm),
+                        Text(entry.value),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        for (final entry in options.entries)
+          Expanded(
+            child: material.ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                _isReceiver == entry.key
+                    ? material.Icons.radio_button_checked
+                    : material.Icons.radio_button_unchecked,
+                color: _isReceiver == entry.key
+                    ? theme.accent
+                    : theme.textSecondary,
+              ),
+              title: Text(entry.value),
+              onTap: () => _setRole(entry.key),
+            ),
+          ),
+      ],
     );
   }
 

@@ -885,6 +885,24 @@ class AppStrings {
       ? 'Konfiguration direkt von Gerät zu Gerät übertragen'
       : 'Transfer configuration directly between devices';
 
+  // --- Automatische Erkennung im lokalen Netz ---
+  String get pairingSearching => isGerman
+      ? 'Suche nach einem Gerät, das auf eine Konfiguration wartet …'
+      : 'Looking for a device waiting for a configuration …';
+  String get pairingNoneFound => isGerman
+      ? 'Kein wartendes Gerät gefunden. Auf dem anderen Gerät „Empfangen" starten und erneut suchen.'
+      : 'No waiting device found. Start “Receive” on the other device and search again.';
+  String get pairingSearchAgain => isGerman ? 'Erneut suchen' : 'Search again';
+  String get pairingFoundSubtitle => isGerman
+      ? 'Bereit — tippen zum Übertragen'
+      : 'Ready — tap to transfer';
+  String get pairingManualEntry => isGerman
+      ? 'Adresse manuell eingeben'
+      : 'Enter address manually';
+  String get pairingListeningHint => isGerman
+      ? 'Andere Geräte im selben Netz finden dieses Gerät automatisch.'
+      : 'Other devices on the same network find this device automatically.';
+
   String get pairingRoleReceive =>
       isGerman ? 'Empfangen' : 'Receive';
   String get pairingRoleSend => isGerman ? 'Senden' : 'Send';

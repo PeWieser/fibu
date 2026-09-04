@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/device_identity_service.dart';
 import '../../../core/services/device_pairing_service.dart';
 import '../../../core/utils/app_paths.dart';
 import '../../../theme/theme.dart';
@@ -56,6 +57,14 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
 
   final TextEditingController _urlCtrl = TextEditingController();
 
+  /// Im lokalen Netz gefundener Empfänger. Ein Tipp genügt dann — kein
+  /// QR-Code, keine Adresseingabe.
+  DiscoveredDevice? _discovered;
+  bool _searching = false;
+
+  /// Eigener Gerätename, wie ihn die Gegenseite beim Finden anzeigt.
+  String _deviceName = '';
+
   /// Wer empfängt, ist eine **Wahl**, keine Plattform-Eigenschaft.
   ///
   /// Vorher war der Desktop immer Empfänger und Mobil immer Sender — damit
@@ -83,7 +92,26 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       _session = null;
       _received = null;
       _error = null;
+      _discovered = null;
     });
+    // Beim Wechsel auf „Senden" sofort suchen, damit ein Ziel dasteht.
+    if (!receive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startDiscovery();
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Auf Mobilgeräten ist „Senden" die wahrscheinlichere Rolle — die Suche
+    // startet sofort, damit beim Öffnen schon ein Ziel dasteht.
+    if (!_isReceiver) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startDiscovery();
+      });
+    }
   }
 
   @override
@@ -99,6 +127,11 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       _phase = _PairingPhase.waiting;
       _error = null;
     });
+    // Eigenen Namen laden, damit die Gegenseite ihn beim Finden anzeigt.
+    if (_deviceName.isEmpty) {
+      final name = await DeviceIdentity.displayName();
+      if (mounted) setState(() => _deviceName = name);
+    }
     final session = await DevicePairingService.startReceiver();
     if (!mounted) return;
     if (session == null) {
@@ -185,6 +218,44 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   }
 
   String _encode(Object value) => const JsonEncoder.withIndent('  ').convert(value);
+
+  /// Sucht im lokalen Netz nach einem wartenden Empfänger.
+  ///
+  /// Läuft automatisch, sobald die Sender-Rolle aktiv ist. Findet sich nichts,
+  /// bleibt die manuelle Eingabe als Rückweg sichtbar.
+  Future<void> _startDiscovery() async {
+    if (_searching) return;
+    setState(() {
+      _searching = true;
+      _discovered = null;
+      _error = null;
+    });
+    final found = await DevicePairingService.discover();
+    if (!mounted) return;
+    setState(() {
+      _searching = false;
+      _discovered = found;
+    });
+  }
+
+  /// Sendet an ein erkanntes Gerät — ein Tipp, keine Eingabe.
+  Future<void> _sendTo(DiscoveredDevice device) async {
+    final strings = ref.read(stringsProvider);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final bundle = await DevicePairingService.collectBundle(
+        defaultTargetPlatform.name);
+    final url = 'http://${device.host}:${device.port}/';
+    final ok = await DevicePairingService.send(url: url, bundle: bundle);
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _phase = ok ? _PairingPhase.received : _PairingPhase.failed;
+      if (!ok) _error = strings.pairingSendFailed;
+    });
+  }
 
   Future<void> _send() async {
     final strings = ref.read(stringsProvider);
@@ -365,6 +436,27 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         if (_phase == _PairingPhase.idle || _phase == _PairingPhase.failed)
           _primaryButton(strings.pairingStart, _startReceiving, theme),
         if (_phase == _PairingPhase.waiting && _session != null) ...[
+          // Eigener Gerätename: Die mobile Seite zeigt genau diesen Namen,
+          // wenn sie dieses Gerät im Netz findet. Ohne ihn wäre nicht klar,
+          // ob das gefundene Ziel das richtige ist.
+          Center(
+            child: Text(
+              _deviceName,
+              style: TextStyle(
+                  color: theme.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          SizedBox(height: theme.xs),
+          Center(
+            child: Text(
+              strings.pairingListeningHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.textSecondary, fontSize: 12),
+            ),
+          ),
+          SizedBox(height: theme.lg),
           Center(
             child: Container(
               padding: EdgeInsets.all(theme.md),
@@ -427,6 +519,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   // --- Sender (Mobil) -------------------------------------------------------
 
   Widget _senderBody(AppThemeData theme, AppStrings strings) {
+    final found = _discovered;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -434,20 +527,92 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
             style: TextStyle(
                 color: theme.textPrimary, fontSize: 14, height: 1.5)),
         SizedBox(height: theme.lg),
-        material.TextField(
-          controller: _urlCtrl,
-          decoration: material.InputDecoration(
-            labelText: strings.pairingUrlLabel,
-            hintText: 'http://192.168.1.20:53124/#…',
-            border: const material.OutlineInputBorder(),
+
+        // Gefundener Empfänger: ein Tipp, kein QR-Code, keine Eingabe.
+        if (found != null) ...[
+          material.Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(theme.radiusLg),
+              side: BorderSide(
+                  color: theme.accent.withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: material.ListTile(
+              leading: Icon(material.Icons.desktop_windows,
+                  color: theme.accent),
+              title: Text(found.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(strings.pairingFoundSubtitle,
+                  style: TextStyle(
+                      color: theme.textSecondary, fontSize: 12)),
+              trailing: _sending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: material.CircularProgressIndicator(
+                          strokeWidth: 2.5),
+                    )
+                  : Icon(material.Icons.arrow_forward,
+                      color: theme.accent),
+              onTap: _sending ? null : () => _sendTo(found),
+            ),
           ),
-          autocorrect: false,
-        ),
-        SizedBox(height: theme.lg),
-        _primaryButton(
-            _sending ? strings.pairingSending : strings.pairingSend,
-            _sending ? null : _send,
-            theme),
+          SizedBox(height: theme.lg),
+        ] else ...[
+          // Suche läuft. Kein Fehler, kein leeres Feld — einfach suchen.
+          Row(
+            children: [
+              const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: material.CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: theme.sm),
+              Expanded(
+                child: Text(
+                  _searching ? strings.pairingSearching : strings.pairingNoneFound,
+                  style: TextStyle(color: theme.textSecondary, fontSize: 13),
+                ),
+              ),
+              if (!_searching)
+                material.TextButton(
+                  onPressed: _startDiscovery,
+                  child: Text(strings.pairingSearchAgain),
+                ),
+            ],
+          ),
+          SizedBox(height: theme.lg),
+          // Manuelle Eingabe bleibt als Rückweg, falls die Erkennung im
+          // eigenen Netz nicht durchkommt (Gast-WLAN, VLAN, Firewall).
+          material.ExpansionTile(
+            title: Text(strings.pairingManualEntry,
+                style: const TextStyle(fontSize: 14)),
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(theme.md, 0, theme.md, theme.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    material.TextField(
+                      controller: _urlCtrl,
+                      decoration: material.InputDecoration(
+                        labelText: strings.pairingUrlLabel,
+                        hintText: 'http://192.168.1.20:53124/#…',
+                        border: const material.OutlineInputBorder(),
+                      ),
+                      autocorrect: false,
+                    ),
+                    SizedBox(height: theme.md),
+                    _primaryButton(
+                        _sending ? strings.pairingSending : strings.pairingSend,
+                        _sending ? null : _send,
+                        theme),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+
         if (_phase == _PairingPhase.received)
           _resultBox(theme, strings.pairingSent, isError: false),
         if (_error != null) ...[

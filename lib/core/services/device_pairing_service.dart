@@ -8,6 +8,7 @@ import 'package:cryptography/cryptography.dart';
 
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
+import 'device_identity_service.dart';
 
 /// Was bei der Kopplung von einem Gerät zum anderen wandert.
 ///
@@ -103,6 +104,19 @@ class PairingSession {
 /// Schlüssel ist 32 zufällige Bytes aus [Random.secure], also bereits hoch
 /// entropisch — ein KDF wäre hier Dekoration. GCM liefert Integrität gleich
 /// mit, ein manipuliertes Bundle fällt beim Entschlüsseln auf.
+/// Ein im lokalen Netz gefundener Empfänger.
+class DiscoveredDevice {
+  final String name;
+  final String host;
+  final int port;
+
+  const DiscoveredDevice({
+    required this.name,
+    required this.host,
+    required this.port,
+  });
+}
+
 class DevicePairingService {
   DevicePairingService._();
 
@@ -118,8 +132,109 @@ class DevicePairingService {
   static String? _expectedSecret;
   static Completer<PairingBundle>? _incoming;
   static Timer? _timeoutTimer;
+  static RawDatagramSocket? _beacon;
+  static Timer? _beaconTimer;
+
+  /// Fester UDP-Port für die Erkennung. Mobilgeräte hören hier und finden
+  /// einen laufenden Empfänger ohne QR-Code und ohne Eingabe.
+  static const int discoveryPort = 47831;
 
   static bool get isListening => _server != null;
+
+  // ---------------------------------------------------------------------------
+  // Erkennung: Empfänger funkt, Mobilgeräte hoeren zu
+  // ---------------------------------------------------------------------------
+
+  /// Startet den Erkennungs-Beacon. Der Empfänger funkt alle zwei Sekunden
+  /// Name, Adresse und Port ins lokale Netz.
+  ///
+  /// Bewusst UDP-Broadcast statt mDNS: mDNS bräuchte ein natives Plugin, und
+  /// Broadcast läuft ohne Abhängigkeit. Der Beacon enthält keine
+  /// Zugangsdaten — nur Name, IP und Port.
+  static Future<void> _startBeacon(String host, int port, String deviceName) async {
+    await _stopBeacon();
+    try {
+      final socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4, 0, reusePort: false);
+      socket.broadcastEnabled = true;
+      _beacon = socket;
+
+      final payload = utf8.encode(jsonEncode({
+        'v': 1,
+        'name': deviceName,
+        'host': host,
+        'port': port,
+      }));
+      final dest = InternetAddress('255.255.255.255');
+
+      void send() {
+        try {
+          socket.send(payload, dest, discoveryPort);
+        } catch (_) {}
+      }
+
+      send();
+      _beaconTimer = Timer.periodic(const Duration(seconds: 2), (_) => send());
+      AppLog.info('pairing', 'Erkennungs-Beacon aktiv (UDP $discoveryPort)');
+    } catch (e) {
+      AppLog.info('pairing',
+          'Erkennungs-Beacon nicht möglich: $e — Kopplung läuft weiter über Code');
+    }
+  }
+
+  static Future<void> _stopBeacon() async {
+    _beaconTimer?.cancel();
+    _beaconTimer = null;
+    _beacon?.close();
+    _beacon = null;
+  }
+
+  /// Sucht nach einem laufenden Empfänger im lokalen Netz.
+  ///
+  /// Hört auf [discoveryPort] und liefert den ersten Beacon, der eintrifft —
+  /// oder null nach [timeout]. Damit findet die mobile Seite einen
+  /// wartenden Desktop ohne QR-Code und ohne Eingabe.
+  static Future<DiscoveredDevice?> discover({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    RawDatagramSocket? socket;
+    try {
+      socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4, discoveryPort, reuseAddress: true);
+      socket.broadcastEnabled = true;
+      final completer = Completer<DiscoveredDevice?>();
+
+      final sub = socket!.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        final datagram = socket!.receive();
+        if (datagram == null) return;
+        try {
+          final decoded = jsonDecode(utf8.decode(datagram.data));
+          if (decoded is! Map) return;
+          final host = decoded['host'] as String? ?? '';
+          final port = (decoded['port'] as num?)?.toInt() ?? 0;
+          if (host.isEmpty || port <= 0) return;
+          if (!completer.isCompleted) {
+            completer.complete(DiscoveredDevice(
+              name: decoded['name'] as String? ?? host,
+              host: host,
+              port: port,
+            ));
+          }
+        } catch (_) {}
+      });
+
+      final result = await completer.future
+          .timeout(timeout, onTimeout: () => null);
+      await sub.cancel();
+      return result;
+    } catch (e) {
+      AppLog.info('pairing', 'Erkennung nicht möglich: $e');
+      return null;
+    } finally {
+      socket?.close();
+    }
+  }
 
   /// Startet die Sitzung. Liefert null, wenn kein Server gebunden werden
   /// konnte oder keine lokale Adresse gefunden wurde.
@@ -140,6 +255,10 @@ class DevicePairingService {
       _expectedSecret = secret;
       _incoming = Completer<PairingBundle>();
       _listen(server);
+      // Erkennungs-Beacon: Mobilgeräte finden diesen Empfänger damit ohne
+      // QR-Code und ohne Eingabe.
+      await _startBeacon(server.address.host, server.port,
+          await DeviceIdentity.displayName());
       _timeoutTimer = Timer(defaultTimeout, () {
         AppLog.info('pairing', 'Kopplungs-Sitzung nach Zeitablauf beendet');
         stopReceiver();
@@ -238,6 +357,7 @@ class DevicePairingService {
   static Future<void> stopReceiver() async {
     _timeoutTimer?.cancel();
     _timeoutTimer = null;
+    await _stopBeacon();
     final server = _server;
     _server = null;
     _expectedSecret = null;

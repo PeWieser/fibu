@@ -199,14 +199,16 @@ class DevicePairingService {
   }) async {
     RawDatagramSocket? socket;
     try {
-      socket = await RawDatagramSocket.bind(
+      // Direkt als nicht-null binden und in eine lokale finale Variable
+      // uebernehmen. Eine nachtraegliche Zuweisung an eine nullable Variable
+      // waere zwar promotet, ein `!` daran ist aber wirkungslos und der
+      // Analyzer meldet es (unnecessary_non_null_assertion).
+      final bound = await RawDatagramSocket.bind(
           InternetAddress.anyIPv4, discoveryPort, reuseAddress: true);
-      socket.broadcastEnabled = true;
+      socket = bound;
+      bound.broadcastEnabled = true;
       final completer = Completer<DiscoveredDevice?>();
 
-      // Lokale finale Referenz: Innerhalb der Closure ist `socket` bereits
-      // promotet, ein `!` waere wirkungslos (unnecessary_non_null_assertion).
-      final bound = socket!;
       final sub = bound.listen((event) {
         if (event != RawSocketEvent.read) return;
         final datagram = bound.receive();

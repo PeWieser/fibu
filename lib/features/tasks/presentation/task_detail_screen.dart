@@ -1073,10 +1073,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     // die Aktion bleibt auffindbar.
                     onPressed: _isSyncing ? null : () => _handleSyncNow(task),
                   ),
-                ],
-                secondaryItems: [
-                  // Destruktive Aktionen gehören ins Overflow-Menü, nicht
-                  // neben den Primär-Button.
+                  // Destruktive Aktionen bleiben SICHTBAR in primaryItems.
+                  // In secondaryItems lägen sie im Overflow-Menü, das erst
+                  // beim Öffnen rendert — die Danger Zone wäre zwar gated,
+                  // aber nicht auffindbar, und der Bestätigungsdialog wäre
+                  // zwei Klicks tief versteckt.
                   fluent.CommandBarButton(
                     icon: Icon(fluent.FluentIcons.delete, color: theme.error),
                     label: Text(strings.deleteTask,

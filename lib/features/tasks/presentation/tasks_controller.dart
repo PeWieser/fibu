@@ -289,7 +289,7 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       if (file.existsSync()) {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
-        state = jsonList.map((j) {
+        final loaded = jsonList.map((j) {
           SyncMode mode = SyncMode.incremental;
           if (j['syncMode'] == 'mirror') {
             mode = SyncMode.mirror;
@@ -335,12 +335,41 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             selectedFolders: (j['selectedFolders'] as List<dynamic>?)?.cast<String>() ?? const [],
           );
         }).toList();
+        state = reduceToSingle(loaded);
+        if (loaded.length > 1) {
+          // Beta: überzählige Sicherungen werden verworfen, nicht archiviert.
+          // Es geht dabei ausschließlich um Konfiguration — Dateien in der
+          // Cloud bleiben unberührt, und die Sicherung selbst kann neu
+          // eingerichtet werden.
+          AppLog.warn('tasks',
+              '${loaded.length} Sicherungen in tasks.json — Modell ist eine '
+              'Sicherung. Behalten: „${state.isEmpty ? '-' : state.first.name}", '
+              '${loaded.length - state.length} verworfen.');
+          await _saveTasks();
+        }
       }
     } catch (_) {
       // Catch exceptions silently in unit tests (e.g. MissingPluginException for path_provider)
     } finally {
       _ref.read(tasksLoadedProvider.notifier).state = true;
     }
+  }
+
+  /// Reduziert eine Aufgabenliste auf die **eine** Sicherung.
+  ///
+  /// Modell seit dem Umbau „eine Cloud, eine Sicherung": Es gibt genau ein
+  /// Ziel und genau eine Sicherung. Treffen mehrere ein (Alt-Installation,
+  /// Konfig-Übertragung von einem alten Gerät), gewinnt die erste aktive;
+  /// ist keine aktiv, die erste überhaupt.
+  ///
+  /// Bewusst kein Archiv: Die App ist in der Beta, und es geht nur um
+  /// Konfiguration — Dateien in der Cloud bleiben, wo sie sind.
+  static List<BackupTask> reduceToSingle(List<BackupTask> tasks) {
+    if (tasks.length <= 1) return tasks;
+    for (final t in tasks) {
+      if (t.isActive) return [t];
+    }
+    return [tasks.first];
   }
 
   Future<void> _saveTasks() async {
@@ -379,8 +408,13 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
     }
   }
 
+  /// Legt die eine Sicherung an — bzw. ersetzt sie.
+  ///
+  /// Es gibt genau eine. Eine zweite anzuhängen wäre ein stiller Widerspruch
+  /// zum Modell, deshalb ersetzt dieser Aufruf. Die Oberfläche fragt vorher
+  /// nach, wenn schon eine Sicherung existiert.
   void addTask(BackupTask task) {
-    state = [...state, task];
+    state = [task];
     _saveTasks();
   }
 
@@ -430,10 +464,19 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       adapted.add(t.copyWith(sourcePath: '', selectedAlbums: const []));
     }
 
-    state = [
+    final merged = <BackupTask>[
       ...state.where((t) => !incomingIds.contains(t.id)),
       ...adapted,
     ];
+    // Auch ein Import darf höchstens eine Sicherung ergeben — sonst hätte
+    // ein altes Gerät beim Übertragen sein Mehrfach-Modell eingeschleust.
+    final reduced = reduceToSingle(merged);
+    if (merged.length > reduced.length) {
+      AppLog.warn('tasks',
+          'Import brachte ${merged.length} Sicherungen — behalten: '
+          '„${reduced.first.name}" (Modell: eine Sicherung)');
+    }
+    state = reduced;
     _saveTasks();
   }
 

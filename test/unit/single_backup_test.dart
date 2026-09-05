@@ -1,0 +1,64 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
+
+/// Modell „eine Cloud, eine Sicherung": Es gibt genau eine Sicherung.
+///
+/// Treffen mehrere ein — Alt-Installation, oder ein altes Gerät schickt seine
+/// Konfiguration — muss die Auswahl deterministisch sein, sonst entscheidet
+/// der Zufall, wohin gesichert wird.
+void main() {
+  BackupTask task({
+    required String id,
+    required String target,
+    bool isActive = true,
+  }) {
+    return BackupTask(
+      id: id,
+      name: 'Sicherung $id',
+      sourcePath: 'files:/daten/$id',
+      targetRemotes: [target],
+      schedule: 'Täglich um 02:00',
+      isActive: isActive,
+    );
+  }
+
+  group('Eine Sicherung', () {
+    test('ohne Einträge bleibt es leer', () {
+      expect(TasksListNotifier.reduceToSingle(const []), isEmpty);
+    });
+
+    test('ein Eintrag bleibt unverändert', () {
+      final one = [task(id: 'a', target: 'mega')];
+      expect(TasksListNotifier.reduceToSingle(one), same(one));
+    });
+
+    test('die erste aktive Sicherung gewinnt', () {
+      final reduced = TasksListNotifier.reduceToSingle([
+        task(id: 'alt', target: 'mega', isActive: false),
+        task(id: 'aktiv', target: 'b2'),
+        task(id: 'noch-eine', target: 'dropbox'),
+      ]);
+      expect(reduced, hasLength(1));
+      expect(reduced.single.id, 'aktiv');
+      expect(reduced.single.targetRemote, 'b2');
+    });
+
+    test('ist keine aktiv, gewinnt die erste', () {
+      final reduced = TasksListNotifier.reduceToSingle([
+        task(id: 'erste', target: 'mega', isActive: false),
+        task(id: 'zweite', target: 'b2', isActive: false),
+      ]);
+      expect(reduced.single.id, 'erste');
+    });
+
+    test('die Reihenfolge der Datei entscheidet, nicht die Sortierung', () {
+      final reduced = TasksListNotifier.reduceToSingle([
+        task(id: 'z', target: 'mega'),
+        task(id: 'a', target: 'b2'),
+      ]);
+      // Beide aktiv → die erste in der Liste, nicht die alphabetisch erste.
+      expect(reduced.single.id, 'z');
+    });
+  });
+}

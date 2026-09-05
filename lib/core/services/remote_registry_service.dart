@@ -89,6 +89,51 @@ class RemoteRegistryService {
 
   List<RemoteEntry>? _cache;
 
+  /// Kennung der **einen** Cloud, auf die gesichert wird. Leer, solange noch
+  /// nichts gewählt wurde — `ActiveCloud.resolve` bestimmt sie dann.
+  String _activeRemoteId = '';
+
+  /// Welche Laufwerke zu einem virtuellen Laufwerk (Union, Combine, Crypt,
+  /// Chunker) gehören. Schlüssel ist das virtuelle Laufwerk.
+  Map<String, List<String>> _poolMembers = const {};
+
+  /// Kennung der einen Cloud (leer = noch nicht bestimmt).
+  String get activeRemoteId => _activeRemoteId;
+
+  /// Bestandteile eines virtuellen Laufwerks (leer, wenn es keine sind).
+  List<String> poolMembersOf(String id) =>
+      List.unmodifiable(_poolMembers[id] ?? const <String>[]);
+
+  /// Macht [id] zur einen Cloud. [members] sind die Laufwerke, die bei einem
+  /// Pool dahinterliegen; leer für eine gewöhnliche Cloud.
+  Future<void> setActiveRemote(String id,
+      {List<String> members = const []}) async {
+    final current = _cache ?? await _readFile();
+    _activeRemoteId = id;
+    if (members.isEmpty) {
+      final next = Map<String, List<String>>.from(_poolMembers)..remove(id);
+      _poolMembers = next;
+    } else {
+      final next = Map<String, List<String>>.from(_poolMembers)
+        ..[id] = List.unmodifiable(members);
+      _poolMembers = next;
+    }
+    await _persist(current);
+    _cache = current;
+    AppLog.info('remote',
+        'Aktive Cloud: „${byId(id)?.name ?? id}"'
+        '${members.isEmpty ? '' : ' (${members.length} Bestandteile)'}');
+  }
+
+  /// Hebt die Wahl auf (z. B. nach „Cloud trennen").
+  Future<void> clearActiveRemote() async {
+    if (_activeRemoteId.isEmpty) return;
+    final current = _cache ?? await _readFile();
+    _activeRemoteId = '';
+    await _persist(current);
+    _cache = current;
+  }
+
   /// Lädt die Registry (einmalig) und gleicht sie mit rclone ab.
   Future<List<RemoteEntry>> entries({bool forceReload = false}) async {
     if (_cache != null && !forceReload) return _cache!;
@@ -99,12 +144,12 @@ class RemoteRegistryService {
       // rclone vorübergehend nicht erreichbar → lieber gespeicherte
       // Registry liefern als gar keine Remotes (bleibt UI stabil).
       AppLog.warn('remote', 'Remote-Liste nicht lesbar ($e) – nutze gespeicherte Registry');
-      final stored = await _readStored();
+      final stored = await _readFile();
       _cache = stored;
       return stored;
     }
 
-    final stored = await _readStored();
+    final stored = await _readFile();
     final byId = {for (final e in stored) e.id: e};
     final result = <RemoteEntry>[];
     var changed = false;
@@ -133,6 +178,26 @@ class RemoteRegistryService {
       changed = true;
       AppLog.info('remote',
           'Registry bereinigt: ${byId.keys.join(', ')} existiert nicht mehr in rclone');
+    }
+    // Eine aktive Cloud oder Bestandteile, die rclone nicht mehr kennt,
+    // dürfen nicht in der Datei bleiben — sonst wählt die UI ein Ziel, das
+    // es nicht gibt.
+    final known = result.map((e) => e.id).toSet();
+    if (_activeRemoteId.isNotEmpty && !known.contains(_activeRemoteId)) {
+      AppLog.warn('remote',
+          'Aktive Cloud „$_activeRemoteId" existiert nicht mehr — Wahl aufgehoben');
+      _activeRemoteId = '';
+      changed = true;
+    }
+    final pruned = <String, List<String>>{};
+    _poolMembers.forEach((key, value) {
+      if (!known.contains(key)) return;
+      final kept = value.where(known.contains).toList();
+      if (kept.isNotEmpty) pruned[key] = kept;
+    });
+    if (pruned.length != _poolMembers.length) {
+      _poolMembers = pruned;
+      changed = true;
     }
     if (changed) await _persist(result);
     _cache = result;
@@ -194,8 +259,19 @@ class RemoteRegistryService {
   /// Entfernt einen Registry-Eintrag (nachdem die rclone-Sektion gelöscht
   /// wurde). rclone-seitig passiert hier nichts mehr.
   Future<void> unregister(String id) async {
-    final current = _cache ?? await _readStored();
+    final current = _cache ?? await _readFile();
     final updated = current.where((e) => e.id != id).toList();
+    // Ein getrenntes Laufwerk darf weder die aktive Cloud bleiben noch als
+    // Bestandteil eines Pools geführt werden — sonst zeigt die UI ein Ziel,
+    // das es nicht mehr gibt.
+    if (_activeRemoteId == id) _activeRemoteId = '';
+    final nextMembers = <String, List<String>>{};
+    _poolMembers.forEach((key, value) {
+      if (key == id) return;
+      final kept = value.where((m) => m != id).toList();
+      if (kept.isNotEmpty) nextMembers[key] = kept;
+    });
+    _poolMembers = nextMembers;
     await _persist(updated);
     _cache = updated;
   }
@@ -210,7 +286,10 @@ class RemoteRegistryService {
     return null;
   }
 
-  Future<List<RemoteEntry>> _readStored() async {
+  /// Liest die Laufwerke aus `remotes.json` **und** übernimmt die zwei
+  /// Meta-Felder (aktive Cloud, Pool-Bestandteile) in den Zustand. Beides
+  /// liegt in derselben Datei — zweimal lesen wäre Unsinn.
+  Future<List<RemoteEntry>> _readFile() async {
     try {
       final file = await privateAppFile('remotes.json');
       if (!await file.exists()) return const [];
@@ -219,12 +298,26 @@ class RemoteRegistryService {
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) return const [];
       final list = decoded['remotes'];
-      if (list is! List) return const [];
-      return list
-          .whereType<Map<String, dynamic>>()
-          .map(RemoteEntry.fromJson)
-          .where((e) => e.id.isNotEmpty)
-          .toList();
+      final entries = list is List
+          ? list
+              .whereType<Map<String, dynamic>>()
+              .map(RemoteEntry.fromJson)
+              .where((e) => e.id.isNotEmpty)
+              .toList()
+          : const <RemoteEntry>[];
+
+      final members = <String, List<String>>{};
+      final rawMembers = decoded['poolMembers'];
+      if (rawMembers is Map) {
+        rawMembers.forEach((key, value) {
+          if (key is! String || value is! List) return;
+          final ids = value.whereType<String>().toList();
+          if (ids.isNotEmpty) members[key] = ids;
+        });
+      }
+      _activeRemoteId = decoded['activeRemoteId'] as String? ?? '';
+      _poolMembers = members;
+      return entries;
     } catch (_) {
       return const [];
     }
@@ -234,8 +327,12 @@ class RemoteRegistryService {
     try {
       final file = await privateAppFile('remotes.json');
       await file.writeAsString(const JsonEncoder.withIndent('  ').convert({
-        'version': 1,
+        // Version 2 = mit activeRemoteId und poolMembers. Eine App-Version 1
+        // liest die Datei trotzdem: unbekannte Felder ignoriert sie.
+        'version': 2,
         'remotes': entries.map((e) => e.toJson()).toList(),
+        if (_activeRemoteId.isNotEmpty) 'activeRemoteId': _activeRemoteId,
+        if (_poolMembers.isNotEmpty) 'poolMembers': _poolMembers,
       }));
     } catch (e) {
       AppLog.warn('remote', 'Registry konnte nicht gespeichert werden: $e');

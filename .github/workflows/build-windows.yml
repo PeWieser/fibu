@@ -2,10 +2,16 @@ name: Build Windows App
 
 on:
   push:
-    # `arena/**` sind die Arbeits-Branches der Agenten-Sitzungen. Sie laufen
-    # hier mit, damit analyze/test/build vor dem Merge nach main grün sind —
-    # ein Agent kann keine Workflows dispatchen (403, actions:write fehlt).
-    branches: [ main, 'arena/**' ]
+    # **Nur** die Arbeits-Branches der Agenten-Sitzungen.
+    #
+    # `main` bekommt dieselben Commits per Fast-forward, nachdem der Lauf hier
+    # grün war — ein zweiter Lauf für denselben Stand wäre reine Wiederholung
+    # (sonst 4 Läufe pro Änderung: iOS + Windows auf beiden Branches).
+    #
+    # Ein Lauf auf `main` geht bei Bedarf manuell:
+    #   gh workflow run build-ios.yml --ref main
+    #   gh workflow run build-windows.yml --ref main
+    branches: [ 'arena/**' ]
   workflow_dispatch:
 
 # Läuft parallel zum iOS-Workflow (build-ios.yml) — eigener Name, eigene

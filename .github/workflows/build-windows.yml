@@ -2,7 +2,10 @@ name: Build Windows App
 
 on:
   push:
-    branches: [ main ]
+    # `arena/**` sind die Arbeits-Branches der Agenten-Sitzungen. Sie laufen
+    # hier mit, damit analyze/test/build vor dem Merge nach main grün sind —
+    # ein Agent kann keine Workflows dispatchen (403, actions:write fehlt).
+    branches: [ main, 'arena/**' ]
   workflow_dispatch:
 
 # Läuft parallel zum iOS-Workflow (build-ios.yml) — eigener Name, eigene

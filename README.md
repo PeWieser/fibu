@@ -20,7 +20,7 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - **Protocols & servers:** SFTP (with SSH key support), WebDAV (Nextcloud, ownCloud, Synology), FTP/FTPS, SMB/CIFS (Windows shares), HTTP read-only.
 - **Encryption & virtual drives:** Crypt (end-to-end encryption with your own master password), Chunker (file splitting), Union (storage pools), Combine & compression.
 
-### 2. True 1:1 Media Library Mirror (iOS & Android)
+### 2. True Two-Way Mirror (Media Library on iOS/Android, Folders on Windows)
 - Reads the real album structure through native APIs (`PhotoKit` / `PHAsset` / `photo_manager`).
 - Mirrors media with the exact hierarchy to the cloud:
   ```text
@@ -40,6 +40,10 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - **Collision-free staging filenames:** Empty or duplicated asset titles (iOS often returns null titles), screen recordings, live photos, and `/L0/001`-style asset IDs are deterministically uniquified per asset — target paths never resolve to directories.
 - **Incremental mode without duplicate storage:** Pure upload tasks stage into a transient cache folder that is deleted right after the upload — no permanent local copies of your photos. Uploads stay incremental on the remote (rclone skips identical size/modtime files).
 - **Album picker shows photo/video counts** per album (plus a grand total), loaded asynchronously via `assetCountAsync`.
+- **Windows mirrors folders two-way:** the filesystem is the source (`FilesystemMirrorSource` → `VirtualMirrorSyncEngine`), so Windows gets the same tombstones, conflict handling and safety brakes as mobile — not a one-way `rclone sync` with delete rights. Local deletes go to a `.fibu-trash` folder (30 days) instead of being hard-deleted.
+- **Conflicts are kept, not overwritten:** local and cloud are compared three-way against the last known state; if both sides changed a file, the local version is preserved under a timestamped name (`IMG_0001 (Konflikt 2026-09-04 14-03).HEIC`) and the cloud version stays put.
+- **Renames are detected** (size + mtime) and applied server-side as a move instead of delete + re-upload.
+- **Two devices, one target folder:** a cloud-side sync lock (`SyncLockService`) makes sure only one device mirrors into a folder at a time — for manual runs and scheduled runs alike — and a per-device journal (`.fibu/journal/`) lets each device see what the others did.
 
 ### 3. Filesystem & Folder Backup (Files app)
 - Full integration with the iOS Files app and Android's Storage Access Framework.
@@ -62,6 +66,7 @@ Support for every cloud storage and protocol in the rclone ecosystem:
   - **iOS:** Cupertino design (blur effects, SF Symbols, Cupertino navigation)
   - **Android:** Material 3 (dynamic color, elevation, floating bars)
 - **Accessibility:** 44 pt minimum touch targets, theme-driven text colors verified to stay readable in light **and** dark mode (no static label colors), WCAG-AA-friendly contrasts, Sanzo Wada palettes.
+- **One appearance choice:** a single row of palettes (Sanzo Wada, plus a neutral default). Each palette carries a light **and** a dark colour set, and light/dark follows the system automatically — there is no in-app mode switch. Contrast for all 8 palettes × 2 modes is pinned by an automated WCAG AA test.
 - **Live theme switching:** System light/dark changes are applied instantly (WidgetsBindingObserver → `appThemeProvider`) across every screen and dialog — text and object colors included — no app restart needed.
 - **Sticky page titles (iOS):** Dashboard, Tasks and Settings use native large titles that collapse into a fixed navigation bar while scrolling, so the page title stays visible at all times (HIG-compliant).
 
@@ -78,6 +83,21 @@ Support for every cloud storage and protocol in the rclone ecosystem:
 - **Legal in-app:** Settings → Legal also carries the full privacy notice and imprint, so the App Store / Play Store requirement for an in-app privacy policy is met without a website ([`docs/DATENSCHUTZ.md`](docs/DATENSCHUTZ.md), [`docs/IMPRESSUM.md`](docs/IMPRESSUM.md)).
 - **Diagnostics log:** Settings → "Sync Log & Diagnostics" shows every action with timestamps and severity (engine, rclone RPCs, remotes, media staging, syncs, offline events) — copyable for support. Everything is also appended to a persistent log file in the private app-support folder (next to `rclone.conf`). It is deliberately **not** in the documents folder: the log contains file names, album names and remote paths, which are personal data and must not sit in a folder the Files app exposes for export.
 
+### 9. Device-to-Device Configuration Transfer
+
+Set up a second device in one tap — no account, no server, no typing:
+
+- The receiving device starts **Receive** and becomes discoverable on the local
+  network (UDP beacon, port 47831).
+- The sending device finds it **by name** and transfers with a single tap:
+  drives **with** credentials, plus tasks. Encrypted with AES-256-GCM using a
+  random per-session key; direct device-to-device, no relay.
+- The receiver shows what arrived (device name, number of drives and tasks) and
+  applies it only after you confirm. Rejecting changes nothing.
+- Tasks that point at the other device's photo library have their source
+  cleared and need a folder again — a library from another device does not
+  exist here.
+
 ---
 
 ## Project Structure
@@ -87,9 +107,12 @@ fibu/
 ├── lib/
 │   ├── core/
 │   │   ├── localization/         # Bilingual (German & English) via AppStrings
+│   │   ├── navigation/           # AppNav — one push helper for Fluent / Cupertino / Material
 │   │   ├── services/             # RcloneService (timeouts/logging), RcloneProviderRegistry,
 │   │   │                         # SyncManifestService, AppLog, SecureStore (native Keychain channel),
-│   │   │                         # NetworkStatus, AutoRefresh, QuickActions, mirror engines
+│   │   │                         # NetworkStatus, AutoRefresh, QuickActions, DevicePairing,
+│   │   │                         # SyncLock, ChangeJournal, mirror engines
+│   │   ├── widgets/              # Win.* Fluent building blocks, Liquid Glass
 │   │   └── utils/                # File handlers, byte formatting
 │   ├── features/
 │   │   ├── dashboard/            # Overview, hero status, storage cards, explorer
@@ -98,10 +121,11 @@ fibu/
 │   │   └── shell/                # Platform-adaptive navigation frame
 │   └── theme/                    # 4pt design tokens, palettes, typography
 ├── test/
-│   ├── unit/                     # Unit tests for the provider registry, manifest, RcloneService
-│   ├── widget/                   # Widget and interaction tests
-│   └── e2e/                      # End-to-end test scripts
-├── ios/                          # iOS Runner (PhotoKit permissions, file sharing)
+│   ├── unit/                     # Provider registry, manifest, RcloneService, theme contrast, pairing
+│   └── widget/                   # Widget and interaction tests (all three platforms)
+├── integration_test/             # On-device end-to-end flows (cloud drives, tasks, MEGA sync)
+├── maestro/                      # Maestro UI flows
+├── ios/                          # iOS Runner (PhotoKit + local network permissions, file sharing)
 ├── android/                      # Android app (storage & media permissions)
 └── windows/                      # Windows desktop runner
 ```
@@ -150,8 +174,30 @@ flutter run -d android
 - [`docs/ARBEITSLOG.md`](docs/ARBEITSLOG.md) — chronological work log of the ongoing development sessions (German).
 - [`docs/RECHTS_AUDIT.md`](docs/RECHTS_AUDIT.md) — legal/compliance audit: copyright and OSS obligations, GDPR, App Store and Play Store requirements, distribution, trademarks (German, with file/line evidence).
 - [`docs/DATENSCHUTZ.md`](docs/DATENSCHUTZ.md) / [`docs/IMPRESSUM.md`](docs/IMPRESSUM.md) — publishable privacy notice and imprint; the same text ships in-app under Settings → Legal.
+- [`docs/TESTMATRIX_IOS_WINDOWS.md`](docs/TESTMATRIX_IOS_WINDOWS.md) — iOS/Windows test matrix: which cross-device scenarios hold, which are risky, with file/line evidence (German).
+- [`docs/VEREINFACHUNG.md`](docs/VEREINFACHUNG.md) — simplification pass: what was removed, what was deliberately kept, and why (German).
+- [`docs/STRESSTEST_DAU.md`](docs/STRESSTEST_DAU.md) — stress-test scenario catalogue with a verdict per case (German).
+- [`docs/ZEITPUNKT_WIEDERHERSTELLUNG.md`](docs/ZEITPUNKT_WIEDERHERSTELLUNG.md) — point-in-time restore: what can be recovered as of when (German).
 
-CI builds an unsigned iOS IPA on every push to `main` (`.github/workflows/build-ios.yml`); the artifact `ios-app-release` is attached to each run.
+## Continuous Integration
+
+Two GitHub Actions workflows run on every push to `main` (and to `arena/**`,
+the working branches of agent sessions):
+
+- **Build iOS App** (macOS) — analyze, `Rclone.xcframework`, unsigned release
+  IPA, verifies the privacy manifest is bundled, then runs the test suite.
+  Artifact: `ios-app-release`.
+- **Build Windows App** (Windows) — analyze, release build, bundles
+  `rclone.exe` next to the app, verifies the bundle, then runs the test suite.
+  Artifact: `windows-app-release`.
+
+`flutter analyze` must report **0 errors and 0 warnings**; info-level lints fail
+the run as well. On failure, each workflow posts the tail of its logs as a
+commit comment, so a red run can be read without opening the web UI:
+
+```bash
+gh api repos/PeWieser/fibu/commits/<sha>/comments --jq '.[].body'
+```
 
 ---
 

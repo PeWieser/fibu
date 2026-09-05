@@ -11,6 +11,8 @@ State                           flutter_riverpod providers
 Localization                    lib/core/localization/AppStrings — every user-visible string DE/EN;
                                 engine layers without a Ref read AppStrings.current
 Services                        lib/core/services/* — all business logic
+Navigation                      lib/core/navigation/AppNav — one push helper for all three platforms
+Shared widgets                  lib/core/widgets/* — Win.* (Fluent settings building blocks), LiquidGlass
 Native bridges (iOS)            ios/Runner/AppDelegate.swift — MethodChannels:
                                 fibu/rclone (librclone RPC), fibu/widget (App-Group push),
                                 fibu/keychain (Security.framework), fibu/system (low-power mode)
@@ -56,15 +58,82 @@ Two engines, both driven by `IosRcloneService.startBackupJob`:
      `PhotoManager.editor.deleteWithIds` — iOS shows **one batched system
      confirmation per run** (Apple does not allow silent deletion for
      third-party apps). Declined items are blocked: kept locally, never
-     re-uploaded, never asked again. Safety brakes: an empty remote listing or
-     a >50 % shrink is treated as an outage and deletes nothing.
+     re-uploaded, never asked again.
+   - **Safety brakes** (`virtual_mirror_sync.dart`): an empty remote listing is
+     treated as an outage and deletes nothing; automatic local deletes stop at
+     **20 % of the last known state and at 25 files absolute** — beyond that the
+     run reports instead of deleting.
+   - **Conflicts are preserved, not overwritten:** local and remote are
+     compared three-way against `lastKnown`. If both sides changed the same
+     path, the local version is kept under a timestamped name
+     (`IMG_0001 (Konflikt 2026-09-04 14-03).HEIC`) and the cloud version stays
+     where it is. No content hash — size + mtime decide, which is deliberate
+     (see `TESTMATRIX_IOS_WINDOWS.md`, B13).
+   - **Renames are detected**, not re-uploaded: same size + mtime under a new
+     path becomes a server-side `moveRemoteFile` (rclone `moveto`).
 2. **MirrorSyncEngine** (filesystem mirror, folders/files): classic local
    mirror directory with the same tombstone protocol.
+3. **Windows** has no photo library, so the filesystem is the source:
+   `FilesystemMirrorSource` feeds `VirtualMirrorSyncEngine` and gives Windows a
+   real two-way mirror with the same tombstones, conflict preservation and
+   brakes (instead of `rclone sync`, which is one-way with delete rights).
+   Deletes go to a `.fibu-trash` folder (30 days) rather than being hard
+   deleted. `.fibu/` is hidden from the mirror and excluded on the copy path.
+
+**Cross-device coordination.** `SyncLockService` holds one lock per target
+folder in the cloud, so two devices cannot mirror into the same folder at the
+same time — checked by manual runs *and* by the scheduler.
+`ChangeJournalService` publishes per-device journals to
+`<target>/.fibu/journal/<deviceId>.jsonl`, so a device can see what the others
+did since its own last run.
 
 Incremental (one-way) media uploads use `sync/copy` with case-insensitive
 include filters (`IMG_0001.HEIC` matches `*.heic`) and transient staging that
 is removed after the upload. A missing remote target folder is treated as an
 empty cloud side, not an error.
+
+## Device-to-device configuration transfer
+
+`DevicePairingService` moves `rclone.conf`, `remotes.json` and `tasks.json`
+from one device to another. There is exactly **one** path — discover and tap;
+a QR code and manual address entry were removed as redundant (`qr_flutter` is
+gone from `pubspec.yaml`).
+
+1. **Receiver** starts an HTTP server on an ephemeral port and broadcasts a
+   UDP beacon to `255.255.255.255:47831` every 2 s carrying
+   `{v: 2, name, host, port, secret}`.
+2. **Sender** listens on 47831 (`discover`), shows the found device by name and
+   sends with one tap. `targetUrlFor` builds `http://host:port/#secret`; the
+   secret travels as a URL **fragment**, so it is never sent on the wire.
+3. Bundle is encrypted with **AES-256-GCM** using the 32-byte session key,
+   uploaded to `/upload`, decrypted, and the server closes immediately.
+4. **The receiver writes nothing until the user confirms** (`_confirmBox`:
+   device name, drive count, task count → Apply / Reject). This is the gate
+   that replaces the QR scan: the secret is readable by anyone on the LAN, so
+   a human on the receiving device decides what lands on disk.
+
+Two traps worth keeping in the tests:
+
+- `_generateSecret` emits base64url **without** padding (32 bytes = 43 chars);
+  `base64Url.decode` requires a multiple of four, so `_keyFrom` pads first
+  (`_padBase64Url`). Without that, every transfer ever attempted threw
+  `FormatException` and the UI only reported "transfer failed".
+- Beacons with `v: 1` (no secret) are skipped when discovering — offering a
+  target that cannot be authenticated is worse than showing none.
+
+iOS needs `NSLocalNetworkUsageDescription`, otherwise the permission prompt
+never appears and broadcast is blocked silently (whether Apple additionally
+requires the *Multicast Networking* entitlement is only verifiable on a real
+device — `TESTMATRIX_IOS_WINDOWS.md`, D11).
+
+## Appearance
+
+One choice: a Sanzo Wada palette (or the neutral default). Each palette ships
+a light **and** a dark set, and `appThemeProvider` picks the set from
+`systemBrightnessProvider` — there is no in-app light/dark switch any more.
+Contrast for all 8 palettes × 2 modes is pinned by `test/unit/theme_contrast_test.dart`
+(WCAG AA ≥ 4.5:1). Old settings files with separate light/dark palettes are
+migrated on load (`ThemeNotifier.paletteFromSettings`: the light choice wins).
 
 ## Live data & status
 
@@ -111,8 +180,28 @@ callback too — background isolates have full engine access.
 
 ## CI
 
-`.github/workflows/build-ios.yml`: on every push to `main`, GitHub Actions
-builds `Rclone.xcframework` (Go + gomobile) and an unsigned release IPA
-(artifact `ios-app-release`). Swift Package Manager is disabled per project
+Two workflows, both on every push to `main` **and** to `arena/**` (the working
+branches of agent sessions — they cannot dispatch workflows, so the push is the
+only trigger):
+
+- `.github/workflows/build-ios.yml` (macOS): `flutter pub get` → `flutter
+  analyze` → build `Rclone.xcframework` (Go + gomobile) → unsigned release IPA
+  → **verify `PrivacyInfo.xcprivacy` is in the bundle** → package → artifact
+  `ios-app-release` → `flutter test`.
+- `.github/workflows/build-windows.yml` (Windows): analyze → release build →
+  bundle `rclone.exe` next to the app → verify the bundle → artifact →
+  `flutter test`.
+
+`flutter analyze` must stay at 0 errors **and** 0 warnings (info-level lints
+fail the run too). Swift Package Manager is disabled per project
 (`pubspec.yaml → flutter.config.enable-swift-package-manager: false`) until
 `flutter_web_auth_2`, `open_filex` and `workmanager` adopt SPM.
+
+**Reading a red run:** step logs live on `results-receiver.actions.githubusercontent.com`,
+which is unreachable from the agent sandbox (TLS blocked) — and so are artifact
+downloads. Every workflow therefore ends with a step that posts the tail of each
+log file as a **commit comment** on failure:
+
+```bash
+gh api repos/PeWieser/fibu/commits/<sha>/comments --jq '.[].body'
+```

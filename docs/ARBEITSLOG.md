@@ -1591,3 +1591,55 @@ dafür steht jetzt an einer Stelle. Erster Baustein des Musters aus
   Entitlement* nötig — das lässt sich hier nicht prüfen, nur am Gerät.
 * L-08 Impressum (Anschrift fehlt), L-16 Bundle-ID (`com.example.fibu`),
   L-24 Markenrecherche „Fibu", L-29 eigene Google-OAuth-App.
+
+---
+
+# Arbeits-Log — Session 2026-09-05 (Doku)
+
+**Nur Markdown, kein Code** — deshalb ohne CI-Verifikation (analyze, Build und
+Tests berühren keine `.md`-Datei). Jede neu geschriebene Aussage ist vorher
+gegen den Code geprüft: `.fibu-trash` + 30 Tage (`filesystem_mirror_source.dart:31,34`),
+`.fibu/journal/<deviceId>.jsonl` (`change_journal_service.dart:248`),
+Sperre `.fibu/lock.json` im Zielordner (`sync_lock_service.dart:17,29`),
+Bremsen 20 % / 25 Dateien (`virtual_mirror_sync.dart:702,712,83`),
+Konflikt-Name (`_conflictRelFor`, `virtual_mirror_sync.dart:1156`),
+Artefakt `windows-app-release` (`build-windows.yml:129`).
+
+## README.md
+- Zwei-Wege-Spiegel auf Windows, Konflikt-Erhalt, Rename-Erkennung, Sync-Lock
+  und geräteübergreifender Verlauf ergänzt; Abschnitt 2 umbenannt.
+- Neuer Abschnitt 9 „Device-to-Device Configuration Transfer".
+- Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem System.
+- Projektstruktur korrigiert: `core/navigation`, `core/widgets`,
+  `integration_test/`, `maestro/` — `test/e2e/` existiert nicht.
+- Doku-Liste vervollständigt, eigener CI-Abschnitt für beide Workflows
+  inklusive des Commit-Kommentar-Kanals für rote Läufe.
+
+## docs/ARCHITECTURE.md
+- Layer um `navigation` (AppNav) und `widgets` (Win.*, Liquid Glass) ergänzt.
+- Sync-Engines: Windows-Spiegel als dritte Engine, Bremsen auf 20 % / 25
+  aktualisiert (stand noch 50 %), Konflikt-Erhalt, Rename-Erkennung,
+  Sync-Lock und Journal.
+- Neue Abschnitte „Device-to-device configuration transfer" (Ablauf,
+  Bestätigung als Tor, die zwei Fallen: Base64-Padding und v1-Beacons) und
+  „Appearance".
+- CI: beide Workflows, `arena/**`, und wie man einen roten Lauf liest.
+
+## docs/DATENSCHUTZ.md
+- **Widerspruch aufgelöst:** „Sie werden damit nicht … auf ein anderes Gerät
+  übertragen" galt seit der Kopplungsfunktion nicht mehr. Jetzt: nicht von
+  selbst, und nicht ins Geräte-Backup — aber auf deinen ausdrücklichen Wunsch.
+- Neuer Abschnitt „Konfiguration von Gerät zu Gerät übertragen": lokales Netz,
+  kein Server, AES-256-GCM, Bestätigung am Empfänger, Auffindbarkeit im Netz
+  während des Wartens, was genau ersetzt wird.
+- Berechtigung „Lokales Netz (iOS)" ergänzt.
+- **Offen:** Der In-App-Text ist eine zweite, hardcodierte Fassung
+  (`legal_documents_screen.dart`, `LegalDocuments.privacy`) und enthält diesen
+  Absatz noch nicht. Das anzugleichen ist eine Code-Änderung und braucht einen
+  CI-Lauf.
+
+## docs/STRESSTEST_DAU.md
+- J2 (getrennte Hell-/Dunkel-Paletten) und K2 (zwei Geräte, ein Zielordner)
+  als „nachgetragen 2026-09-05" aktualisiert, CI-Hinweis ergänzt. Der
+  ursprüngliche Prüfstand der Datei (`main @ b5a95c9`) bleibt stehen — die
+  übrigen Befunde sind nicht neu geprüft.

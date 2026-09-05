@@ -19,7 +19,9 @@ Fibu hat keinen eigenen Server. Die App enthält keine Analytics-, Werbungs-
 oder Absturz-SDKs, legt keine Konten an und überträgt nichts an den
 Entwickler. Alles, was die App liest — Fotos, Videos, Dateien und deine
 Zugangsdaten — bleibt auf deinem Gerät oder geht ausschließlich in die
-Cloud-Konten, die du selbst eingerichtet hast.
+Cloud-Konten, die du selbst eingerichtet hast. Auf ein anderes Gerät gelangt
+etwas nur, wenn du die Gerät-zu-Gerät-Übertragung selbst auslöst und am
+Empfänger bestätigst.
 
 ## Verantwortlicher
 
@@ -48,10 +50,44 @@ darin, die Sicherung deiner eigenen Daten überhaupt durchführen zu können.
 
 Auf iOS und macOS werden Zugangsdaten im nativen Apple-Schlüsselbund
 (Security.framework) gespeichert, Zugriffsklasse „After First Unlock, this
-device only". Sie werden damit nicht in ein Geräte-Backup und nicht auf ein
-anderes Gerät übertragen. Auf anderen Plattformen liegen sie in einer Datei im
-privaten App-Ordner. Zugangsdaten werden niemals protokolliert und niemals an
-den Entwickler übermittelt.
+device only". Sie gelangen damit **nicht** in ein Geräte-Backup (iCloud-Backup,
+iTunes) und verlassen das Gerät nicht von selbst. Auf anderen Plattformen
+liegen sie in einer Datei im privaten App-Ordner. Zugangsdaten werden niemals
+protokolliert und niemals an den Entwickler übermittelt.
+
+Die einzige Ausnahme ist die Übertragung, die du selbst auslöst — siehe
+nächsten Abschnitt.
+
+## Konfiguration von Gerät zu Gerät übertragen
+
+Wenn du ein zweites Gerät einrichtest, kannst du Laufwerke, Zugangsdaten und
+Aufgaben direkt von einem Gerät auf das andere übertragen. Dabei gilt:
+
+- **Nur dein lokales Netz.** Die Daten gehen direkt von Gerät zu Gerät
+  (WLAN/LAN). Es gibt keinen Server dazwischen, keine Cloud und kein Konto —
+  der Entwickler sieht nichts davon.
+- **Nur auf deinen ausdrücklichen Wunsch.** Das sendende Gerät überträgt erst
+  nach einem Tipp auf ein gefundenes Gerät. Das empfangende Gerät schreibt
+  nichts, bevor du dort „Übernehmen" angetippt hast; vorher siehst du, von
+  welchem Gerät die Konfiguration kommt und wie viele Laufwerke und Aufgaben
+  sie enthält. „Ablehnen" ändert nichts.
+- **Verschlüsselt.** Die Übertragung ist mit AES-256-GCM verschlüsselt; der
+  Schlüssel wird je Sitzung zufällig erzeugt. Eine verfälschte Übertragung
+  fällt beim Entschlüsseln auf und wird verworfen.
+- **Sichtbar im Netz, solange du wartest.** Ein Gerät, das auf eine
+  Konfiguration wartet, meldet seinen Namen und seine Adresse im lokalen Netz
+  (UDP-Port 47831), damit das andere Gerät es finden kann. In einem fremden
+  Netz (Hotel, Café) solltest du die Funktion deshalb nicht offen laufen
+  lassen. Geschrieben wird am Empfänger trotzdem nichts ohne deine
+  Bestätigung.
+- **Was übernommen wird:** `rclone.conf` (Laufwerke **mit** Zugangsdaten),
+  die Laufwerksliste und die Aufgaben. Aufgaben, die auf die Foto-Mediathek
+  des anderen Geräts zeigen, bekommen ihre Quelle entzogen und müssen neu
+  gewählt werden. Bestehende Laufwerke und Aufgaben auf dem Empfänger werden
+  dabei ersetzt.
+
+Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO — die Übertragung ist die
+Durchführung der von dir gewünschten Funktion.
 
 ## Anmeldung über OAuth — wichtiger Hinweis zu rclone.org
 
@@ -89,6 +125,10 @@ Datenschutzerklärung des jeweiligen Anbieters.
   („Auswahl …") sieht die App ausschließlich die von dir gewählten Bilder.
 - **Dateien:** Nur die Ordner, die du über die Dateien-App freigibst.
 - **Netzwerk:** Für die Übertragung an deine Cloud-Konten.
+- **Lokales Netz (iOS):** Nur für die Gerät-zu-Gerät-Übertragung. iOS fragt
+  einmal nach, ob Fibu Geräte im selben Netz finden darf. Ohne diese Freigabe
+  funktioniert allein die Übertragung nicht — Sicherung und Wiederherstellung
+  laufen davon unberührt.
 - **Hintergrundaktualisierung:** Für geplante Sicherungen, die iOS zeitlich
   selbst steuert.
 

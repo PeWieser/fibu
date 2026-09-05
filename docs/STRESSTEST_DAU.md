@@ -169,7 +169,7 @@ Der grep nach `textScaler` war kein Beleg für fehlende Skalierung.
 | # | Szenario | Bewertung | Hinweis |
 |---|---|---|---|
 | J1 | Hell/Dunkel während der Nutzung umschalten | ✅ | `systemBrightnessProvider` live |
-| J2 | Palette wählen, dann System auf Dunkel | ✅ | Getrennte Hell-/Dunkel-Paletten |
+| J2 | Palette wählen, dann System auf Dunkel | ✅ | **Nachgetragen 2026-09-05:** Getrennte Hell-/Dunkel-Paletten gibt es nicht mehr. Es gibt **eine** Palette; sie bringt beide Farbsets mit und `appThemeProvider` wählt das Set nach `systemBrightnessProvider`. Der Umschaltfall ist damit derselbe Code-Pfad, nur mit anderer Helligkeit |
 | J3 | Jede Palette auf Lesbarkeit | ✅ | WCAG AA ≥ 4.5:1 in 8 Paletten × 2 Modi × 7 Kombinationen, per Test abgesichert |
 | J4 | Sprache umschalten, während ein Sync läuft | ⚠️ | Laufende Logs mischen Sprachen (kosmetisch) |
 | J5 | Aufgabenname mit Emoji / 200 Zeichen | `LengthLimitingTextInputFormatter(80)` im Wizard (iOS + Windows), ohne Zähler-UI. | ✅ |
@@ -181,7 +181,7 @@ Der grep nach `textScaler` war kein Beleg für fehlende Skalierung.
 | # | Szenario | Bewertung | Hinweis |
 |---|---|---|---|
 | K1 | App löschen und neu installieren | ⚠️ | Mirror-Zustand liegt in `Application Support` → weg. Cloud bleibt; erster Lauf adoptiert über `adoptOrphans` |
-| K2 | Zweites Gerät, gleiches Cloud-Ziel | ⚠️ | Dateinamen können kollidieren (`IMG_0001.HEIC` existiert auf beiden Geräten). Name+Größe trennt sie jetzt korrekt — aber beide Geräte halten denselben Ordner für „ihren" |
+| K2 | Zweites Gerät, gleiches Cloud-Ziel | ⚠️ | Dateinamen können kollidieren (`IMG_0001.HEIC` existiert auf beiden Geräten). Name+Größe trennt sie jetzt korrekt — aber beide Geräte halten denselben Ordner für „ihren". **Nachgetragen 2026-09-05:** `SyncLockService` verhindert, dass beide **gleichzeitig** in denselben Zielordner spiegeln; Konflikte werden per 3-Way-Abgleich als Zeitstempel-Kopie behalten statt überschrieben |
 | K3 | Upgrade von einer Version mit globalem Mirror-Zustand | ✅ | Nur `blocked`/`adopted` werden migriert, nie `items`/Tombstones |
 | K4 | Systemuhr verstellt | ⚠️ | Konflikt-Auflösung nutzt Modtime; 60 s Toleranz |
 
@@ -204,3 +204,7 @@ Zuerst die Datenverlust-Pfade, weil sie irreversibel sind:
 - Laufzeitverhalten auf einem echten Gerät (kein Simulator, kein Flutter-SDK in dieser Umgebung).
 - Backend-spezifisches Verhalten einzelner rclone-Provider (Sonderzeichen in Pfaden, Server-seitiges Kopieren).
 - Ob `flutter analyze` / `flutter test` aktuell grün sind — der Lauf mit deinem Workflow-Update wurde bei „Set up job" abgebrochen, bevor er startete.
+  **Nachgetragen 2026-09-05:** Beide Workflows laufen inzwischen bei jedem Push
+  und sind auf `main` @ `3139d5b` grün (Windows-Lauf 33987370958, iOS-Lauf
+  33987370983): analyze 0 Fehler/0 Warnungen, Build, Tests. Die Einzelbefunde
+  dieses Katalogs wurden dadurch **nicht** neu geprüft.

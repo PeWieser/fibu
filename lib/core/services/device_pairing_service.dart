@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../utils/app_paths.dart';
 import 'app_log_service.dart';
@@ -409,6 +410,17 @@ class DevicePairingService {
     }
     await server?.close(force: true);
   }
+
+  /// Nur für Tests: Verschlüsseln und Entschlüsseln getrennt vom Transport
+  /// prüfen zu können. Beide Methoden sind privat, weil sie in der App nur
+  /// als Paar hinter `send`/`waitForBundle` vorkommen sollen.
+  @visibleForTesting
+  static Future<Uint8List> encryptBundle(PairingBundle bundle, String secret) =>
+      _encryptBundle(bundle, secret);
+
+  @visibleForTesting
+  static Future<PairingBundle> decryptBundle(Uint8List bytes, String secret) =>
+      _decryptBundle(bytes, secret);
 
   // ---------------------------------------------------------------------------
   // Sender (Mobil)

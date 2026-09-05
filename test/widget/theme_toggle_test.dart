@@ -77,6 +77,18 @@ void main() {
         // Ausgangszustand: Standard, keine Palette.
         expect(container.read(themeConfigProvider).selectedPalette, isNull);
 
+        // „Standard" zuerst antippen, solange die Reihe noch nicht gescrollt
+        // ist. `ensureVisible` schiebt die horizontale Reihe nach rechts —
+        // was dabei links aus dem Viewport wandert, baut `ListView.builder`
+        // nicht mehr, und der Finder findet es auch mit ensureVisible nicht
+        // (er braucht das Widget, um es sichtbar zu machen). Genau daran ist
+        // der alte Test dieser Datei gescheitert.
+        final standardFinder = find.text(strings.paletteStandard);
+        expect(standardFinder, findsOneWidget);
+        await tester.tap(standardFinder);
+        await tester.pumpAndSettle();
+        expect(container.read(themeConfigProvider).selectedPalette, isNull);
+
         // Genau EINE Reihe: Jede Palette steht jetzt einmal da, nicht zweimal
         // (früher Hell- und Dunkel-Reihe).
         final akiFinder = find.text('Aki (Autumn)');
@@ -91,16 +103,6 @@ void main() {
           container.read(themeConfigProvider).selectedPalette,
           equals(SanzoWadaPalette.autumnAki),
         );
-
-        // Zurück auf Standard — der erste Swatch in der Reihe.
-        final standardFinder = find.text(strings.paletteStandard);
-        expect(standardFinder, findsOneWidget);
-        await tester.ensureVisible(standardFinder);
-        await tester.pumpAndSettle();
-        await tester.tap(standardFinder);
-        await tester.pumpAndSettle();
-
-        expect(container.read(themeConfigProvider).selectedPalette, isNull);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

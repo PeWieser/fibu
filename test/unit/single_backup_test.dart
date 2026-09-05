@@ -57,11 +57,17 @@ void main() {
       expect(reduced.single.id, 'erste');
     });
 
-    test('eine zweite Sicherung ersetzt die erste', () {
+    test('eine zweite Sicherung ersetzt die erste', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
+      // Der Notifier lädt im Konstruktor asynchron nach. Erst warten, bis
+      // das erledigt ist — sonst läuft der Ladevorgang in einen Container,
+      // den der Test gerade abgeräumt hat.
       final notifier = container.read(tasksListProvider.notifier);
+      while (!container.read(tasksLoadedProvider)) {
+        await Future<void>.delayed(Duration.zero);
+      }
       notifier.addTask(task(id: 'alt', target: 'mega'));
       notifier.addTask(task(id: 'neu', target: 'b2'));
 

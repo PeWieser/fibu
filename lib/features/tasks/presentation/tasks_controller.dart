@@ -351,7 +351,13 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
     } catch (_) {
       // Catch exceptions silently in unit tests (e.g. MissingPluginException for path_provider)
     } finally {
-      _ref.read(tasksLoadedProvider.notifier).state = true;
+      // Der Ladevorgang läuft ohne await im Konstruktor an. Ist der
+      // Provider-Container bis dahin entsorgt (Test-Ende, Neuaufbau der App),
+      // würde das Schreiben „Tried to read a provider from a
+      // ProviderContainer that was already disposed" werfen.
+      if (mounted) {
+        _ref.read(tasksLoadedProvider.notifier).state = true;
+      }
     }
   }
 

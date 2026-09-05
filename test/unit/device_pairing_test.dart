@@ -46,16 +46,18 @@ void main() {
       // Ohne Fragment lehnt send() ab — das war der Fehler.
       expect(parsed.fragment, isNotEmpty);
       expect(parsed.fragment, device.secret);
-      // Das Fragment selbst geht nie über die Leitung.
-      expect(parsed.replace(fragment: '').toString(),
-          'http://192.168.1.20:53124/');
+      // Das Fragment selbst geht nie über die Leitung: send() schickt
+      // `parsed.replace(fragment: '')`. (Uri hängt ein leeres `#` an — das
+      // ist kein Inhalt, nur Schreibweise.)
+      expect(parsed.replace(fragment: '').fragment, isEmpty);
     });
 
     test('Bundle kommt verschlüsselt an und ist danach dasselbe', () async {
-      final session = await DevicePairingService.startReceiver();
-      expect(session, isNotNull,
-          reason: 'Empfänger konnte nicht starten — hat der Test-Rechner '
-              'eine Netzadresse (nicht Loopback)?');
+      // Loopback: Der Test soll an Verschlüsselung und Protokoll scheitern
+      // können, nicht an einer Firewall oder am Routing des CI-Runners.
+      final session =
+          await DevicePairingService.startReceiver(bindHost: '127.0.0.1');
+      expect(session, isNotNull, reason: 'Empfänger konnte nicht starten');
       addTearDown(DevicePairingService.stopReceiver);
 
       const bundle = PairingBundle(
@@ -83,7 +85,11 @@ void main() {
         )),
         bundle: bundle,
       );
-      expect(ok, isTrue);
+      expect(ok, isTrue,
+          reason: DevicePairingService.isListening
+              ? 'Der Server lief noch — die Übertragung selbst ist '
+                  'fehlgeschlagen (Verschlüsselung oder HTTP-Antwort).'
+              : 'Der Server war schon weg, bevor das Bundle ankam.');
 
       final received = await waiting;
       expect(received, isNotNull);
@@ -96,7 +102,8 @@ void main() {
     });
 
     test('Ein Bundle mit falschem Schlüssel wird abgelehnt', () async {
-      final session = await DevicePairingService.startReceiver();
+      final session =
+          await DevicePairingService.startReceiver(bindHost: '127.0.0.1');
       expect(session, isNotNull);
       addTearDown(DevicePairingService.stopReceiver);
 

@@ -267,11 +267,15 @@ class DevicePairingService {
 
   /// Startet die Sitzung. Liefert null, wenn kein Server gebunden werden
   /// konnte oder keine lokale Adresse gefunden wurde.
-  static Future<PairingSession?> startReceiver() async {
+  /// [bindHost] setzt die Netzadresse ausdrücklich — gedacht für Tests, die
+  /// über Loopback gehen, statt eine Firewall oder ein Routing ins eigene
+  /// LAN vorauszusetzen. Ohne Angabe wird die lokale Netzadresse gesucht;
+  /// die Kopplung soll ja von einem *anderen* Gerät erreichbar sein.
+  static Future<PairingSession?> startReceiver({String? bindHost}) async {
     await stopReceiver();
 
     final secret = _generateSecret();
-    final host = await _localAddress();
+    final host = bindHost ?? await _localAddress();
     if (host == null) {
       AppLog.warn('pairing',
           'Keine lokale Netzadresse gefunden — Kopplung nicht möglich');
@@ -282,7 +286,15 @@ class DevicePairingService {
       final server = await HttpServer.bind(host, 0);
       _server = server;
       _expectedSecret = secret;
-      _incoming = Completer<PairingBundle>();
+      final incoming = Completer<PairingBundle>();
+      _incoming = incoming;
+      // `stopReceiver` beendet eine offene Sitzung mit completeError. Hört in
+      // dem Moment niemand zu (Bildschirm schon geschlossen, Test ohne
+      // waitForBundle), läuft der Fehler als unbehandelter asynchroner Fehler
+      // durch die Zone. `ignore` meldet ihn als behandelt, ohne ihn zu
+      // verschlucken: `waitForBundle` hängt am selben Future und bekommt ihn
+      // weiterhin.
+      incoming.future.ignore();
       _listen(server);
       // Erkennungs-Beacon: Mobilgeräte finden diesen Empfänger damit ohne
       // QR-Code und ohne Eingabe.

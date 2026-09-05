@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
@@ -8,6 +9,10 @@ import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 /// Konfiguration — muss die Auswahl deterministisch sein, sonst entscheidet
 /// der Zufall, wohin gesichert wird.
 void main() {
+  // Der Notifier schreibt seine Liste weg; ohne Binding wirft schon der
+  // MethodChannel-Aufruf statt der erwarteten MissingPluginException.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   BackupTask task({
     required String id,
     required String target,
@@ -50,6 +55,19 @@ void main() {
         task(id: 'zweite', target: 'b2', isActive: false),
       ]);
       expect(reduced.single.id, 'erste');
+    });
+
+    test('eine zweite Sicherung ersetzt die erste', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(tasksListProvider.notifier);
+      notifier.addTask(task(id: 'alt', target: 'mega'));
+      notifier.addTask(task(id: 'neu', target: 'b2'));
+
+      final tasks = container.read(tasksListProvider);
+      expect(tasks, hasLength(1));
+      expect(tasks.single.id, 'neu');
     });
 
     test('die Reihenfolge der Datei entscheidet, nicht die Sortierung', () {

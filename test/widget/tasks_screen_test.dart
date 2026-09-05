@@ -136,7 +136,7 @@ void main() {
       }
     });
 
-    testWidgets('Renders populated tasks list with clean minimal rows and chevrons', (WidgetTester tester) async {
+    testWidgets('Renders the single backup as a clean minimal row with chevron', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       try {
@@ -145,17 +145,8 @@ void main() {
           localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
 
-        container.read(tasksListProvider.notifier).addTask(
-          const BackupTask(
-            id: 'task_inc',
-            name: 'Incremental Backup Task',
-            sourcePath: 'D:\\Photos',
-            targetRemote: 'OneDrive_Backup:backup',
-            schedule: 'Daily at 02:00',
-            isActive: true,
-            syncMode: SyncMode.incremental,
-          ),
-        );
+        // Modell „eine Cloud, eine Sicherung": addTask ersetzt, eine Liste
+        // mit zwei Zeilen kann es gar nicht mehr geben.
         container.read(tasksListProvider.notifier).addTask(
           const BackupTask(
             id: 'task_mir',
@@ -178,10 +169,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Incremental Backup Task'), findsOneWidget);
+        // Eine Sicherung, eine Zeile. „Aktiv" darf nicht auftauchen — die
+        // einzige Sicherung ist pausiert.
         expect(find.text('Mirror Backup Task'), findsOneWidget);
-        expect(find.text(strings.statusActive), findsOneWidget);
         expect(find.text(strings.statusInactive), findsOneWidget);
+        expect(find.text(strings.statusActive), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

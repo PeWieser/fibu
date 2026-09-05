@@ -18,6 +18,10 @@ import '../helpers/platform_mocks.dart';
 ///   OneDrive (Mock)     100 GB gesamt / 15 GB belegt
 ///   alles andere          2 GB gesamt /  0,5 GB belegt
 void main() {
+  // Der path_provider-Mock hängt am Test-Binary-Messenger — ohne
+  // initialisiertes Binding wirft schon setUpAll.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const gb = 1024 * 1024 * 1024;
   const google = 'Google Drive (Mock)';
   const onedrive = 'OneDrive (Mock)';

@@ -74,6 +74,17 @@
 	<string>Damit deine Fotos und Videos 1:1 in deiner eigenen Cloud landen.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Damit wiederhergestellte Fotos und Videos zurück in deine Mediathek kommen.</string>
+	<!--
+		Lokales Netz (iOS 14+). Ohne diesen Schlüssel zeigt iOS den
+		Berechtigungs-Dialog für das lokale Netz gar nicht erst an und
+		blockiert Broadcast/Unicast ins eigene Netz still — die automatische
+		Geräte-Erkennung der Konfig-Übertragung (UDP-Beacon, Port 47831,
+		siehe device_pairing_service.dart) würde damit nie ein Gerät finden.
+		Da die Erkennung der einzige Weg zur Konfig-Übertragung ist, ist
+		dieser Eintrag Pflicht, nicht Deko.
+	-->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Damit sich deine Fibu-Geräte im selben WLAN finden und Laufwerke, Zugangsdaten und Aufgaben direkt untereinander übertragen können — ohne Server dazwischen.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

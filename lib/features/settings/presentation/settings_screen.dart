@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/widgets/liquid_glass.dart';
+import '../../../core/navigation/app_nav.dart';
 import '../../../core/widgets/windows_controls.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
@@ -25,8 +26,8 @@ import 'licenses_screen.dart';
 /// Platform-adaptive Settings screen structured according to Apple HIG:
 /// 1. Cloud Storage (Manage Cloud Drives)
 /// 2. Network & Cellular (Wi-Fi Only Sync toggle)
-/// 3. Appearance & Design (Sync with System, Dark mode, Sanzo Wada palettes)
-/// 4. Language (System Auto / Deutsch / English)
+/// 3. Appearance & Design (eine Palette — Hell/Dunkel folgt dem System)
+/// 4. Language (System Auto / Deutsch / English) — liegt bei 3.
 /// 5. About (App Version, Developer, Cloud Engine, License, Credits)
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -43,67 +44,33 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  // Alle fünf Ziele öffnen über [AppNav.push]: eine Plattform-Weiche für das
+  // ganze Projekt statt einer pro Ziel. Die Übergänge bleiben plattformeigen.
+
   /// Gerät-zu-Gerät-Übertragung der Konfiguration.
-  void _navigateToPairing(BuildContext context) {
-    const screen = DevicePairingScreen();
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => screen)
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
-            : material.MaterialPageRoute(builder: (_) => screen));
-    if (platform == TargetPlatform.iOS) IosHaptics.selection();
-    Navigator.of(context).push(route);
-  }
+  void _navigateToPairing(BuildContext context) =>
+      AppNav.push(context, const DevicePairingScreen());
 
-  void _navigateToCloudDrives(BuildContext context) {
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => const CloudDrivesScreen())
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => const CloudDrivesScreen())
-            : material.MaterialPageRoute(builder: (_) => const CloudDrivesScreen()));
-    Navigator.of(context).push(route);
-  }
+  void _navigateToCloudDrives(BuildContext context) =>
+      AppNav.push(context, const CloudDrivesScreen());
 
-  void _navigateToDebugLog(BuildContext context) {
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => const DebugLogScreen())
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => const DebugLogScreen())
-            : material.MaterialPageRoute(builder: (_) => const DebugLogScreen()));
-    Navigator.of(context).push(route);
-  }
+  void _navigateToDebugLog(BuildContext context) =>
+      AppNav.push(context, const DebugLogScreen());
 
   /// Öffnet alle Open-Source-Lizenzen als EIN durchscrollbares Dokument
   /// (LicenseRegistry: alle Dart-Pakete plus manuell registrierte
   /// Komponenten wie rclone/librclone und gomobile — siehe main.dart).
-  void _openLicenses(BuildContext context, AppStrings strings, AppThemeData theme) {
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => const LicensesScreen())
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => const LicensesScreen())
-            : material.MaterialPageRoute(builder: (_) => const LicensesScreen()));
-    Navigator.of(context).push(route);
-  }
+  void _openLicenses(BuildContext context) =>
+      AppNav.push(context, const LicensesScreen());
 
   /// Öffnet einen statischen Rechtstext (Datenschutzerklärung / Impressum).
   void _openLegalDocument(
     BuildContext context,
     String title,
     List<LegalDocSection> sections,
-  ) {
-    final screen = LegalDocumentScreen(title: title, sections: sections);
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => screen)
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
-            : material.MaterialPageRoute(builder: (_) => screen));
-    Navigator.of(context).push(route);
-  }
+  ) =>
+      AppNav.push(
+          context, LegalDocumentScreen(title: title, sections: sections));
 
   void _showIOSLanguagePicker(BuildContext context, WidgetRef ref, AppLocaleMode currentMode, AppStrings strings) {
     cupertino.showCupertinoModalPopup<void>(
@@ -250,51 +217,30 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SizedBox(height: theme.xl),
 
-              // 3. Appearance & Design
+              // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem
+              // System. Zwei Reihen (Hell/Dunkel) plus zwei Modus-Schalter
+              // wären 18 Entscheidungen für etwas, das man einmal festlegt.
               Win.sectionHeader(strings.appearanceSection, theme),
               Win.group(
                 theme: theme,
                 children: [
-                  Win.toggle(
-                    theme: theme,
-                    title: strings.syncWithSystem,
-                    subtitle: strings.tooltipThemeMode,
-                    value: config.syncWithSystem,
-                    onChanged: (val) => ref
-                        .read(themeConfigProvider.notifier)
-                        .setSyncWithSystem(val),
-                    first: true,
-                    last: config.syncWithSystem,
-                  ),
-                  // Eigener Hell/Dunkel-Schalter nur, wenn das System nicht
-                  // übernommen wird — sonst ist er wirkungslos und verwirrt.
-                  if (!config.syncWithSystem)
-                    Win.toggle(
-                      theme: theme,
-                      title: strings.useDarkMode,
-                      value: config.forceDarkMode,
-                      onChanged: (val) => ref
-                          .read(themeConfigProvider.notifier)
-                          .setForceDarkMode(val),
-                      last: true,
+                  Padding(
+                    padding:
+                        EdgeInsets.fromLTRB(theme.md, theme.md, theme.md, 0),
+                    child: Text(
+                      strings.appearanceAutoHint,
+                      style: TextStyle(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                          height: 1.4),
                     ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        theme.md, theme.sm, theme.md, theme.md),
+                    child: _buildPaletteRow(context, ref, config, strings),
+                  ),
                 ],
-              ),
-              // Paletten bleiben bewusst eigene Bereiche: Sie sind eine
-              // Auswahl aus acht Möglichkeiten, keine Ja/Nein-Entscheidung.
-              Win.expander(
-                theme: theme,
-                header: strings.lightModePalette,
-                subtitle: strings.tooltipWadaPalette,
-                leading: fluent.FluentIcons.photo2,
-                content: _buildWadaPaletteRow(context, ref, config, false, strings),
-              ),
-              Win.expander(
-                theme: theme,
-                header: strings.darkModePalette,
-                subtitle: strings.tooltipWadaPalette,
-                leading: fluent.FluentIcons.photo2,
-                content: _buildWadaPaletteRow(context, ref, config, true, strings),
               ),
 
               // Sprache gehoert zum Erscheinungsbild, nicht in eine eigene
@@ -368,7 +314,7 @@ class SettingsScreen extends ConsumerWidget {
                     leading: fluent.FluentIcons.page,
                     trailing:
                         const Icon(fluent.FluentIcons.chevron_right, size: 14),
-                    onPressed: () => _openLicenses(context, strings, theme),
+                    onPressed: () => _openLicenses(context),
                     semanticLabel: strings.openSourceLicenses,
                     first: true,
                   ),
@@ -492,73 +438,25 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
 
-              // 3. Appearance & Design Section
-              Semantics(
-                label: strings.tooltipThemeMode,
-                child: cupertino.CupertinoListSection.insetGrouped(
-                  backgroundColor: theme.surface,
-                  header: IosTheme.sectionHeader(strings.themeMode, theme),
-                  children: [
-                    cupertino.CupertinoListTile(
-                      title: Text(strings.syncWithSystem, style: const TextStyle(fontSize: 16)),
-                      trailing: cupertino.CupertinoSwitch(
-                        value: config.syncWithSystem,
-                        onChanged: (val) {
-                          IosHaptics.selection();
-                          ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                        },
-                      ),
-                    ),
-                    if (!config.syncWithSystem)
-                      cupertino.CupertinoListTile(
-                        title: Text(strings.useDarkMode, style: const TextStyle(fontSize: 16)),
-                        trailing: cupertino.CupertinoSwitch(
-                          value: config.forceDarkMode,
-                          onChanged: (val) {
-                            IosHaptics.selection();
-                            ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              // Sanzo Wada Palette Swatches
+              // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem
+              // System. Kein Modus-Schalter, keine zweite Reihe — die
+              // gewählte Palette bringt beide Farbsets mit.
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.sm),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Semantics(
-                      label: strings.tooltipWadaPalette,
-                      child: Text(
-                        strings.lightModeSection,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.textSecondary,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.3,
-                        ),
+                    IosTheme.sectionHeader(strings.appearanceSection, theme),
+                    Text(
+                      strings.appearanceAutoHint,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.textSecondary,
+                        height: 1.4,
                       ),
                     ),
                     SizedBox(height: theme.sm),
-                    _buildWadaPaletteRow(context, ref, config, false, strings),
-                    SizedBox(height: theme.lg),
-                    Semantics(
-                      label: strings.tooltipWadaPalette,
-                      child: Text(
-                        strings.darkModeSection,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.textSecondary,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: theme.sm),
-                    _buildWadaPaletteRow(context, ref, config, true, strings),
+                    _buildPaletteRow(context, ref, config, strings),
                     // Sprache gehoert hierher. Eine eigene Sektion mit genau
                     // einem Eintrag kostet Ueberschrift und Rahmen fuer nichts
                     // und zwingt zum Scrollen, wo eine Zeile gereicht haette.
@@ -644,7 +542,7 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     onTap: () {
                       IosHaptics.selection();
-                      _openLicenses(context, strings, theme);
+                      _openLicenses(context);
                     },
                   ),
                   cupertino.CupertinoListTile(
@@ -770,51 +668,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             SizedBox(height: theme.xl),
 
-            // 3. Appearance & Design
+            // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem System
             Text(strings.appearanceSection, style: material.Theme.of(context).textTheme.titleSmall),
+            SizedBox(height: theme.xs),
+            Text(
+              strings.appearanceAutoHint,
+              style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.4),
+            ),
             SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Column(
-                children: [
-                  material.SwitchListTile(
-                    title: Text(strings.syncWithSystem),
-                    value: config.syncWithSystem,
-                    onChanged: (val) {
-                      ref.read(themeConfigProvider.notifier).setSyncWithSystem(val);
-                    },
-                  ),
-                  if (!config.syncWithSystem) ...[
-                    const material.Divider(height: 1),
-                    material.SwitchListTile(
-                      title: Text(strings.useDarkMode),
-                      value: config.forceDarkMode,
-                      onChanged: (val) {
-                        ref.read(themeConfigProvider.notifier).setForceDarkMode(val);
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(height: theme.lg),
-            material.Tooltip(
-              message: strings.tooltipWadaPalette,
-              child: Text(strings.lightModePalette, style: material.Theme.of(context).textTheme.titleSmall),
-            ),
-            SizedBox(height: theme.sm),
-            _buildWadaPaletteRow(context, ref, config, false, strings),
-            SizedBox(height: theme.lg),
-            material.Tooltip(
-              message: strings.tooltipWadaPalette,
-              child: Text(strings.darkModePalette, style: material.Theme.of(context).textTheme.titleSmall),
-            ),
-            SizedBox(height: theme.sm),
-            _buildWadaPaletteRow(context, ref, config, true, strings),
+            _buildPaletteRow(context, ref, config, strings),
             // Sprache gehoert zum Erscheinungsbild, nicht in eine eigene
             // Sektion: Eine Sektion mit genau einem Eintrag kostet
             // Ueberschrift und Rahmen fuer nichts.
@@ -897,7 +759,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text(strings.openSourceLicenses),
                 subtitle: Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                 trailing: const Icon(material.Icons.chevron_right),
-                onTap: () => _openLicenses(context, strings, theme),
+                onTap: () => _openLicenses(context),
               ),
             ),
             SizedBox(height: theme.sm),
@@ -945,18 +807,26 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  // --- Wada Color Palette Grid Swatch Selector Row ---
+  // --- Farbwähler: eine Reihe für beide Modi ------------------------------
 
-
-  Widget _buildWadaPaletteRow(
+  /// Eine Reihe Farbwähler: Standard plus die acht Sanzo-Wada-Paletten.
+  ///
+  /// **Eine Wahl gilt für Hell und Dunkel.** Früher gab es zwei Reihen
+  /// (Hell-Palette, Dunkel-Palette) — dieselben acht Paletten zweimal, und
+  /// wer beide gleich wollte, musste zweimal dasselbe tippen. Jetzt zeigt die
+  /// Vorschau das Farbset des Modus, der gerade aktiv ist: schaltet das
+  /// System um, zeigt dieselbe Reihe die andere Seite derselben Palette.
+  Widget _buildPaletteRow(
     BuildContext context,
     WidgetRef ref,
     ThemeConfig config,
-    bool isDarkRow,
     AppStrings strings,
   ) {
     final theme = context.theme;
     final platform = defaultTargetPlatform;
+    // Aktiver Modus — dieselbe Regel wie in main.dart: die Helligkeit des
+    // aufgelösten Canvas. So zeigt die Vorschau immer das, was gilt.
+    final isDark = theme.canvas.computeLuminance() < 0.5;
 
     final palettes = [null, ...SanzoWadaPalette.values];
 
@@ -967,42 +837,34 @@ class SettingsScreen extends ConsumerWidget {
         itemCount: palettes.length,
         itemBuilder: (context, index) {
           final palette = palettes[index];
-          final isSelected = isDarkRow
-              ? config.selectedDarkPalette == palette
-              : config.selectedLightPalette == palette;
+          final isSelected = config.selectedPalette == palette;
 
-          // Modusgerechtes Farb-Set: Die Hell-Reihe zeigt das Light-Set,
-          // die Dunkel-Reihe das Dark-Set — so ist sofort sichtbar, wie die
-          // Palette im jeweiligen Modus aussieht (grün bleibt grün).
-          final cardColor = palette != null
-              ? (isDarkRow ? palette.darkSurface : palette.lightSurface)
-              : (isDarkRow ? AppThemeData.dark.surface : AppThemeData.light.surface);
+          // Farbset des aktiven Modus: Die Vorschau zeigt, wie die Palette
+          // hier und jetzt aussieht — nicht zwei Varianten nebeneinander.
+          final cardColor = palette?.surfaceFor(isDark) ??
+              (isDark ? AppThemeData.dark.surface : AppThemeData.light.surface);
           final textPrimaryColor = palette != null
-              ? (isDarkRow ? palette.darkTextPrimary : palette.lightTextPrimary)
-              : (isDarkRow ? AppThemeData.dark.textPrimary : AppThemeData.light.textPrimary);
+              ? (isDark ? palette.darkTextPrimary : palette.lightTextPrimary)
+              : (isDark
+                  ? AppThemeData.dark.textPrimary
+                  : AppThemeData.light.textPrimary);
 
-          final dot1Color = palette?.accentFor(isDarkRow) ??
-              (isDarkRow ? AppThemeData.dark.accent : AppThemeData.light.accent);
+          final dot1Color = palette?.accentFor(isDark) ??
+              (isDark ? AppThemeData.dark.accent : AppThemeData.light.accent);
           final dot2Color = palette?.secondary ??
-              (isDarkRow ? AppThemeData.dark.success : AppThemeData.light.success);
+              (isDark ? AppThemeData.dark.success : AppThemeData.light.success);
           final dot3Color = palette != null
-              ? (isDarkRow ? palette.darkTextSecondary : palette.lightTextSecondary)
-              : (isDarkRow ? AppThemeData.dark.textSecondary : AppThemeData.light.textSecondary);
+              ? (isDark ? palette.darkTextSecondary : palette.lightTextSecondary)
+              : (isDark
+                  ? AppThemeData.dark.textSecondary
+                  : AppThemeData.light.textSecondary);
 
-          final paletteLabel = palette?.name ?? (isDarkRow ? strings.useDarkMode : strings.syncWithSystem);
+          final paletteLabel = palette?.name ?? strings.paletteStandard;
 
           final swatchCard = GestureDetector(
-            onTap: () {
-              if (isDarkRow) {
-                ref.read(themeConfigProvider.notifier).setDarkPalette(palette);
-              } else {
-                ref.read(themeConfigProvider.notifier).setLightPalette(palette);
-              }
-            },
+            onTap: () => ref.read(themeConfigProvider.notifier).setPalette(palette),
             child: Semantics(
-              label: palette == null
-                  ? (isDarkRow ? 'Standard Dark theme' : 'Standard Light theme')
-                  : 'Sanzo Wada Palette ${palette.name}',
+              label: paletteLabel,
               selected: isSelected,
               button: true,
               child: Container(
@@ -1013,7 +875,9 @@ class SettingsScreen extends ConsumerWidget {
                   color: cardColor,
                   borderRadius: BorderRadius.circular(theme.radiusLg),
                   border: Border.all(
-                    color: isSelected ? theme.accent : theme.textSecondary.withValues(alpha: 0.2),
+                    color: isSelected
+                        ? theme.accent
+                        : theme.textSecondary.withValues(alpha: 0.2),
                     width: isSelected ? 2.5 : 1.0,
                   ),
                 ),
@@ -1022,7 +886,7 @@ class SettingsScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      palette?.name ?? (isDarkRow ? 'System Dark' : 'System Light'),
+                      paletteLabel,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,

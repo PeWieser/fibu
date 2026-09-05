@@ -1508,3 +1508,71 @@ Umsetzung der Empfehlungen aus `docs/CODE_AUDIT.md` plus robustes Multi-Gerät-L
 ## CI/Infrastruktur
 - Actions auf Node-24-Majors: checkout v5, setup-java v5, setup-go v6 (`cache: false`, kein go.sum im Root), upload-artifact v7. Go auf `stable` (gomobile@latest verlangt ≥ 1.25; Pin 1.21 brach den Build).
 - Hinweis: Die Arena-GitHub-App hat keine `workflows`-Permission → Workflow-Dateiänderungen wurden manuell übertragen.
+
+---
+
+# Arbeits-Log — Session 2026-09-05
+
+**Branch:** `arena/01a03e8c-fibu` · direkte Pushes auf `main`.
+Grundlage: Vereinfachungs-Durchgang (`docs/VEREINFACHUNG.md`) plus die
+Entscheidungen aus der Rücksprache.
+
+## Erscheinungsbild: 16 Farbwähler → eine Reihe
+
+Eine Palette gilt jetzt für Hell **und** Dunkel; welcher Modus gilt,
+entscheidet das System. Weggefallen: `syncWithSystem`, `forceDarkMode`,
+`selectedLightPalette`, `selectedDarkPalette` samt Settern, die Getter
+`lightPalettes`/`darkPalettes` und acht Lokalisierungs-Strings.
+`ThemeNotifier.paletteFromSettings` wandert alte `settings.json` (und alte
+Geräte bei der Konfig-Übertragung) mit: Hell-Wahl gewinnt, sonst Dunkel-Wahl.
+Neu: `appearanceAutoHint`, `paletteStandard`.
+
+## Kopplung: drei Wege → einer (und der funktionierende)
+
+QR-Code und Adresseingabe sind raus, `qr_flutter` ist aus `pubspec.yaml` raus.
+
+**Dabei gefunden: die Ein-Tipp-Übertragung war kaputt.** Der UDP-Beacon
+enthielt nur Name, IP und Port — `send()` verlangt aber den Schlüssel aus dem
+URL-Fragment und lehnt ohne ihn ab. `_sendTo` baute die URL ohne Fragment,
+also schlug jeder Tipp auf ein gefundenes Gerät fehl. Fix: Schlüssel im Beacon
+(`'v': 2`), `DiscoveredDevice.secret`, `DevicePairingService.targetUrlFor`.
+
+**Neu: Bestätigung vor dem Überschreiben.** Da der Schlüssel jetzt im lokalen
+Netz lesbar ist, schreibt der Empfänger nichts ohne Antippen
+(`_PairingPhase.confirm`, `_confirmBox`): Gerätename, Anzahl Laufwerke, Anzahl
+Aufgaben, dann „Übernehmen" oder „Ablehnen". Ablehnen schreibt nichts
+(AGENTS.md Regel 6).
+
+**iOS:** `NSLocalNetworkUsageDescription` in `Info.plist` ergänzt. Ohne den
+Eintrag zeigt iOS den Freigabe-Dialog für das lokale Netz nie an und blockiert
+Broadcast still — die Erkennung fände nie ein Gerät. Auf einem echten Gerät zu
+prüfen (Testmatrix D11); im Simulator nicht nachstellbar.
+
+## Navigation: elf Plattform-Weichen → eine
+
+`lib/core/navigation/app_nav.dart`: `AppNav.push(context, screen)` baut die
+zur Plattform passende Route (Fluent/Cupertino/Material) inklusive
+iOS-Haptik. Ersetzt in `settings_screen`, `cloud_drives_screen`,
+`licenses_screen`, `dashboard_screen`, `multi_remote_storage_card` und
+`tasks_screen`. Die Übergänge bleiben plattformeigen — nur die Entscheidung
+dafür steht jetzt an einer Stelle. Erster Baustein des Musters aus
+`docs/VEREINFACHUNG.md` (geteilte Logik, plattformeigene Darstellung).
+
+## Tests
+
+* `test/widget/theme_toggle_test.dart` neu geschrieben: Farbwähler setzt die
+  Palette und „Standard" setzt sie zurück (der alte Test war seit dem Einbau
+  der Autostart-Karte `skip: true` — die Abdeckung ist wieder da);
+  Hell/Dunkel folgt der Systemhelligkeit; alte Einstellungen wandern um.
+* `test/unit/device_pairing_test.dart` neu: Fund → Zieladresse mit Schlüssel
+  (Regressionstest für den Fehler oben), verschlüsselter Rundlauf über
+  Loopback, falscher Schlüssel wird abgelehnt, Erkennung ohne Empfänger
+  liefert null.
+
+## Offene Punkte
+
+* **D11:** Lokales Netz auf einem echten iPhone prüfen (Freigabe-Dialog,
+  Beacon-Empfang). Ggf. ist zusätzlich Apples *Multicast Networking
+  Entitlement* nötig — das lässt sich hier nicht prüfen, nur am Gerät.
+* L-08 Impressum (Anschrift fehlt), L-16 Bundle-ID (`com.example.fibu`),
+  L-24 Markenrecherche „Fibu", L-29 eigene Google-OAuth-App.

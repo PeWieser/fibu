@@ -199,8 +199,8 @@ class SanzoWadaPalette {
     darkAccent: Color(0xffff6b81), // Hot Pink, aufgehellt (6.2:1 / 4.7:1)
   );
 
-  /// Alle Paletten (jede mit Hell- und Dunkel-Set, damit in beiden Modus-
-  /// Reihen jede Farbe wählbar ist).
+  /// Alle Paletten. Jede bringt ein Hell- **und** ein Dunkel-Set mit, damit
+  /// eine einzige Wahl in beiden Modi trägt — der Modus kommt vom System.
   static List<SanzoWadaPalette> get values => [
         autumnAki,
         springHaru,
@@ -211,10 +211,4 @@ class SanzoWadaPalette {
         forestMori,
         volcanoKazan,
       ];
-
-  /// Alle Paletten für die Hell-Reihe (Auswahl zeigt das Light-Set).
-  static List<SanzoWadaPalette> get lightPalettes => values;
-
-  /// Alle Paletten für die Dunkel-Reihe (Auswahl zeigt das Dark-Set).
-  static List<SanzoWadaPalette> get darkPalettes => values;
 }

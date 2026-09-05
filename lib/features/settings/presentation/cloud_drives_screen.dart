@@ -8,11 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../dashboard/presentation/cloud_photos_screen.dart';
 
 import '../../../core/localization/app_strings.dart';
+import '../../../core/navigation/app_nav.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/utils/ios_haptics.dart';
 import '../../../core/services/oauth_service.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../theme/theme.dart';
@@ -562,17 +562,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   /// Ersetzt den früheren Dateiexplorer: Die Ordnerstruktur der Sicherung ist
   /// nur noch Datenquelle, angezeigt werden Alben und nach Datum sortierte
   /// Aufnahmen (siehe `cloud_photos_screen.dart`).
-  void _openCloudPhotos(BuildContext context, String remote) {
-    final screen = CloudPhotosScreen(initialRemote: remote);
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => screen)
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => screen)
-            : material.MaterialPageRoute(builder: (_) => screen));
-    if (platform == TargetPlatform.iOS) IosHaptics.selection();
-    Navigator.of(context).push(route);
-  }
+  void _openCloudPhotos(BuildContext context, String remote) =>
+      AppNav.push(context, CloudPhotosScreen(initialRemote: remote));
 
   Future<void> _showRemoteActions(
       BuildContext context, String remote, TargetPlatform platform) async {

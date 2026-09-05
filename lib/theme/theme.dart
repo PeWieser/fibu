@@ -224,37 +224,35 @@ class AppThemeData {
   }
 }
 
-/// The mode/configuration of the theme.
-/// Supports separate selected Wada palettes for light and dark modes, with system synchronization.
+/// Erscheinungsbild-Konfiguration: **eine** Palette, keine Modus-Wahl.
+///
+/// Früher gab es hier fünf Stellgrößen: System-Übernahme an/aus, Dunkelmodus
+/// erzwingen an/aus, Hell-Palette, Dunkel-Palette — also 8 Paletten × 2 Modi
+/// = 16 Farbwähler plus zwei Schalter. Für eine Backup-App sind das 18
+/// Entscheidungen, die man einmal trifft und danach nie wieder anfasst.
+///
+/// Jetzt: eine Palette für beide Modi. Jede Palette bringt ihr Hell- und ihr
+/// Dunkel-Set mit; welcher Modus aktiv ist, entscheidet das System
+/// (siehe [appThemeProvider]). Der Nutzer wählt einen Farbklang — nicht
+/// zweimal denselben Farbklang in zwei Helligkeiten.
 class ThemeConfig {
-  final bool syncWithSystem;
-  final bool forceDarkMode;
-  final SanzoWadaPalette? selectedLightPalette;
-  final SanzoWadaPalette? selectedDarkPalette;
+  /// Die gewählte Palette. `null` = Standard (neutrales [AppThemeData.light]
+  /// bzw. [AppThemeData.dark]).
+  final SanzoWadaPalette? selectedPalette;
   final PrimaryUsage primaryUsage;
 
   const ThemeConfig({
-    this.syncWithSystem = true,
-    this.forceDarkMode = false,
-    this.selectedLightPalette,
-    this.selectedDarkPalette,
+    this.selectedPalette,
     this.primaryUsage = PrimaryUsage.identity,
   });
 
   ThemeConfig copyWith({
-    bool? syncWithSystem,
-    bool? forceDarkMode,
-    SanzoWadaPalette? selectedLightPalette,
-    SanzoWadaPalette? selectedDarkPalette,
+    SanzoWadaPalette? selectedPalette,
     PrimaryUsage? primaryUsage,
-    bool clearLightPalette = false,
-    bool clearDarkPalette = false,
+    bool clearPalette = false,
   }) {
     return ThemeConfig(
-      syncWithSystem: syncWithSystem ?? this.syncWithSystem,
-      forceDarkMode: forceDarkMode ?? this.forceDarkMode,
-      selectedLightPalette: clearLightPalette ? null : (selectedLightPalette ?? this.selectedLightPalette),
-      selectedDarkPalette: clearDarkPalette ? null : (selectedDarkPalette ?? this.selectedDarkPalette),
+      selectedPalette: clearPalette ? null : (selectedPalette ?? this.selectedPalette),
       primaryUsage: primaryUsage ?? this.primaryUsage,
     );
   }
@@ -277,31 +275,9 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
       if (file.existsSync()) {
         final content = await file.readAsString();
         final Map<String, dynamic> data = json.decode(content);
-        
-        SanzoWadaPalette? lightPal;
-        SanzoWadaPalette? darkPal;
-
-        if (data['selectedLightPalette'] != null) {
-          try {
-            lightPal = SanzoWadaPalette.values.firstWhere(
-              (p) => p.name == data['selectedLightPalette'],
-            );
-          } catch (_) {}
-        }
-
-        if (data['selectedDarkPalette'] != null) {
-          try {
-            darkPal = SanzoWadaPalette.values.firstWhere(
-              (p) => p.name == data['selectedDarkPalette'],
-            );
-          } catch (_) {}
-        }
 
         state = ThemeConfig(
-          syncWithSystem: data['syncWithSystem'] as bool? ?? true,
-          forceDarkMode: data['forceDarkMode'] as bool? ?? false,
-          selectedLightPalette: lightPal,
-          selectedDarkPalette: darkPal,
+          selectedPalette: paletteFromSettings(data),
           primaryUsage: PrimaryUsage.values.firstWhere(
             (PrimaryUsage u) => u.name == data['primaryUsage'],
             orElse: () => PrimaryUsage.identity,
@@ -309,6 +285,29 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
         );
       }
     } catch (_) {}
+  }
+
+  /// Liest die Paletten-Wahl aus einem Einstellungs-`Map` — und wandert
+  /// alte Schlüssel mit.
+  ///
+  /// Ältere Versionen haben Hell- und Dunkel-Palette getrennt gespeichert
+  /// (`selectedLightPalette` / `selectedDarkPalette`). Wer die App
+  /// aktualisiert, soll seine Wahl behalten, nicht auf Standard
+  /// zurückfallen: die Hell-Palette gewinnt, sonst die Dunkel-Palette.
+  /// Dieselbe Regel gilt für die Konfig-Übertragung zwischen Geräten
+  /// (`AppSettingsData.fromJson` in settings_service.dart).
+  static SanzoWadaPalette? paletteFromSettings(Map<String, dynamic> data) {
+    SanzoWadaPalette? byName(Object? name) {
+      if (name == null) return null;
+      for (final p in SanzoWadaPalette.values) {
+        if (p.name == name) return p;
+      }
+      return null;
+    }
+
+    return byName(data['selectedPalette']) ??
+        byName(data['selectedLightPalette']) ??
+        byName(data['selectedDarkPalette']);
   }
 
   Future<void> _persistThemeConfig() async {
@@ -320,43 +319,29 @@ class ThemeNotifier extends StateNotifier<ThemeConfig> {
           data = json.decode(await file.readAsString());
         } catch (_) {}
       }
-      data['syncWithSystem'] = state.syncWithSystem;
-      data['forceDarkMode'] = state.forceDarkMode;
-      data['selectedLightPalette'] = state.selectedLightPalette?.name;
-      data['selectedDarkPalette'] = state.selectedDarkPalette?.name;
+      data['selectedPalette'] = state.selectedPalette?.name;
+      // Alte Schlüssel ausräumen, sonst steht nach dem Update eine zweite,
+      // widersprüchliche Wahrheit in der Datei.
+      data.remove('selectedLightPalette');
+      data.remove('selectedDarkPalette');
+      data.remove('syncWithSystem');
+      data.remove('forceDarkMode');
       data['primaryUsage'] = state.primaryUsage.name;
       await file.writeAsString(json.encode(data));
     } catch (_) {}
   }
 
-  void setSyncWithSystem(bool sync) {
-    state = state.copyWith(syncWithSystem: sync);
-    _persistThemeConfig();
-  }
-
-  void setForceDarkMode(bool forceDark) {
-    state = state.copyWith(forceDarkMode: forceDark);
-    _persistThemeConfig();
-  }
-
-  void setLightPalette(SanzoWadaPalette? palette) {
+  /// Setzt die eine Palette für beide Modi. `null` = Standard.
+  void setPalette(SanzoWadaPalette? palette) {
     state = state.copyWith(
-      selectedLightPalette: palette,
-      clearLightPalette: palette == null,
+      selectedPalette: palette,
+      clearPalette: palette == null,
     );
     _persistThemeConfig();
   }
 
   void setPrimaryUsage(PrimaryUsage usage) {
     state = state.copyWith(primaryUsage: usage);
-    _persistThemeConfig();
-  }
-
-  void setDarkPalette(SanzoWadaPalette? palette) {
-    state = state.copyWith(
-      selectedDarkPalette: palette,
-      clearDarkPalette: palette == null,
-    );
     _persistThemeConfig();
   }
 }
@@ -377,25 +362,24 @@ final systemBrightnessProvider = StateProvider<Brightness>((ref) {
 });
 
 /// Riverpod provider that returns the resolved [AppThemeData] based on active configuration and system brightness.
+///
+/// Hell/Dunkel ist keine Einstellung, sondern eine Folge: Das System sagt,
+/// welcher Modus gilt, die eine gewählte Palette liefert das passende
+/// Farbset dazu. Schaltet das System um, schaltet die App mit — ohne dass
+/// der Nutzer irgendwo einen Modus gewählt hätte.
 final appThemeProvider = Provider<AppThemeData>((ref) {
   final config = ref.watch(themeConfigProvider);
 
   // Systemhelligkeit live verfolgen (Systemwechsel Light/Dark zur Laufzeit).
   final systemBrightness = ref.watch(systemBrightnessProvider);
-  final isDark = config.syncWithSystem
-      ? systemBrightness == Brightness.dark
-      : config.forceDarkMode;
+  final isDark = systemBrightness == Brightness.dark;
 
+  final palette = config.selectedPalette;
   final AppThemeData base;
-  if (isDark) {
-    base = config.selectedDarkPalette != null
-        ? AppThemeData.fromWadaPalette(config.selectedDarkPalette!, isDark: true)
-        : AppThemeData.dark;
+  if (palette != null) {
+    base = AppThemeData.fromWadaPalette(palette, isDark: isDark);
   } else {
-    base = config.selectedLightPalette != null
-        ? AppThemeData.fromWadaPalette(config.selectedLightPalette!,
-            isDark: false)
-        : AppThemeData.light;
+    base = isDark ? AppThemeData.dark : AppThemeData.light;
   }
   return base.copyWith(primaryUsage: config.primaryUsage);
 });

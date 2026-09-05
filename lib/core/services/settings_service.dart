@@ -4,7 +4,6 @@ import '../utils/app_paths.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/theme.dart';
-import '../../theme/sanzo_wada_palettes.dart';
 import '../localization/locale_provider.dart';
 
 /// Persistent data transfer object for application settings.
@@ -20,34 +19,12 @@ class AppSettingsData {
   });
 
   Map<String, dynamic> toJson() => {
-    'syncWithSystem': themeConfig.syncWithSystem,
-    'forceDarkMode': themeConfig.forceDarkMode,
-    'selectedLightPalette': themeConfig.selectedLightPalette?.name,
-    'selectedDarkPalette': themeConfig.selectedDarkPalette?.name,
+    'selectedPalette': themeConfig.selectedPalette?.name,
     'locale': locale.name,
     'wifiOnlySync': wifiOnlySync,
   };
 
   factory AppSettingsData.fromJson(Map<String, dynamic> json) {
-    SanzoWadaPalette? lightPal;
-    SanzoWadaPalette? darkPal;
-
-    if (json['selectedLightPalette'] != null) {
-      try {
-        lightPal = SanzoWadaPalette.values.firstWhere(
-          (p) => p.name == json['selectedLightPalette'],
-        );
-      } catch (_) {}
-    }
-
-    if (json['selectedDarkPalette'] != null) {
-      try {
-        darkPal = SanzoWadaPalette.values.firstWhere(
-          (p) => p.name == json['selectedDarkPalette'],
-        );
-      } catch (_) {}
-    }
-
     AppLocale loc = AppLocale.de;
     if (json['locale'] != null) {
       try {
@@ -57,10 +34,10 @@ class AppSettingsData {
 
     return AppSettingsData(
       themeConfig: ThemeConfig(
-        syncWithSystem: json['syncWithSystem'] as bool? ?? true,
-        forceDarkMode: json['forceDarkMode'] as bool? ?? false,
-        selectedLightPalette: lightPal,
-        selectedDarkPalette: darkPal,
+        // Eine Palette für beide Modi. Alte Dateien (und alte Geräte bei der
+        // Konfig-Übertragung) haben Hell und Dunkel getrennt gespeichert —
+        // `paletteFromSettings` wandert das mit, statt die Wahl zu verwerfen.
+        selectedPalette: ThemeNotifier.paletteFromSettings(json),
       ),
       locale: loc,
       wifiOnlySync: json['wifiOnlySync'] as bool? ?? true,

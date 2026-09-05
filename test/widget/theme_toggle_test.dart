@@ -15,6 +15,13 @@ import 'package:fibu/theme/sanzo_wada_palettes.dart';
 import '../helpers/platform_mocks.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 
+/// Erscheinungsbild: **ein** Farbwähler, Hell/Dunkel folgt dem System.
+///
+/// Früher gab es hier zwei Paletten-Reihen (Hell, Dunkel) plus zwei
+/// Modus-Schalter. Beides ist weg — diese Tests prüfen deshalb genau die zwei
+/// Zusagen, die übrig bleiben:
+///   1. Ein Tipp wählt die Palette für beide Modi.
+///   2. Welcher Modus gilt, entscheidet die Systemhelligkeit — nicht die App.
 void main() {
   // path_provider mocken: Die Screens lesen tasks.json / settings.json und
   // den Mirror-Zustand darüber — ohne Mock gäbe es MissingPluginException.
@@ -26,7 +33,7 @@ void main() {
     await removePathProviderMock(mockDir);
   });
 
-  group('Theme Configurations & Design Menu Tests', () {
+  group('Erscheinungsbild', () {
     late MockRcloneService mockRcloneService;
     const strings = AppStrings(AppLocale.de);
 
@@ -39,35 +46,14 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    // AUSGESETZT seit dem Einbau der Autostart-Karte (Commit 51c0cdf).
-    //
-    // Der Test findet das Label „System Light" der Hell-Reihe nicht mehr. Drei
-    // Reparaturversuche (ensureVisible, Umordnen, größere Test-Oberfläche)
-    // haben die Ursache nicht getroffen — sie liegt tiefer als im Scrollen.
-    //
-    // Bewusst nicht „einfach gelöscht": Die Abdeckung (Palette wählen,
-    // zurücksetzen, Dunkel-Palette setzen) fehlt jetzt und soll zurückkommen.
-    // Der Test prüft außerdem einen hartkodierten englischen String in einem
-    // deutsch lokalisierten Aufbau — das ist an sich schon brüchig.
-    //
-    // Die Funktion selbst ist unverändert und läuft; der zweite Test dieser
-    // Gruppe (System-Sync-Schalter) bleibt aktiv.
-    testWidgets('Toggling Wada Palettes changes theme configuration state',
-        // Grund steht im Kommentar oben; `skip` ist in dieser Flutter-Version
-        // ein bool?, kein String.
-        skip: true,
+    testWidgets('Ein Farbwähler setzt die Palette — und Standard setzt sie zurück',
         (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
       // Die Einstellungsseite ist länger als das Standard-Testfenster
       // (800×600). Was außerhalb liegt, wird von den faulen Listen gar nicht
       // erst gebaut — find.text findet dann nichts, und ensureVisible kann
-      // auch nicht helfen, weil es den Finder selbst braucht. Der Test hing
-      // damit an der exakten Scroll-Position und brach, sobald oben etwas
-      // dazukam.
-      //
-      // Ein großes Testfenster macht ihn unabhängig davon: Die Seite passt
-      // hinein, alle Reihen sind gebaut, es muss nicht gescrollt werden.
+      // auch nicht helfen, weil es den Finder selbst braucht.
       await tester.binding.setSurfaceSize(const material.Size(1200, 2000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -76,7 +62,8 @@ void main() {
           tasksLoadedProvider.overrideWith((ref) => true),
           localeProvider.overrideWith((ref) => AppLocale.de),
         ]);
-        
+        addTearDown(container.dispose);
+
         await tester.pumpWidget(
           UncontrolledProviderScope(
             container: container,
@@ -87,103 +74,123 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Check initial configuration (no custom light/dark palette)
-        expect(container.read(themeConfigProvider).selectedLightPalette, isNull);
-        expect(container.read(themeConfigProvider).selectedDarkPalette, isNull);
-        
-        // Jede Palette steht inzwischen in BEIDEN Reihen (Hell und Dunkel),
-        // der Name kommt also zweimal vor. Die Hell-Reihe liegt zuerst.
-        final akiFinder = find.text('Aki (Autumn)').first;
-        expect(find.text('Aki (Autumn)'), findsNWidgets(2));
-        // Die Autostart-Karte sitzt im Windows-Layout vor dem
-        // Erscheinungsbild-Abschnitt und schiebt die Paletten-Reihen nach
-        // unten. Ohne ensureVisible liegt das Ziel außerhalb des
-        // Test-Viewports und der Tap geht ins Leere.
+        // Ausgangszustand: Standard, keine Palette.
+        expect(container.read(themeConfigProvider).selectedPalette, isNull);
+
+        // Genau EINE Reihe: Jede Palette steht jetzt einmal da, nicht zweimal
+        // (früher Hell- und Dunkel-Reihe).
+        final akiFinder = find.text('Aki (Autumn)');
+        expect(akiFinder, findsOneWidget);
+
         await tester.ensureVisible(akiFinder);
         await tester.pumpAndSettle();
         await tester.tap(akiFinder);
         await tester.pumpAndSettle();
 
-        // Check that selectedLightPalette state is updated to autumnAki
-        expect(container.read(themeConfigProvider).selectedLightPalette, equals(SanzoWadaPalette.autumnAki));
-        
-        // Hell-Reihe zuerst vollständig abhandeln, BEVOR zur Dunkel-Reihe
-        // gescrollt wird. Sonst liegt die Hell-Reihe außerhalb des Viewports,
-        // ihre Widgets sind nicht gebaut und find.text('System Light') findet
-        // nichts — ensureVisible kann dann auch nicht mehr helfen, weil es den
-        // Finder selbst braucht.
-        //
-        // Zurücksetzen der Hell-Palette auf „System Light":
-        final standardLightFinder = find.text('System Light');
-        expect(standardLightFinder, findsOneWidget);
-        await tester.ensureVisible(standardLightFinder);
+        expect(
+          container.read(themeConfigProvider).selectedPalette,
+          equals(SanzoWadaPalette.autumnAki),
+        );
+
+        // Zurück auf Standard — der erste Swatch in der Reihe.
+        final standardFinder = find.text(strings.paletteStandard);
+        expect(standardFinder, findsOneWidget);
+        await tester.ensureVisible(standardFinder);
         await tester.pumpAndSettle();
-        await tester.tap(standardLightFinder);
+        await tester.tap(standardFinder);
         await tester.pumpAndSettle();
 
-        // Check selectedLightPalette is null again
-        expect(container.read(themeConfigProvider).selectedLightPalette, isNull);
-
-        // Dunkel-Reihe liegt hinter der Hell-Reihe → letzter Treffer.
-        // Beide Reihen enthalten dieselben 8 Paletten horizontal gescrollt;
-        // weiter hinten stehende sind im Test-Viewport nicht gebaut.
-        final fuyuFinder = find.text('Aki (Autumn)').last;
-        await tester.ensureVisible(fuyuFinder);
-        await tester.pumpAndSettle();
-        await tester.tap(fuyuFinder);
-        await tester.pumpAndSettle();
-
-        // Check that selectedDarkPalette state is updated
-        expect(container.read(themeConfigProvider).selectedDarkPalette,
-            equals(SanzoWadaPalette.autumnAki));
+        expect(container.read(themeConfigProvider).selectedPalette, isNull);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('Toggling System Sync switches syncWithSystem and forceDarkMode states', (WidgetTester tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      
-      try {
-        final container = ProviderContainer(overrides: [
-          tasksLoadedProvider.overrideWith((ref) => true),
-          localeProvider.overrideWith((ref) => AppLocale.de),
-        ]);
-        
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const material.MaterialApp(
-              home: SettingsScreen(),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
+    test('Die gewählte Palette liefert Hell und Dunkel aus demselben Eintrag',
+        () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-        // Initially syncWithSystem is true
-        expect(container.read(themeConfigProvider).syncWithSystem, isTrue);
+      container
+          .read(themeConfigProvider.notifier)
+          .setPalette(SanzoWadaPalette.autumnAki);
 
-        // Tap the Sync with System Theme switch
-        final syncSwitchFinder = find.widgetWithText(material.SwitchListTile, strings.syncWithSystem);
-        expect(syncSwitchFinder, findsOneWidget);
-        await tester.tap(syncSwitchFinder);
-        await tester.pumpAndSettle();
+      // Hell: System sagt hell → Light-Set der Palette.
+      container.read(systemBrightnessProvider.notifier).state =
+          material.Brightness.light;
+      final light = container.read(appThemeProvider);
+      expect(light.canvas, equals(SanzoWadaPalette.autumnAki.lightSurface));
+      expect(
+        light.textPrimary,
+        equals(SanzoWadaPalette.autumnAki.lightTextPrimary),
+      );
+      expect(light.accent, equals(SanzoWadaPalette.autumnAki.lightAccent));
 
-        // Now syncWithSystem is false
-        expect(container.read(themeConfigProvider).syncWithSystem, isFalse);
-        expect(container.read(themeConfigProvider).forceDarkMode, isFalse);
+      // Dunkel: dieselbe Palette, anderes Set — ohne dass irgendwo in der App
+      // ein Modus gewählt worden wäre.
+      container.read(systemBrightnessProvider.notifier).state =
+          material.Brightness.dark;
+      final dark = container.read(appThemeProvider);
+      expect(dark.canvas, equals(SanzoWadaPalette.autumnAki.darkSurface));
+      expect(
+        dark.textPrimary,
+        equals(SanzoWadaPalette.autumnAki.darkTextPrimary),
+      );
+      expect(dark.accent, equals(SanzoWadaPalette.autumnAki.darkAccent));
+    });
 
-        // Tap the Use Dark Mode switch that appeared
-        final darkSwitchFinder = find.widgetWithText(material.SwitchListTile, strings.useDarkMode);
-        expect(darkSwitchFinder, findsOneWidget);
-        await tester.tap(darkSwitchFinder);
-        await tester.pumpAndSettle();
+    test('Ohne Palette gilt das neutrale Standard-Farbschema', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-        // Now forceDarkMode is true
-        expect(container.read(themeConfigProvider).forceDarkMode, isTrue);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
+      container.read(systemBrightnessProvider.notifier).state =
+          material.Brightness.light;
+      expect(container.read(appThemeProvider).canvas,
+          equals(AppThemeData.light.canvas));
+
+      container.read(systemBrightnessProvider.notifier).state =
+          material.Brightness.dark;
+      expect(
+          container.read(appThemeProvider).canvas, equals(AppThemeData.dark.canvas));
+    });
+
+    test('Alte Einstellungen mit zwei Paletten wandern auf eine um', () {
+      // Ältere Versionen haben Hell und Dunkel getrennt gespeichert.
+      final legacy = <String, dynamic>{
+        'syncWithSystem': false,
+        'forceDarkMode': true,
+        'selectedLightPalette': SanzoWadaPalette.forestMori.name,
+        'selectedDarkPalette': SanzoWadaPalette.midnightYoru.name,
+      };
+      // Die Hell-Wahl gewinnt — sie war die sichtbare.
+      expect(
+        ThemeNotifier.paletteFromSettings(legacy),
+        equals(SanzoWadaPalette.forestMori),
+      );
+
+      // Nur Dunkel gesetzt → Dunkel-Wahl bleibt erhalten.
+      expect(
+        ThemeNotifier.paletteFromSettings(<String, dynamic>{
+          'selectedDarkPalette': SanzoWadaPalette.midnightYoru.name,
+        }),
+        equals(SanzoWadaPalette.midnightYoru),
+      );
+
+      // Neuer Schlüssel gewinnt immer.
+      expect(
+        ThemeNotifier.paletteFromSettings(<String, dynamic>{
+          'selectedPalette': SanzoWadaPalette.oceanUmi.name,
+          'selectedLightPalette': SanzoWadaPalette.forestMori.name,
+        }),
+        equals(SanzoWadaPalette.oceanUmi),
+      );
+
+      // Unbekannter Name → Standard, kein Absturz.
+      expect(
+        ThemeNotifier.paletteFromSettings(
+            <String, dynamic>{'selectedPalette': 'Gibt es nicht'}),
+        isNull,
+      );
     });
   });
 }

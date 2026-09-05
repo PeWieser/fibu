@@ -72,9 +72,9 @@ class PairingSession {
   final String host;
   final int port;
 
-  /// 256-Bit-Schlüssel, Base64URL. Wandert nur über den QR-Code, nie über
-  /// eine Netzwerkanfrage — ein URL-Fragment wird von HTTP-Clients nicht
-  /// mitgesendet.
+  /// 256-Bit-Schlüssel, Base64URL. Wandert als URL-Fragment mit — ein
+  /// Fragment senden HTTP-Clients nicht mit, der Schlüssel bleibt also
+  /// zwischen Sender und Empfänger und taucht in keinem Log-Header auf.
   final String secret;
 
   const PairingSession({
@@ -82,20 +82,29 @@ class PairingSession {
     required this.port,
     required this.secret,
   });
-
-  /// Was im QR-Code steht.
-  Uri get uri => Uri.parse('http://$host:$port/#$secret');
-
-  /// Kurzform zum Abtippen, falls kein Scanner zur Hand ist.
-  String get shortCode => secret.substring(0, 8).toUpperCase();
 }
 
 /// Gerät-zu-Gerät-Übertragung der Konfiguration im lokalen Netz.
 ///
-/// **Ablauf.** Der Empfänger (Desktop) startet einen HTTP-Server und zeigt
-/// einen QR-Code mit Adresse und Schlüssel. Das sendende Gerät (Mobil) liest
-/// den Code, verschlüsselt sein Konfigurations-Bundle mit dem Schlüssel und
-/// lädt es hoch. Danach wird der Server sofort beendet.
+/// **Ablauf.** Der Empfänger startet einen HTTP-Server und funkt Name,
+/// Adresse, Port und Sitzungsschlüssel als UDP-Beacon ins lokale Netz. Das
+/// sendende Gerät hört zu, zeigt das gefundene Gerät an und überträgt mit
+/// einem Tipp: Bundle mit dem Schlüssel verschlüsseln, hochladen. Der
+/// Empfänger zeigt anschließend, **was** angekommen ist, und übernimmt es
+/// erst nach Bestätigung. Danach wird der Server sofort beendet.
+///
+/// **Ein Weg, nicht drei.** Es gibt keinen QR-Code und keine Adresseingabe
+/// mehr. Beides war ein zweiter und dritter Weg zum selben Ziel — und die
+/// manuelle Eingabe hat den Schlüssel über die Tastatur geschickt, was
+/// niemand tippen will (32 Bytes Base64URL).
+///
+/// **Warum der Schlüssel im Beacon steht und das trotzdem sicher ist.** Der
+/// Beacon ist im lokalen Netz lesbar; wer mithört, kann ein Bundle schicken.
+/// Geschrieben wird deshalb nichts ohne Bestätigung am Empfänger: Der Dialog
+/// nennt Gerät, Anzahl Laufwerke und Anzahl Aufgaben, und erst das Antippen
+/// von „Übernehmen" überschreibt `rclone.conf`, `remotes.json` und
+/// `tasks.json`. Das ist dasselbe Modell wie bei AirDrop — auffindbar im
+/// eigenen Netz, annehmen tut ein Mensch.
 ///
 /// **Kein Server dazwischen.** Die Daten gehen direkt von Gerät zu Gerät über
 /// das lokale Netz. Es gibt keinen Relay, keine Cloud und kein Konto.
@@ -110,10 +119,14 @@ class DiscoveredDevice {
   final String host;
   final int port;
 
+  /// Sitzungsschlüssel des gefundenen Empfängers, wie er im Beacon stand.
+  final String secret;
+
   const DiscoveredDevice({
     required this.name,
     required this.host,
     required this.port,
+    required this.secret,
   });
 }
 
@@ -146,12 +159,14 @@ class DevicePairingService {
   // ---------------------------------------------------------------------------
 
   /// Startet den Erkennungs-Beacon. Der Empfänger funkt alle zwei Sekunden
-  /// Name, Adresse und Port ins lokale Netz.
+  /// Name, Adresse, Port und Sitzungsschlüssel ins lokale Netz.
   ///
   /// Bewusst UDP-Broadcast statt mDNS: mDNS bräuchte ein natives Plugin, und
   /// Broadcast läuft ohne Abhängigkeit. Der Beacon enthält keine
-  /// Zugangsdaten — nur Name, IP und Port.
-  static Future<void> _startBeacon(String host, int port, String deviceName) async {
+  /// Zugangsdaten — nur Name, IP, Port und den Schlüssel der laufenden
+  /// Sitzung (siehe Sicherheitsbetrachtung oben an der Klasse).
+  static Future<void> _startBeacon(
+      String host, int port, String deviceName, String secret) async {
     await _stopBeacon();
     try {
       final socket = await RawDatagramSocket.bind(
@@ -159,11 +174,16 @@ class DevicePairingService {
       socket.broadcastEnabled = true;
       _beacon = socket;
 
+      // `v: 2` = Payload enthält den Sitzungsschlüssel. Beacons der
+      // Version 1 (ohne Schlüssel) kann die Gegenseite nicht bedienen —
+      // sie werden beim Finden übersprungen, statt eine Übertragung
+      // anzubieten, die am fehlenden Schlüssel scheitert.
       final payload = utf8.encode(jsonEncode({
-        'v': 1,
+        'v': 2,
         'name': deviceName,
         'host': host,
         'port': port,
+        'secret': secret,
       }));
       final dest = InternetAddress('255.255.255.255');
 
@@ -218,12 +238,16 @@ class DevicePairingService {
           if (decoded is! Map) return;
           final host = decoded['host'] as String? ?? '';
           final port = (decoded['port'] as num?)?.toInt() ?? 0;
-          if (host.isEmpty || port <= 0) return;
+          final secret = decoded['secret'] as String? ?? '';
+          // Ohne Adresse, Port oder Schlüssel ist das Gerät kein Ziel: Die
+          // Übertragung braucht alle drei.
+          if (host.isEmpty || port <= 0 || secret.isEmpty) return;
           if (!completer.isCompleted) {
             completer.complete(DiscoveredDevice(
               name: decoded['name'] as String? ?? host,
               host: host,
               port: port,
+              secret: secret,
             ));
           }
         } catch (_) {}
@@ -263,7 +287,7 @@ class DevicePairingService {
       // Erkennungs-Beacon: Mobilgeräte finden diesen Empfänger damit ohne
       // QR-Code und ohne Eingabe.
       await _startBeacon(server.address.host, server.port,
-          await DeviceIdentity.displayName());
+          await DeviceIdentity.displayName(), secret);
       _timeoutTimer = Timer(defaultTimeout, () {
         AppLog.info('pairing', 'Kopplungs-Sitzung nach Zeitablauf beendet');
         stopReceiver();
@@ -377,6 +401,14 @@ class DevicePairingService {
   // ---------------------------------------------------------------------------
   // Sender (Mobil)
   // ---------------------------------------------------------------------------
+
+  /// Zieladresse für ein gefundenes Gerät.
+  ///
+  /// Der Schlüssel reist als URL-Fragment mit: `send` nimmt ihn daraus und
+  /// entfernt ihn vor dem Absenden wieder. Als eigene Methode, damit der
+  /// Zusammenhang (Fund → Ziel) testbar ist und nicht in einem Widget steckt.
+  static String targetUrlFor(DiscoveredDevice device) =>
+      'http://${device.host}:${device.port}/#${device.secret}';
 
   /// Lädt ein Bundle zu einer laufenden Empfänger-Sitzung.
   static Future<bool> send({

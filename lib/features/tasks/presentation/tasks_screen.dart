@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../../core/navigation/app_nav.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/widgets/liquid_glass.dart';
@@ -130,13 +131,8 @@ class TasksScreen extends ConsumerWidget {
                     ],
                   ),
                   semanticLabel: task.name,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      fluent.FluentPageRoute(
-                        builder: (_) => TaskDetailScreen(taskId: task.id),
-                      ),
-                    );
-                  },
+                  onPressed: () =>
+                      AppNav.push(context, TaskDetailScreen(taskId: task.id)),
                 );
               },
             ),
@@ -472,7 +468,7 @@ class TasksScreen extends ConsumerWidget {
             cupertino.CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(ctx);
-                _openImportScreen(context, candidates, platform);
+                _openImportScreen(context, candidates);
               },
               child: Text(strings.importDetectedTasksOption(candidates.length)),
             ),
@@ -501,7 +497,7 @@ class TasksScreen extends ConsumerWidget {
             fluent.Button(
               onPressed: () {
                 Navigator.pop(ctx);
-                _openImportScreen(context, candidates, platform);
+                _openImportScreen(context, candidates);
               },
               child: Text(strings.importDetectedTasksOption(candidates.length)),
             ),
@@ -533,7 +529,7 @@ class TasksScreen extends ConsumerWidget {
                 title: Text(strings.importDetectedTasksOption(candidates.length)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _openImportScreen(context, candidates, platform);
+                  _openImportScreen(context, candidates);
                 },
               ),
             ],
@@ -546,16 +542,8 @@ class TasksScreen extends ConsumerWidget {
   void _openImportScreen(
     BuildContext context,
     List<BackupTask> candidates,
-    TargetPlatform platform,
-  ) {
-    final page = RemoteTaskImportScreen(candidates: candidates);
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute<int>(builder: (_) => page)
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute<int>(builder: (_) => page)
-            : material.MaterialPageRoute<int>(builder: (_) => page));
-    Navigator.of(context).push(route);
-  }
+  ) =>
+      AppNav.push<int>(context, RemoteTaskImportScreen(candidates: candidates));
 
   // =========================================================================
   // MAIN ADD/EDIT DIALOG DISPATCHER (3-Step Wizard)

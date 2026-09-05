@@ -55,7 +55,7 @@ könnte. Deshalb wird lokal nie hart gelöscht, sondern in einen Papierkorb mit
 | A3 | iOS zuerst, dann Windows **manuell** | ✅ | Getrennte `tasks.json`, getrennte Registry. Kein Konflikt solange die Zielordner verschieden sind |
 | A4 | iOS zuerst, dann Windows **per Kopplung** | ⚠️ | `rclone.conf`, `remotes.json`, `tasks.json` werden übernommen. Mediathek-Quelle wird geleert (`device_pairing_screen.dart:_importBundle`), **`syncMode: mirror` aber nicht** |
 | A5 | Windows zuerst, dann iOS manuell | ✅ | Symmetrisch zu A3 |
-| A6 | Windows zuerst, dann iOS **per Kopplung** | ✅ **gelöst**: Die Rolle ist ein Schalter auf jeder Plattform (`device_pairing_screen.dart:66,75`), nicht mehr plattform-abgeleitet. Der Startwert folgt nur der wahrscheinlicheren Richtung |
+| A6 | Windows zuerst, dann iOS **per Kopplung** | ✅ **gelöst**: Die Rolle ist ein Schalter auf jeder Plattform (`device_pairing_screen.dart:90,92`), nicht mehr plattform-abgeleitet. Der Startwert folgt nur der wahrscheinlicheren Richtung |
 | A7 | Beide, verschiedene Cloud-Konten | ✅ | Keine Berührung |
 | A8 | Beide, gleiches Konto, **verschiedene** Zielordner | ✅ | Voreinstellung: iOS `fibu-backup/Photos`, Windows-Wizard `Mediathek` |
 | A9 | Beide, gleiches Konto, **gleicher** Zielordner | ❌ | Siehe B9 — der gefährlichste Fall der ganzen Matrix |
@@ -174,12 +174,15 @@ Behoben: `scheduler_service.dart:320,347`.
 | D1 | Windows offline zum geplanten Zeitpunkt | ✅ wird als `skipped` gebucht und beim nächsten Start nachgeholt (`runMissedSyncs`) |
 | D2 | Windows ohne Autostart | ⚠️ Zeitplan läuft nur bei geöffneter App. Steht jetzt im UI (`schedulePlatformNote`) |
 | D3 | iOS: System weckt den Hintergrundtask nicht | ✅ gleicher Nachhol-Mechanismus |
-| D4 | Kopplung, aber anderes Netz | ⚠️ Meldung „Übertragung fehlgeschlagen". Kein Zeitlimit-Fehler, der verwirrt |
+| D4 | Kopplung, aber anderes Netz | ⚠️ Die Erkennung findet nichts: „Kein wartendes Gerät gefunden. Auf dem anderen Gerät „Empfangen" starten und erneut suchen." (`pairingNoneFound`) — kein Zeitlimit-Fehler, der verwirrt |
 | D5 | Kopplung zweimal | ✅ Server schließt nach dem ersten Bundle (`stopReceiver`) |
 | D6 | Aufgabe ohne Quelle (nach Kopplung) | ✅ Sync verweigert sich mit klarer Meldung statt „fertig" |
 | D7 | Windows-Preset „Mediathek-Spiegelung" | ⚠️ heißt „Mediathek", sichert aber einen Ordner. Der Name ist auf Windows irreführend |
 | D8 | iOS lädt Windows-Dateien in die Mediathek | ⚠️ B6. Album-Name wird aus dem Pfad abgeleitet (`_albumNameFromRel`). Fremde Ordnerstruktur → fremde Alben in der Mediathek |
 | D9 | Zwei iOS-Geräte, derselbe Zielordner | ⚠️ je eigener `mirror_state`, aber `adopted`/`blocked`-Mengen divergieren. Nicht Teil der Anforderung, aber dieselbe Klasse Problem wie A9 |
+| D10 | Fremdes Gerät im selben WLAN schickt ein Bundle | ✅ Der Schlüssel reist im UDP-Beacon mit, also kann jeder im Netz senden — geschrieben wird aber nichts ohne Bestätigung am Empfänger (`_confirmBox`: Gerätename, Anzahl Laufwerke, Anzahl Aufgaben). Ablehnen schreibt nichts |
+| D11 | iOS ohne Freigabe „Lokales Netz" | ⚠️ Ohne `NSLocalNetworkUsageDescription` (Info.plist) zeigt iOS den Freigabe-Dialog nie an und blockiert das Netz still — die Erkennung fände dann nie ein Gerät. Der Eintrag ist deshalb Pflicht. **Auf einem echten Gerät zu prüfen**, im Simulator nicht nachstellbar |
+| D12 | Ältere Fibu-Version als Gegenstelle | ⚠️ Beacons vor Version 2 enthalten keinen Schlüssel und werden beim Finden übersprungen (`discover`). Beide Geräte brauchen dieselbe Version |
 
 ---
 
@@ -192,7 +195,7 @@ einzelnen Matrix-Zeilen.
 |---|---|---|---|
 | 1 | Windows-Spiegelung löscht fremde Dateien (B1, B5, B9) | ✅ **behoben** | `rclone_service_impl.dart:198` leitet Spiegel durch `VirtualMirrorSyncEngine`; `filesystem_mirror_source.dart` liefert die vier Callbacks |
 | 2 | `.fibu/` liegt im Sync-Ziel (C1–C3) | ✅ **behoben, doppelt** | `filesystem_mirror_source.dart:53-55` blendet aus; `rclone_service_impl.dart:238` hat `--exclude` auf dem `copy`-Pfad |
-| 3 | Kopplung nur in eine Richtung (A6) | ✅ **behoben** | `device_pairing_screen.dart:66,75` — Rolle ist ein Schalter |
+| 3 | Kopplung nur in eine Richtung (A6) | ✅ **behoben** | `device_pairing_screen.dart:90,92` — Rolle ist ein Schalter |
 | 4 | Kopplung übernimmt `syncMode: mirror` unverändert (A4) | ✅ **behoben** | `device_pairing_screen.dart` stuft nur herab, wenn der **Empfänger** ein Desktop ist |
 | 5 | Anomalie-Bremse zu schwach (B9) | ✅ **verschärft** | `virtual_mirror_sync.dart:83,613` — 20 % statt 50 %, plus Obergrenze 25 |
 | 6 | Kein geräteübergreifender Sync-Lock (B14) | ✅ **behoben** | `sync_lock_service.dart`; greift bei manuellen **und** geplanten Läufen |

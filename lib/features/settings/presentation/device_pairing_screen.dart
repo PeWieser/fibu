@@ -7,7 +7,6 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/device_identity_service.dart';
@@ -17,15 +16,18 @@ import '../../../theme/theme.dart';
 
 /// Gerät-zu-Gerät-Übertragung der Konfiguration.
 ///
-/// Auf dem Desktop: zeigt einen QR-Code und nimmt die Konfiguration eines
-/// Mobilgeräts entgegen. Auf Mobil: nimmt die Adresse entgegen und sendet die
-/// eigene Konfiguration.
+/// **Ein Weg: finden und tippen.** Wer empfängt, startet „Empfangen" und ist
+/// im lokalen Netz auffindbar. Wer sendet, sieht das gefundene Gerät mit
+/// Namen und überträgt mit einem Tipp. Der Empfänger bestätigt anschließend,
+/// was übernommen wird — geschrieben wird nichts ohne dieses Antippen.
 ///
-/// **Bewusste Grenze: kein Kamera-Scanner.** Die Adresse wird abgetippt oder
-/// eingefügt. Ein Scanner bräuchte ein natives Kamera-Plugin, und das würde
-/// eine Kamera-Berechtigung plus einen Eintrag im Privacy Manifest aufmachen
-/// (docs/RECHTS_AUDIT.md, L-13). Die Funktion ist dieselbe, nur die Eingabe
-/// ist eine Zeile Text statt eines Kamera-Bilds.
+/// **Was es nicht mehr gibt.** Kein QR-Code und keine Adresseingabe. Beides
+/// war ein zweiter und dritter Weg zum selben Ziel. Die manuelle Eingabe
+/// hätte 32 Bytes Base64URL über die Tastatur verlangt — ein Weg, den
+/// niemand geht, wenn die Erkennung funktioniert. Und ein Kamera-Scanner
+/// hätte eine Kamera-Berechtigung plus einen Privacy-Manifest-Eintrag
+/// aufgemacht (docs/RECHTS_AUDIT.md, L-13), nur um denselben Schlüssel
+/// einzulesen, den die Erkennung schon hat.
 class DevicePairingScreen extends ConsumerStatefulWidget {
   const DevicePairingScreen({super.key});
 
@@ -34,7 +36,16 @@ class DevicePairingScreen extends ConsumerStatefulWidget {
       _DevicePairingScreenState();
 }
 
-enum _PairingPhase { idle, waiting, received, failed }
+enum _PairingPhase {
+  idle,
+  waiting,
+
+  /// Ein Bundle ist angekommen, aber noch nicht geschrieben: Der Empfänger
+  /// sieht erst, was übernommen würde, und bestätigt dann.
+  confirm,
+  received,
+  failed,
+}
 
 class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   _PairingPhase _phase = _PairingPhase.idle;
@@ -55,10 +66,14 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     return platform == TargetPlatform.iOS || platform == TargetPlatform.android;
   }
 
-  final TextEditingController _urlCtrl = TextEditingController();
+  /// Angekommen, aber noch nicht übernommen — wartet auf die Bestätigung.
+  PairingBundle? _pending;
 
-  /// Im lokalen Netz gefundener Empfänger. Ein Tipp genügt dann — kein
-  /// QR-Code, keine Adresseingabe.
+  /// Eine Übertragung wurde abgelehnt. Wird als Hinweis gezeigt, damit
+  /// „Ablehnen" nicht wirkt, als sei nichts passiert.
+  bool _rejected = false;
+
+  /// Im lokalen Netz gefundener Empfänger. Ein Tipp genügt dann.
   DiscoveredDevice? _discovered;
   bool _searching = false;
 
@@ -84,13 +99,15 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   void _setRole(bool receive) {
     if (_isReceiver == receive) return;
     // Rollenwechsel beendet eine laufende Empfangs-Sitzung, sonst bliebe der
-    // Port belegt und der QR-Code würde weiter etwas versprechen.
+    // Port belegt und das Gerät würde weiter als Ziel im Netz stehen.
     DevicePairingService.stopReceiver();
     setState(() {
       _isReceiver = receive;
       _phase = _PairingPhase.idle;
       _session = null;
       _received = null;
+      _pending = null;
+      _rejected = false;
       _error = null;
       _discovered = null;
     });
@@ -118,7 +135,6 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   void dispose() {
     // Sitzung immer abbauen, sonst bleibt der Port belegt.
     DevicePairingService.stopReceiver();
-    _urlCtrl.dispose();
     super.dispose();
   }
 
@@ -150,7 +166,14 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         setState(() => _phase = _PairingPhase.failed);
         return;
       }
-      await _importBundle(bundle);
+      // Angekommen ist nicht gleich übernommen. Der Import überschreibt
+      // rclone.conf, remotes.json und tasks.json vollständig — das ist
+      // destruktiv und braucht deshalb eine Bestätigung, die sagt, was
+      // überschrieben wird (AGENTS.md Regel 6).
+      setState(() {
+        _pending = bundle;
+        _phase = _PairingPhase.confirm;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -161,6 +184,8 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   }
 
   /// Empfangene Konfiguration in die eigenen Dateien schreiben.
+  ///
+  /// Läuft erst nach der Bestätigung im Bestätigungs-Dialog.
   ///
   /// Überschreibt `rclone.conf` und `remotes.json` vollständig — die
   /// Laufwerke kommen ja gerade deshalb vom anderen Gerät. Aufgaben werden
@@ -222,7 +247,8 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   /// Sucht im lokalen Netz nach einem wartenden Empfänger.
   ///
   /// Läuft automatisch, sobald die Sender-Rolle aktiv ist. Findet sich nichts,
-  /// bleibt die manuelle Eingabe als Rückweg sichtbar.
+  /// bleibt es bei der Erklärung und „Erneut suchen" — eine Adresseingabe als
+  /// Rückweg gibt es bewusst nicht mehr.
   Future<void> _startDiscovery() async {
     if (_searching) return;
     setState(() {
@@ -247,8 +273,8 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     });
     final bundle = await DevicePairingService.collectBundle(
         defaultTargetPlatform.name);
-    final url = 'http://${device.host}:${device.port}/';
-    final ok = await DevicePairingService.send(url: url, bundle: bundle);
+    final ok = await DevicePairingService.send(
+        url: DevicePairingService.targetUrlFor(device), bundle: bundle);
     if (!mounted) return;
     setState(() {
       _sending = false;
@@ -257,25 +283,12 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     });
   }
 
-  Future<void> _send() async {
-    final strings = ref.read(stringsProvider);
-    final url = _urlCtrl.text.trim();
-    if (url.isEmpty) {
-      setState(() => _error = strings.pairingUrlMissing);
-      return;
-    }
+  /// Abgelehnt: Es wurde nichts geschrieben.
+  void _rejectPending() {
     setState(() {
-      _sending = true;
-      _error = null;
-    });
-    final bundle = await DevicePairingService.collectBundle(
-        defaultTargetPlatform.name);
-    final ok = await DevicePairingService.send(url: url, bundle: bundle);
-    if (!mounted) return;
-    setState(() {
-      _sending = false;
-      _phase = ok ? _PairingPhase.received : _PairingPhase.failed;
-      if (!ok) _error = strings.pairingSendFailed;
+      _pending = null;
+      _phase = _PairingPhase.idle;
+      _rejected = true;
     });
   }
 
@@ -458,30 +471,6 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
           ),
           SizedBox(height: theme.lg),
           Center(
-            child: Container(
-              padding: EdgeInsets.all(theme.md),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFFFF),
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-              ),
-              child: QrImageView(
-                data: _session!.uri.toString(),
-                size: 240,
-                backgroundColor: const Color(0xFFFFFFFF),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.md),
-          Center(
-            child: Text(
-              strings.pairingOrEnterCode(_session!.uri.toString()),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: theme.textSecondary, fontSize: 12, height: 1.4),
-            ),
-          ),
-          SizedBox(height: theme.lg),
-          Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -495,6 +484,14 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
               ],
             ),
           ),
+        ],
+
+        // Angekommen, aber noch nicht übernommen: erst zeigen, was es ist.
+        if (_phase == _PairingPhase.confirm && _pending != null)
+          _confirmBox(theme, strings, _pending!),
+        if (_rejected) ...[
+          SizedBox(height: theme.md),
+          _resultBox(theme, strings.pairingRejected, isError: true),
         ],
         if (_phase == _PairingPhase.received && _received != null)
           _resultBox(
@@ -559,14 +556,18 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
           ),
           SizedBox(height: theme.lg),
         ] else ...[
-          // Suche läuft. Kein Fehler, kein leeres Feld — einfach suchen.
+          // Suche läuft — oder ist gelaufen und hat nichts gefunden. Kein
+          // Fehler, kein leeres Feld. Der Spinner läuft nur, solange gesucht
+          // wird: ein stillstehender Fortschritt wäre eine Lüge.
           Row(
             children: [
-              const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: material.CircularProgressIndicator(strokeWidth: 2)),
-              SizedBox(width: theme.sm),
+              if (_searching) ...[
+                const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: material.CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: theme.sm),
+              ],
               Expanded(
                 child: Text(
                   _searching ? strings.pairingSearching : strings.pairingNoneFound,
@@ -581,38 +582,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
             ],
           ),
           SizedBox(height: theme.lg),
-          // Manuelle Eingabe bleibt als Rückweg, falls die Erkennung im
-          // eigenen Netz nicht durchkommt (Gast-WLAN, VLAN, Firewall).
-          material.ExpansionTile(
-            title: Text(strings.pairingManualEntry,
-                style: const TextStyle(fontSize: 14)),
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(theme.md, 0, theme.md, theme.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    material.TextField(
-                      controller: _urlCtrl,
-                      decoration: material.InputDecoration(
-                        labelText: strings.pairingUrlLabel,
-                        hintText: 'http://192.168.1.20:53124/#…',
-                        border: const material.OutlineInputBorder(),
-                      ),
-                      autocorrect: false,
-                    ),
-                    SizedBox(height: theme.md),
-                    _primaryButton(
-                        _sending ? strings.pairingSending : strings.pairingSend,
-                        _sending ? null : _send,
-                        theme),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ],
-
         if (_phase == _PairingPhase.received)
           _resultBox(theme, strings.pairingSent, isError: false),
         if (_error != null) ...[
@@ -636,6 +606,63 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
           disabledBackgroundColor: theme.offline.withValues(alpha: 0.35),
         ),
         child: Text(label),
+      ),
+    );
+  }
+
+  /// Bestätigung vor dem Überschreiben der eigenen Konfiguration.
+  ///
+  /// Nennt Gerät und Umfang, damit „Übernehmen" eine informierte
+  /// Entscheidung ist und nicht ein Reflex auf einen Dialog.
+  Widget _confirmBox(AppThemeData theme, AppStrings strings, PairingBundle bundle) {
+    return Container(
+      padding: EdgeInsets.all(theme.md),
+      decoration: BoxDecoration(
+        color: theme.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: theme.accent.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            strings.pairingConfirmRequest(
+              bundle.deviceName,
+              bundle.remotes.length,
+              bundle.tasks.length,
+            ),
+            style: TextStyle(color: theme.textPrimary, fontSize: 13, height: 1.4),
+          ),
+          SizedBox(height: theme.xs),
+          Text(
+            strings.pairingConfirmOverwrite,
+            style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.4),
+          ),
+          SizedBox(height: theme.md),
+          Row(
+            children: [
+              Expanded(
+                child: _primaryButton(
+                    strings.pairingAccept, () => _importBundle(bundle), theme),
+              ),
+              SizedBox(width: theme.md),
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: material.OutlinedButton(
+                    onPressed: _rejectPending,
+                    style: material.OutlinedButton.styleFrom(
+                      foregroundColor: theme.textPrimary,
+                      side: BorderSide(
+                          color: theme.textSecondary.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(strings.pairingReject),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

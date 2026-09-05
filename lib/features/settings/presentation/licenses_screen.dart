@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/navigation/app_nav.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../theme/theme.dart';
@@ -106,18 +107,8 @@ class _LicensesScreenState extends ConsumerState<LicensesScreen> {
   bool _isCoreComponent(String title) =>
       _coreDescription(title, ref.read(stringsProvider)) != null;
 
-  void _openDetail(_LicenseSection section, AppStrings strings) {
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(
-            builder: (_) => _LicenseDetailScreen(section: section))
-        : (platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(
-                builder: (_) => _LicenseDetailScreen(section: section))
-            : material.MaterialPageRoute(
-                builder: (_) => _LicenseDetailScreen(section: section)));
-    Navigator.of(context).push(route);
-  }
+  void _openDetail(_LicenseSection section) =>
+      AppNav.push(context, _LicenseDetailScreen(section: section));
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +287,7 @@ class _LicensesScreenState extends ConsumerState<LicensesScreen> {
       ],
     );
 
-    void onTap() => _openDetail(section, strings);
+    void onTap() => _openDetail(section);
 
     if (platform == TargetPlatform.iOS) {
       return Padding(

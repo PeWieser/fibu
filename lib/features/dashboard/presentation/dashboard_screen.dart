@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/navigation/app_nav.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/utils/ios_haptics.dart';
@@ -151,13 +152,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // wechselt, führt „Laufwerk hinzufügen“ in den Einstellungen-Tab — und
     // öffnet dort direkt die Cloud-Laufwerke.
     ref.read(shellIndexProvider.notifier).state = 2;
-    final platform = defaultTargetPlatform;
-    final route = platform == TargetPlatform.windows
-        ? fluent.FluentPageRoute(builder: (_) => const CloudDrivesScreen())
-        : platform == TargetPlatform.iOS
-            ? cupertino.CupertinoPageRoute(builder: (_) => const CloudDrivesScreen())
-            : material.MaterialPageRoute(builder: (_) => const CloudDrivesScreen());
-    Navigator.of(context).push(route);
+    AppNav.push(context, const CloudDrivesScreen());
   }
 
   /// „Letztes Backup: 23.08.2026, 12:15“ — dezent unter dem Sync-Button.

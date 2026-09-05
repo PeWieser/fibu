@@ -504,13 +504,13 @@ class AppStrings {
   // --- Settings ---
   String get settingsTitle => isGerman ? 'Einstellungen' : 'Settings';
   String get appearanceSection => isGerman ? 'Erscheinungsbild' : 'Appearance';
-  String get syncWithSystem => isGerman ? 'Mit System synchronisieren' : 'Sync with System';
-  String get useDarkMode => isGerman ? 'Dunkelmodus verwenden' : 'Use Dark Mode';
-  String get lightModeSection => isGerman ? 'Light Mode Farbschema' : 'Light Mode Palettes';
-  String get darkModeSection => isGerman ? 'Dark Mode Farbschema' : 'Dark Mode Palettes';
-  String get lightModePalette => isGerman ? 'Light Mode Farbschema' : 'Light Mode Palette';
-  String get darkModePalette => isGerman ? 'Dark Mode Farbschema' : 'Dark Mode Palette';
-  String get themeMode => isGerman ? 'Farbschema-Modus' : 'Theme Mode';
+  /// Hinweis unter „Erscheinungsbild": Hell/Dunkel ist keine Einstellung.
+  String get appearanceAutoHint => isGerman
+      ? 'Hell und Dunkel folgen dem System. Die gewählte Palette gilt für beides.'
+      : 'Light and dark follow the system. The palette you choose applies to both.';
+
+  /// Name des neutralen Standard-Farbschemas im Farbwähler.
+  String get paletteStandard => isGerman ? 'Standard' : 'Standard';
   String get cloudStorage => isGerman ? 'Cloud-Speicher' : 'Cloud Storage';
   String get manageCloudDrives => isGerman ? 'Cloud-Laufwerke verwalten' : 'Manage Cloud Drives';
   String get languageSection => isGerman ? 'Sprache' : 'Language';
@@ -543,9 +543,6 @@ class AppStrings {
       : 'Character colour tints section titles, raised to 3:1 contrast.';
 
   String get tooltipLanguage => isGerman ? 'Wähle die Sprache der Benutzeroberfläche.' : 'Choose the interface language.';
-  String get tooltipThemeMode => isGerman
-      ? 'Wähle zwischen automatischem System-Modus oder manuellem Dunkel-/Hellmodus.'
-      : 'Choose between automatic system mode or manual dark/light mode.';
   String get tooltipWadaPalette => isGerman
       ? 'Wähle eine traditionelle japanische Sanzo Wada Farbpalette für ein harmonisches Design.'
       : 'Choose a traditional Japanese Sanzo Wada color palette for balanced styling.';
@@ -863,18 +860,28 @@ class AppStrings {
   String get pairingTitle =>
       isGerman ? 'Konfiguration übertragen' : 'Transfer Configuration';
   String get pairingReceiverIntro => isGerman
-      ? 'Dieses Gerät wartet auf die Konfiguration eines Mobilgeräts. Den Code unten mit der Fibu-App auf dem Handy öffnen — Laufwerke, Zugangsdaten und Aufgaben werden direkt über das lokale Netz übertragen, ohne Server dazwischen.'
-      : 'This device is waiting for the configuration of a mobile device. Open the code below with the Fibu app on your phone — drives, credentials and tasks transfer directly over the local network, with no server in between.';
+      ? 'Dieses Gerät wartet auf die Konfiguration eines anderen Geräts. Es ist im lokalen Netz auffindbar, solange es wartet — übertragen wird direkt von Gerät zu Gerät, ohne Server dazwischen.'
+      : 'This device is waiting for the configuration of another device. It stays discoverable on the local network while it waits — the transfer goes directly device to device, with no server in between.';
   String get pairingSenderIntro => isGerman
-      ? 'Gib die Adresse ein, die das andere Gerät anzeigt, und sende deine Konfiguration dorthin. Übertragen werden Laufwerke mit Zugangsdaten, Aufgaben und Einstellungen — verschlüsselt, direkt von Gerät zu Gerät.'
-      : 'Enter the address shown on the other device and send your configuration there. Drives with credentials, tasks and settings are transferred — encrypted, directly device to device.';
+      ? 'Auf dem anderen Gerät „Empfangen" starten — es erscheint dann hier mit seinem Namen. Ein Tipp überträgt Laufwerke mit Zugangsdaten, Aufgaben und Einstellungen: verschlüsselt, direkt von Gerät zu Gerät.'
+      : 'Start “Receive” on the other device — it then shows up here with its name. One tap transfers drives with credentials, tasks and settings: encrypted, directly device to device.';
   String get pairingStart =>
-      isGerman ? 'Code anzeigen' : 'Show Code';
+      isGerman ? 'Empfangen starten' : 'Start receiving';
   String get pairingWaiting =>
       isGerman ? 'Warte auf das andere Gerät …' : 'Waiting for the other device …';
-  String pairingOrEnterCode(String url) => isGerman
-      ? 'Ohne Kamera: Diese Adresse auf dem anderen Gerät eingeben\n$url'
-      : 'No camera? Enter this address on the other device\n$url';
+
+  // --- Bestätigung vor dem Überschreiben ---
+  String pairingConfirmRequest(String device, int remotes, int tasks) => isGerman
+      ? '„$device" hat eine Konfiguration gesendet: $remotes ${remotes == 1 ? 'Laufwerk' : 'Laufwerke'}, $tasks ${tasks == 1 ? 'Aufgabe' : 'Aufgaben'}.'
+      : '“$device” sent a configuration: $remotes ${remotes == 1 ? 'drive' : 'drives'}, $tasks ${tasks == 1 ? 'task' : 'tasks'}.';
+  String get pairingConfirmOverwrite => isGerman
+      ? 'Übernehmen ersetzt die Laufwerke, Zugangsdaten und Aufgaben auf diesem Gerät. Aufgaben mit einer Mediathek-Quelle brauchen danach noch einen Ordner.'
+      : 'Applying replaces the drives, credentials and tasks on this device. Tasks with a library source still need a folder afterwards.';
+  String get pairingAccept => isGerman ? 'Übernehmen' : 'Apply';
+  String get pairingReject => isGerman ? 'Ablehnen' : 'Reject';
+  String get pairingRejected => isGerman
+      ? 'Abgelehnt — es wurde nichts geändert.'
+      : 'Rejected — nothing was changed.';
   String pairingReceived(String device, int remotes, int tasks) => isGerman
       ? 'Konfiguration von „$device" übernommen: $remotes Laufwerke, $tasks Aufgaben. Aufgaben mit Mediathek-Quelle brauchen noch einen Ordner.'
       : 'Configuration from “$device” applied: $remotes drives, $tasks tasks. Tasks with a library source still need a folder.';
@@ -896,9 +903,6 @@ class AppStrings {
   String get pairingFoundSubtitle => isGerman
       ? 'Bereit — tippen zum Übertragen'
       : 'Ready — tap to transfer';
-  String get pairingManualEntry => isGerman
-      ? 'Adresse manuell eingeben'
-      : 'Enter address manually';
   String get pairingListeningHint => isGerman
       ? 'Andere Geräte im selben Netz finden dieses Gerät automatisch.'
       : 'Other devices on the same network find this device automatically.';
@@ -917,12 +921,6 @@ class AppStrings {
   String get pairingNoNetwork => isGerman
       ? 'Keine lokale Netzadresse gefunden. Ist das Gerät mit einem Netzwerk verbunden?'
       : 'No local network address found. Is this device connected to a network?';
-  String get pairingUrlLabel =>
-      isGerman ? 'Adresse des anderen Geräts' : 'Address of the other device';
-  String get pairingUrlMissing =>
-      isGerman ? 'Bitte zuerst die Adresse eingeben.' : 'Enter the address first.';
-  String get pairingSend => isGerman ? 'Konfiguration senden' : 'Send Configuration';
-  String get pairingSending => isGerman ? 'Wird gesendet …' : 'Sending …';
   String get pairingSent => isGerman
       ? 'Konfiguration übertragen.' : 'Configuration transferred.';
   String get pairingSendFailed => isGerman

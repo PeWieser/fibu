@@ -42,9 +42,11 @@ class ActiveCloud {
     };
 
     String? chosen;
-    final backupTarget = await backupTarget();
-    if (backupTarget != null && entries.any((e) => e.id == backupTarget)) {
-      chosen = backupTarget;
+    // Nicht `backupTarget` nennen: Die lokale Variable würde die
+    // gleichnamige Methode verdecken und sich damit selbst meinen.
+    final target = await backupTarget();
+    if (target != null && entries.any((e) => e.id == target)) {
+      chosen = target;
     }
     chosen ??= entries.firstWhere(
       (e) => !memberIds.contains(e.id),

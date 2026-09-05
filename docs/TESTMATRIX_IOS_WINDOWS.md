@@ -183,6 +183,7 @@ Behoben: `scheduler_service.dart:320,347`.
 | D10 | Fremdes Gerät im selben WLAN schickt ein Bundle | ✅ Der Schlüssel reist im UDP-Beacon mit, also kann jeder im Netz senden — geschrieben wird aber nichts ohne Bestätigung am Empfänger (`_confirmBox`: Gerätename, Anzahl Laufwerke, Anzahl Aufgaben). Ablehnen schreibt nichts |
 | D11 | iOS ohne Freigabe „Lokales Netz" | ⚠️ Ohne `NSLocalNetworkUsageDescription` (Info.plist) zeigt iOS den Freigabe-Dialog nie an und blockiert das Netz still — die Erkennung fände dann nie ein Gerät. Der Eintrag ist deshalb Pflicht. **Auf einem echten Gerät zu prüfen**, im Simulator nicht nachstellbar |
 | D12 | Ältere Fibu-Version als Gegenstelle | ⚠️ Beacons vor Version 2 enthalten keinen Schlüssel und werden beim Finden übersprungen (`discover`). Beide Geräte brauchen dieselbe Version |
+| D13 | Konfig-Übertragung überhaupt | ❌ **war kaputt, jetzt behoben**: `_generateSecret` lieferte Base64URL ohne Padding (43 Zeichen), `_keyFrom` dekodiert aber mit `base64Url.decode` — `FormatException` bei jedem Versuch, auf allen drei Wegen (Erkennung, QR, Adresseingabe). `_padBase64Url` füllt jetzt auf; `test/unit/device_pairing_test.dart` nagelt das fest |
 
 ---
 

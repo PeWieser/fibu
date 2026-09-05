@@ -60,10 +60,13 @@ void main() {
     test('Bundle überlebt Verschlüsseln und Entschlüsseln unverändert',
         () async {
       const bundle = _testBundle;
-      // 32 Bytes, Base64URL ohne Padding — genau das Format aus
-      // _generateSecret, damit die Längenprüfung nicht greift.
+      // Genau das Format aus _generateSecret: 32 Bytes Base64URL, Padding
+      // entfernt. 43 Zeichen sind kein Vielfaches von vier — und genau daran
+      // scheiterte base64Url.decode, bevor _keyFrom aufgefüllt hat. Ohne
+      // diese Eigenschaft wäre der Test keine Regression mehr.
       final secret = base64Url.encode(List<int>.generate(32, (i) => i + 1))
           .replaceAll('=', '');
+      expect(secret.length % 4, isNot(0));
 
       final bytes = await DevicePairingService.encryptBundle(bundle, secret);
       final back = await DevicePairingService.decryptBundle(bytes, secret);

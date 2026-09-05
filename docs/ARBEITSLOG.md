@@ -1531,11 +1531,26 @@ Neu: `appearanceAutoHint`, `paletteStandard`.
 
 QR-Code und Adresseingabe sind raus, `qr_flutter` ist aus `pubspec.yaml` raus.
 
-**Dabei gefunden: die Ein-Tipp-Übertragung war kaputt.** Der UDP-Beacon
-enthielt nur Name, IP und Port — `send()` verlangt aber den Schlüssel aus dem
-URL-Fragment und lehnt ohne ihn ab. `_sendTo` baute die URL ohne Fragment,
-also schlug jeder Tipp auf ein gefundenes Gerät fehl. Fix: Schlüssel im Beacon
-(`'v': 2`), `DiscoveredDevice.secret`, `DevicePairingService.targetUrlFor`.
+**Dabei gefunden: die Konfig-Übertragung hat nie funktioniert — auf keinem
+der drei Wege.** Zwei unabhängige Fehler, beide erst durch die neuen Tests
+sichtbar:
+
+1. **Der Schlüssel ließ sich nicht dekodieren.** `_generateSecret` liefert
+   Base64URL **ohne** Padding (32 Bytes = 43 Zeichen); `_keyFrom` dekodiert
+   mit `base64Url.decode`, das ein Vielfaches von vier verlangt. Jeder Aufruf
+   warf `FormatException: Invalid length`, `send` fing ihn und meldete nur
+   „Übertragung fehlgeschlagen". Fix: `_padBase64Url` füllt beim Dekodieren
+   auf — damit funktioniert auch ein Schlüssel, der unterwegs sein Padding
+   verloren hat.
+2. **Der Beacon enthielt keinen Schlüssel.** Nur Name, IP und Port —
+   `send()` verlangt den Schlüssel aber aus dem URL-Fragment. `_sendTo` baute
+   die URL ohne Fragment, ein Tipp auf ein gefundenes Gerät schlug also schon
+   vorher fehl. Fix: Schlüssel im Beacon (`'v': 2`), `DiscoveredDevice.secret`,
+   `DevicePairingService.targetUrlFor`.
+
+Zusätzlich baut `send` die Ziel-Uri jetzt neu, statt `replace(fragment: '')`
+zu verwenden — das lässt `hasFragment` auf true, und eine Uri mit Fragment
+will kein HTTP-Client haben.
 
 **Neu: Bestätigung vor dem Überschreiben.** Da der Schlüssel jetzt im lokalen
 Netz lesbar ist, schreibt der Empfänger nichts ohne Antippen

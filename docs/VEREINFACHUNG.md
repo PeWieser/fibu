@@ -53,14 +53,27 @@ Vorher: automatische Erkennung, QR-Code, Adresseingabe.
 **Jetzt:** nur die Erkennung. QR-Code und Adresseingabe sind raus,
 `qr_flutter` ist aus `pubspec.yaml` raus.
 
-**Dabei gefunden — die Erkennung war kaputt.** Der UDP-Beacon enthielt nur
-Name, IP und Port. `send()` verlangt aber den Sitzungsschlüssel aus dem
-URL-Fragment und lehnt ohne ihn ab (`Adresse enthält keinen Schlüssel`).
-`_sendTo` baute die URL ohne Fragment — **ein Tipp auf ein gefundenes Gerät
-schlug damit immer fehl.** Der Schlüssel steht jetzt im Beacon
-(`'v': 2`), `DiscoveredDevice` transportiert ihn, und
-`DevicePairingService.targetUrlFor` baut daraus die Zieladresse. Ein Test
-nagelt das fest (`test/unit/device_pairing_test.dart`).
+**Dabei gefunden — die Konfig-Übertragung hat nie funktioniert.** Nicht nur
+die Erkennung: **alle drei Wege** scheiterten, und zwar an zwei unabhängigen
+Stellen.
+
+1. **Der Schlüssel ließ sich nicht dekodieren.** `_generateSecret` liefert
+   Base64URL ohne Padding (32 Bytes = 43 Zeichen); `_keyFrom` dekodiert mit
+   `base64Url.decode`, das ein Vielfaches von vier verlangt. Jeder Versuch
+   warf `FormatException`, `send` meldete nur „Übertragung fehlgeschlagen".
+   Deshalb war der Fehler unsichtbar: Die UI sah richtig aus, die Meldung war
+   richtig, nur die Übertragung kam nie zustande. Fix: `_padBase64Url`.
+2. **Der Beacon enthielt keinen Schlüssel.** Nur Name, IP und Port —
+   `send()` verlangt den Schlüssel aber aus dem URL-Fragment, und `_sendTo`
+   baute die URL ohne Fragment. Fix: Schlüssel im Beacon (`'v': 2`),
+   `DiscoveredDevice.secret`, `DevicePairingService.targetUrlFor`.
+
+Beide Fehler sind durch Tests festgenagelt (`test/unit/device_pairing_test.dart`),
+die die Kette gliedweise prüfen: Schlüssel → Krypto → HTTP-Status → `send`.
+
+**Lehre für diesen Durchgang:** „Weglassen" hat den Fehler überhaupt erst
+sichtbar gemacht. Solange drei Wege zum Ziel führten, konnte jeder einzeln
+kaputt sein, ohne dass es auffiel.
 
 **Und: Bestätigung vor dem Überschreiben.** Da der Schlüssel jetzt im lokalen
 Netz lesbar ist, kann jeder im Netz ein Bundle schicken. Geschrieben wird

@@ -449,16 +449,22 @@ class DevicePairingService {
       AppLog.warn('pairing', 'Adresse enthält keinen Schlüssel');
       return false;
     }
-    // Das Fragment darf nicht mitgesendet werden.
-    final target = parsed.replace(fragment: '');
-
     try {
       final payload = await _encryptBundle(bundle, secret);
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 10);
       try {
-        final request = await client.postUrl(
-            target.replace(path: '/upload'));
+        // Ziel neu bauen statt `parsed.replace(fragment: '')`: Das lässt
+        // `hasFragment` auf true (nur der Wert ist leer), und eine Uri mit
+        // Fragment will kein HTTP-Client haben. Der Schlüssel bleibt im
+        // Fragment, geht also nie über die Leitung.
+        final target = Uri(
+          scheme: parsed.scheme,
+          host: parsed.host,
+          port: parsed.port,
+          path: '/upload',
+        );
+        final request = await client.postUrl(target);
         request.headers.contentType = ContentType.binary;
         request.add(payload);
         final response = await request.close().timeout(const Duration(seconds: 30));
@@ -482,13 +488,29 @@ class DevicePairingService {
 
   static AesGcm get _algorithm => AesGcm.with256bits();
 
-  /// Schlüssel aus dem Base64URL-Text des QR-Codes.
+  /// Schlüssel aus dem Base64URL-Text des Sitzungsschlüssels.
+  ///
+  /// **Die Falle, an der die ganze Übertragung hing:** `_generateSecret`
+  /// liefert Base64URL **ohne** Padding — 32 Bytes sind 43 Zeichen, und
+  /// `base64Url.decode` verlangt ein Vielfaches von vier. Jeder Aufruf warf
+  /// damit `FormatException: Invalid length`, bevor ein Byte das Gerät
+  /// verließ; `send` fing den Fehler und meldete schlicht „fehlgeschlagen".
+  ///
+  /// Aufgefüllt wird hier und nicht bei der Erzeugung: Ein Schlüssel, der
+  /// unterwegs sein Padding verloren hat (URL-Fragment, Copy&Paste), muss
+  /// trotzdem funktionieren.
   static Future<SecretKey> _keyFrom(String secret) async {
-    final raw = base64Url.decode(secret);
+    final raw = base64Url.decode(_padBase64Url(secret));
     if (raw.length != 32) {
       throw const FormatException('Pairing-Schlüssel hat nicht 32 Bytes');
     }
     return SecretKey(raw);
+  }
+
+  /// Ergänzt fehlendes Base64-Padding: 43 Zeichen → 44.
+  static String _padBase64Url(String value) {
+    final rest = value.length % 4;
+    return rest == 0 ? value : value + '=' * (4 - rest);
   }
 
   static Future<Uint8List> _encryptBundle(

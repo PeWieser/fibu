@@ -3,6 +3,11 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/app_paths.dart';
+// Bewusste Ausnahme von der Schichtung (core → features): Der Provider braucht
+// das Ziel der Sicherung, und das liegt im Aufgaben-Zustand. Die Alternative
+// wäre ein Datei-Lesevorgang in einem Provider — genau das hat ihn in den
+// Tests langsamer gemacht als das Zeitfenster, in dem die Oberfläche baut.
+import '../../features/tasks/presentation/tasks_controller.dart';
 import 'rclone_provider.dart';
 import 'rclone_service.dart';
 import 'remote_registry_service.dart';
@@ -37,9 +42,19 @@ class ActiveCloud {
   /// Dasselbe wie [resolve], aber mit einer schon geladenen Laufwerksliste —
   /// die Provider-Schicht liefert sie aus `remoteEntriesProvider`, damit
   /// Overrides (z. B. in Tests) wirken.
+  ///
+  /// [preferredTarget] übergibt das Ziel der Sicherung aus dem Speicher. Wer
+  /// es hat, setzt außerdem [lookupBackupTarget] auf false — dann liest diese
+  /// Methode **keine Datei**, und der Provider bleibt billig.
+  ///
+  /// [persist] schreibt die Wahl in die Registry. Der Provider tut das
+  /// bewusst nicht: Er würde bei jedem Neuaufbau in die Datei schreiben.
+  /// Gespeichert wird, wenn eine Cloud verbunden oder ersetzt wird.
   static Future<String?> resolveFrom(
     List<RemoteEntry> entries,
     RemoteRegistryService registry, {
+    String? preferredTarget,
+    bool lookupBackupTarget = true,
     bool persist = true,
   }) async {
     if (entries.isEmpty) return null;
@@ -54,7 +69,8 @@ class ActiveCloud {
     String? chosen;
     // Nicht `backupTarget` nennen: Die lokale Variable würde die
     // gleichnamige Methode verdecken und sich damit selbst meinen.
-    final target = await backupTarget();
+    final target =
+        preferredTarget ?? (lookupBackupTarget ? await backupTarget() : null);
     if (target != null && entries.any((e) => e.id == target)) {
       chosen = target;
     }
@@ -65,6 +81,18 @@ class ActiveCloud {
 
     if (persist) await registry.setActiveRemote(chosen);
     return chosen;
+  }
+
+  /// Ziel-Laufwerk der Sicherung aus dem geladenen Zustand — ohne Datei-IO.
+  static String? targetOfTasks(List<BackupTask> tasks) {
+    if (tasks.isEmpty) return null;
+    for (final t in tasks) {
+      if (t.isActive && t.targetRemote.isNotEmpty) return t.targetRemote;
+    }
+    for (final t in tasks) {
+      if (t.targetRemote.isNotEmpty) return t.targetRemote;
+    }
+    return null;
   }
 
   /// Ziel-Laufwerk der vorhandenen Sicherung, direkt aus `tasks.json`.
@@ -155,9 +183,21 @@ class ActiveCloud {
 /// Kennung der einen Cloud (rclone-Sektionsname), oder null, wenn keine
 /// verbunden ist.
 final activeRemoteIdProvider = FutureProvider<String?>((ref) async {
+  // Alles Synchrone zuerst: Nach einem await darf `ref` nicht mehr benutzt
+  // werden. Und genau deshalb kommt das Sicherungsziel hier aus dem Zustand
+  // statt aus tasks.json — Datei-IO in diesem Provider hat ihn in den Tests
+  // langsamer gemacht als das Zeitfenster, in dem die Oberfläche baut.
+  final registry = ref.watch(remoteRegistryServiceProvider);
+  final tasks = ref.watch(tasksListProvider);
+  final preferred = ActiveCloud.targetOfTasks(tasks);
   final entries = await ref.watch(remoteEntriesProvider.future);
   return ActiveCloud.resolveFrom(
-      entries, ref.watch(remoteRegistryServiceProvider));
+    entries,
+    registry,
+    preferredTarget: preferred,
+    lookupBackupTarget: false,
+    persist: false,
+  );
 });
 
 /// Eintrag der einen Cloud (Name, Typ) — null, wenn keine verbunden ist.

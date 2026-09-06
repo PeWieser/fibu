@@ -26,7 +26,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  // Mittelgroß statt 1280x720: Das Dashboard hat drei Objekte (Status,
+  // Speicher, Sync-Button) und eine Inhaltsspalte von 620 px — ein riesiges
+  // Fenster wäre leerer Platz. Die Mindestgröße steht in win32_window.cpp
+  // (WM_GETMINMAXINFO), damit der Inhalt nie abgeschnitten wird.
+  Win32Window::Size size(860, 620);
   if (!window.Create(L"fibu", origin, size)) {
     return EXIT_FAILURE;
   }

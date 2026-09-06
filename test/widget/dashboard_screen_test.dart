@@ -16,7 +16,6 @@ import 'package:fibu/core/services/remote_registry_service.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
-import 'package:fibu/features/dashboard/presentation/widgets/multi_remote_storage_card.dart';
 import '../helpers/platform_mocks.dart';
 
 /// Die Screens zeigen unbestimmte Lade-Indikatoren (z. B. Quota), die endlos
@@ -215,6 +214,32 @@ void main() {
       }
     });
 
+    testWidgets('Windows-Dashboard passt bei 860×620 ohne Überlauf', (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      // Genau die Fenstergröße aus windows/runner/main.cpp. Ein RenderFlex-
+      // Überlauf wirft — der Test schlägt also fehl, sobald der Inhalt nicht
+      // mehr passt.
+      await tester.binding.setSurfaceSize(const material.Size(860, 620));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await tester.pumpWidget(createWidgetUnderTest());
+        await settleBounded(tester);
+
+        // Drei Objekte: Statuskarte (hier: Einrichtung), Speicher, Button.
+        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.textContaining('belegt'), findsOneWidget);
+        expect(
+          find.widgetWithText(fluent.FilledButton, strings.syncAll),
+          findsOneWidget,
+        );
+        // Die Inhaltsspalte bleibt schmal, auch wenn das Fenster breiter wird.
+        expect(find.byType(fluent.ScaffoldPage), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
     testWidgets('Tapping Sync All triggers simulated job and shows active job card (Windows)', (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
@@ -266,8 +291,9 @@ void main() {
         );
         await settleBounded(tester);
 
-        // Mit Task + Remotes: normales Dashboard (kein Setup-Hinweis).
-        expect(find.byType(MultiRemoteStorageCard), findsOneWidget);
+        // Mit Sicherung + Cloud: normales Dashboard (kein Einrichtungs-Hinweis).
+        // Der Speicherplatz steht als Zeile unter der Statuskarte.
+        expect(find.textContaining('belegt'), findsOneWidget);
         expect(find.text(strings.addTask), findsNothing);
         expect(find.text(strings.addCloudDrive), findsNothing);
 
@@ -279,8 +305,8 @@ void main() {
         // Advance clock to let mock sync delay fire and trigger provider state updates
         await tester.pump(const Duration(milliseconds: 200));
 
-        // Status updates to Syncing
-        expect(find.text(strings.syncActive), findsOneWidget);
+        // Status läuft: Die Statuskarte zeigt denselben einen Text, den
+        // früher Statusleiste und Job-Panel getrennt angezeigt haben.
         
         // Die Statusleiste zeigt genau einen von drei Zuständen (Vorgabe):
         // „Auf Änderungen überprüfen", „„Datei" auf/von „Cloud" übertragen"

@@ -109,11 +109,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             title: fluent.Text(strings.navDashboard),
             body: const DashboardScreen(),
           ),
-          fluent.PaneItem(
-            icon: Icon(fluent.FluentIcons.task_manager, semanticLabel: strings.navTasks),
-            title: fluent.Text(strings.navTasks),
-            body: const TasksScreen(),
-          ),
+          // Kein Aufgaben-Tab: Modell ist „eine Cloud, eine Sicherung", die
+          // Sicherung wird in den Einstellungen eingerichtet. Zwei Einträge
+          // statt drei — Index 1 ist jetzt Einstellungen.
           fluent.PaneItem(
             icon: Icon(fluent.FluentIcons.settings, semanticLabel: strings.navSettings),
             title: fluent.Text(strings.navSettings),

@@ -31,7 +31,17 @@ class ActiveCloud {
     RemoteRegistryService registry, {
     bool persist = true,
   }) async {
-    final entries = await registry.entries();
+    return resolveFrom(await registry.entries(), registry, persist: persist);
+  }
+
+  /// Dasselbe wie [resolve], aber mit einer schon geladenen Laufwerksliste —
+  /// die Provider-Schicht liefert sie aus `remoteEntriesProvider`, damit
+  /// Overrides (z. B. in Tests) wirken.
+  static Future<String?> resolveFrom(
+    List<RemoteEntry> entries,
+    RemoteRegistryService registry, {
+    bool persist = true,
+  }) async {
     if (entries.isEmpty) return null;
 
     final stored = registry.activeRemoteId;
@@ -144,8 +154,10 @@ class ActiveCloud {
 
 /// Kennung der einen Cloud (rclone-Sektionsname), oder null, wenn keine
 /// verbunden ist.
-final activeRemoteIdProvider = FutureProvider<String?>((ref) {
-  return ActiveCloud.resolve(ref.watch(remoteRegistryServiceProvider));
+final activeRemoteIdProvider = FutureProvider<String?>((ref) async {
+  final entries = await ref.watch(remoteEntriesProvider.future);
+  return ActiveCloud.resolveFrom(
+      entries, ref.watch(remoteRegistryServiceProvider));
 });
 
 /// Eintrag der einen Cloud (Name, Typ) — null, wenn keine verbunden ist.

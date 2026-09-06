@@ -5,6 +5,8 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/navigation/app_nav.dart';
+import '../../../core/services/active_cloud.dart';
+import '../../../core/utils/format.dart';
 
 import '../../../theme/theme.dart';
 import '../../../core/utils/ios_haptics.dart';
@@ -15,6 +17,7 @@ import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/widget_status_service.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
+import '../../tasks/presentation/tasks_screen.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
@@ -96,7 +99,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _setupActionRow(
             context, theme, strings.addCloudDrive, () => _openCloudDrives(context))
       else if (!hasTasks)
-        _setupActionRow(context, theme, strings.addTask, _goToTasks),
+        _setupActionRow(context, theme, strings.addTask, () => _goToTasks(context)),
     ];
     if (rows.isEmpty) return null;
 
@@ -143,15 +146,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  void _goToTasks() {
+  void _goToTasks(BuildContext context) {
+    // Windows hat seit dem Umbau keinen Aufgaben-Tab mehr — die Sicherung
+    // öffnet sich als Seite, bis sie in die Einstellungen wandert.
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      AppNav.push(context, const TasksScreen());
+      return;
+    }
     ref.read(shellIndexProvider.notifier).state = 1;
   }
 
   void _openCloudDrives(BuildContext context) {
-    // Ein Navigationsmodell: wie „Aufgabe erstellen“ in den Aufgaben-Tab
-    // wechselt, führt „Laufwerk hinzufügen“ in den Einstellungen-Tab — und
-    // öffnet dort direkt die Cloud-Laufwerke.
-    ref.read(shellIndexProvider.notifier).state = 2;
+    // Auf iOS/Android liegt die Laufwerksverwaltung im Einstellungen-Tab,
+    // der Tab wird also mitgewechselt. Windows hat nur noch zwei Einträge —
+    // dort öffnet sich die Seite einfach darüber.
+    if (defaultTargetPlatform != TargetPlatform.windows) {
+      ref.read(shellIndexProvider.notifier).state = 2;
+    }
     AppNav.push(context, const CloudDrivesScreen());
   }
 
@@ -226,12 +237,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // --- Windows (Fluent Design) ---
+  //
+  // Drei Objekte, mehr nicht: Statuskarte, Speicherplatz, Sync-Button.
+  // Die Statuskarte trägt den Ruhezustand **und** den laufenden Sync in
+  // demselben Feld — zwei Felder wären zwei Wahrheiten übereinander.
+
+  /// Breite des Inhaltsspalts. Das Fenster ist bewusst kleiner als früher
+  /// (1280×720); der Inhalt bestimmt die Größe, nicht umgekehrt.
+  static const double windowsContentWidth = 620;
+
   Widget _buildWindows(BuildContext context) {
     final theme = context.theme;
     final strings = ref.watch(stringsProvider);
-    final activeJob = ref.watch(activeJobProvider);
-    final quotaAsync = ref.watch(primaryQuotaProvider);
-    final setupHint = _buildSetupHint(context, strings);
+    final job = ref.watch(activeJobProvider);
 
     return fluent.ScaffoldPage(
       header: fluent.PageHeader(
@@ -241,125 +259,244 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ),
       content: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: theme.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatusBanner(context, activeJob, strings),
-            if (setupHint != null) ...[
-              SizedBox(height: theme.sm),
-              setupHint,
-            ] else ...[
-              quotaAsync.when(
-                data: (quota) {
-                  if (quota == null) {
-                    return fluent.Tooltip(
-                      message: strings.tooltipStorageCard,
-                      child: fluent.Card(
-                        padding: EdgeInsets.all(theme.md),
-                        child: Row(
-                          children: [
-                            Icon(
-                              fluent.FluentIcons.cloud_add,
-                              color: theme.textSecondary,
-                              size: 20,
-                              semanticLabel: strings.noDrivesConfigured,
-                            ),
-                            SizedBox(width: theme.md),
-                            Expanded(
-                              child: Text(
-                                strings.noDrivesConfigured,
-                                style: TextStyle(color: theme.textSecondary),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-                  return const MultiRemoteStorageCard();
-                },
-                loading: () => const fluent.ProgressBar(),
-                error: (err, stack) => fluent.Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
-              ),
-              SizedBox(height: theme.xl),
-              _buildActiveJobPanelWindows(context, activeJob, strings),
-              SizedBox(height: theme.xl),
-              _buildSyncActionsWindows(context, activeJob, strings),
-              _lastSyncInfo(context, strings),
-              SizedBox(height: theme.xl),
-              SizedBox(height: theme.xl),
-            ],
-          ],
+        padding: EdgeInsets.fromLTRB(theme.xxl, 0, theme.xxl, theme.xxl),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: windowsContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _windowsStatusCard(context, job, strings),
+                SizedBox(height: theme.xl),
+                _windowsStorage(context, strings),
+                SizedBox(height: theme.xxl),
+                _buildSyncActionsWindows(context, job, strings),
+                _lastSyncInfo(context, strings),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildActiveJobPanelWindows(BuildContext context, ActiveJobState job, AppStrings strings) {
+  /// Die abgehobene Fläche hinter dem Status: eigene Karte, Kontur in der
+  /// Zustandsfarbe, große Ecken. Sie soll sich vom Rest der Seite abheben.
+  Widget _windowsCardShell(
+    AppThemeData theme, {
+    required Color color,
+    required Widget child,
+  }) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(theme.radiusLg),
+        border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
+      ),
+      child: child,
+    );
+  }
+
+  /// **Ein** Feld für alle Zustände — Ruhe wie laufender Sync.
+  ///
+  /// Der Sync-Zustand ersetzt die Ruhe-Zeile, er hängt nichts an. Texte und
+  /// Meldungen sind dieselben wie vorher, nur die Anordnung ist neu.
+  Widget _windowsStatusCard(
+      BuildContext context, ActiveJobState job, AppStrings strings) {
     final theme = context.theme;
-    if (job.status == RcloneJobStatus.completed && job.jobId == null) {
-      return const SizedBox.shrink();
+    final running = job.status == RcloneJobStatus.syncing ||
+        job.status == RcloneJobStatus.pending;
+    final hasCloud = ref.watch(activeRemoteIdProvider).valueOrNull != null;
+    final hasBackup = ref.watch(tasksListProvider).isNotEmpty;
+    final tasksLoaded = ref.watch(tasksLoadedProvider);
+
+    // Noch nichts eingerichtet: Die Karte ist die Aufforderung. Eine echte
+    // ListTile, damit sie Tastaturfokus, Semantik und Fokus-Ring hat.
+    if (!running && tasksLoaded && (!hasCloud || !hasBackup)) {
+      final label = hasCloud ? strings.addTask : strings.addCloudDrive;
+      final hint = hasCloud ? strings.noActiveTasksError : strings.noDrivesConfigured;
+      return _windowsCardShell(
+        theme,
+        color: theme.accent,
+        child: fluent.ListTile(
+          leading: Icon(
+            hasCloud ? fluent.FluentIcons.add : fluent.FluentIcons.cloud_add,
+            size: 22,
+            color: theme.accent,
+          ),
+          title: Text(
+            label,
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Text(
+            hint,
+            style: TextStyle(color: theme.textSecondary, fontSize: 12),
+          ),
+          trailing: Icon(fluent.FluentIcons.chevron_right,
+              size: 14, color: theme.textSecondary),
+          semanticLabel: label,
+          onPressed: () {
+            if (hasCloud) {
+              _goToTasks(context);
+            } else {
+              _openCloudDrives(context);
+            }
+          },
+        ),
+      );
     }
 
-    return fluent.Card(
-      padding: EdgeInsets.all(theme.lg),
+    final online = ref.watch(networkStatusProvider).online;
+    final needsSync = ref.watch(widgetStatusProvider).needsSync;
+
+    Color color;
+    IconData icon;
+    String title;
+    String? detail;
+
+    if (running) {
+      color = theme.accent;
+      icon = fluent.FluentIcons.sync_status;
+      title = _syncStatusText(job, strings);
+      detail = job.isTransferring
+          ? (job.etaSeconds >= 0
+              ? strings.etaRemaining(job.etaSeconds)
+              : strings.etaCalculating)
+          : null;
+    } else if (!online) {
+      color = theme.offline;
+      icon = fluent.FluentIcons.error;
+      title = strings.statusOffline;
+      detail = null;
+    } else if (job.status == RcloneJobStatus.failed) {
+      color = theme.error;
+      icon = fluent.FluentIcons.error;
+      title = strings.syncFailed;
+      // Der Grund steht in der zweiten Zeile — nicht nur „fehlgeschlagen".
+      detail = job.currentFile.isEmpty ? null : job.currentFile;
+    } else if (job.status == RcloneJobStatus.cancelled) {
+      color = theme.offline;
+      icon = fluent.FluentIcons.cancel;
+      title = strings.syncCancelled;
+      detail = null;
+    } else if (needsSync) {
+      color = theme.warning;
+      icon = fluent.FluentIcons.warning;
+      title = strings.syncNeededBanner;
+      detail = null;
+    } else {
+      color = theme.success;
+      icon = fluent.FluentIcons.completed;
+      title = strings.allFilesSynced;
+      detail = null;
+    }
+
+    return _windowsCardShell(
+      theme,
+      color: color,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (job.warning.isNotEmpty) ...[
-            Container(
-              padding: EdgeInsets.all(theme.sm),
-              decoration: BoxDecoration(
-                color: theme.warning.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-              ),
-              child: Row(
-                children: [
-                  const Icon(fluent.FluentIcons.warning,
-                      size: 16, semanticLabel: 'Warning'),
-                  SizedBox(width: theme.xs),
-                  Expanded(
-                    child: Text(job.warning,
+          Padding(
+            padding: EdgeInsets.all(theme.lg),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 22, semanticLabel: title),
+                SizedBox(width: theme.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: theme.warning,
+                          color: theme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (detail != null) ...[
+                        SizedBox(height: theme.xs),
+                        Text(
+                          detail,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.textSecondary,
                             fontSize: 12,
-                            fontWeight: FontWeight.w600)),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            SizedBox(height: theme.sm),
-          ],
-          // Status: genau einer von drei Texten (siehe `_syncStatusText`).
-          Text(
-            _syncStatusText(job, strings),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: theme.textPrimary, fontSize: 14, height: 1.35),
           ),
-          SizedBox(height: theme.sm),
-          fluent.ProgressBar(
-            value: job.percentage.clamp(0.0, 100.0),
-            activeColor: theme
-                .syncProgressFor(theme.surface.computeLuminance() < 0.25),
-            backgroundColor: theme.syncTrack,
-          ),
-          // Restdauer mittig unter dem Balken — ohne „ETA", ohne Prozentzahl.
-          if (job.isTransferring) ...[
-            SizedBox(height: theme.sm),
-            Center(
-              child: Text(
-                job.etaSeconds >= 0
-                    ? strings.etaRemaining(job.etaSeconds)
-                    : strings.etaCalculating,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: theme.textSecondary),
-              ),
+          // Fortschritt am unteren Rand derselben Karte — kein eigenes Feld,
+          // keine Prozentzahl.
+          if (running)
+            fluent.ProgressBar(
+              value: job.percentage.clamp(0.0, 100.0),
+              activeColor: theme
+                  .syncProgressFor(theme.surface.computeLuminance() < 0.25),
+              backgroundColor: theme.syncTrack,
             ),
-          ],
         ],
       ),
+    );
+  }
+
+  /// Belegter und freier Platz der **einen** Cloud.
+  ///
+  /// Ohne Cloud unsichtbar — die Statuskarte fordert dann zum Verbinden auf,
+  /// zwei Hinweise auf dasselbe wären einer zu viel.
+  Widget _windowsStorage(BuildContext context, AppStrings strings) {
+    final theme = context.theme;
+    final quota = ref.watch(activeCloudQuotaProvider).valueOrNull;
+    if (quota == null) return const SizedBox.shrink();
+
+    final known = quota.totalBytes > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                known
+                    ? strings.quotaSummaryUsedOf(
+                        formatBytes(quota.usedBytes),
+                        formatBytes(quota.totalBytes))
+                    : strings.quotaSummaryUnavailable,
+                style: TextStyle(color: theme.textPrimary, fontSize: 13),
+              ),
+            ),
+            if (known)
+              Text(
+                strings.quotaSummaryFree(formatBytes(quota.freeBytes)),
+                style: TextStyle(color: theme.textSecondary, fontSize: 13),
+              ),
+          ],
+        ),
+        SizedBox(height: theme.sm),
+        fluent.ProgressBar(
+          value: known
+              ? (quota.usedBytes / quota.totalBytes * 100).clamp(0.0, 100.0)
+              : 0.0,
+          activeColor: theme.accent,
+          backgroundColor: theme.syncTrack,
+        ),
+      ],
     );
   }
 
@@ -374,7 +511,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final canSync = tasksLoaded && online;
     final enabled = canSync && !isSyncing;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         fluent.Tooltip(
       message: !online
@@ -391,6 +528,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Spinner statt stummem Grau, solange tasks.json lädt oder

@@ -325,14 +325,15 @@ grün in beiden Workflows.
 
 ## 8. Phasen
 
-| # | Inhalt | Risiko |
-|---|---|---|
-| 1 | Modell, Migration, Provider, Unit-Tests — **ohne** Oberflächenänderung | niedrig, App verhält sich unverändert |
-| 2 | Windows-Shell (2 Tabs) + neues Dashboard + Fenstergröße | mittel |
-| 3 | Einstellungen neu (Cloud + Sicherung), Aufgaben-Tab auf Windows raus | mittel |
-| 4 | Assistent mit Pool-Flow | mittel |
-| 5 | Aufräumen: tote Zweige, Strings, Doku | niedrig |
-| 6 | iOS/Android auf dasselbe Modell | hoch, eigene Planung |
+| # | Inhalt | Risiko | Stand |
+|---|---|---|---|
+| 1 | Modell, Migration, Provider, Unit-Tests — **ohne** Oberflächenänderung | niedrig | ✅ fertig (`e00b518`) |
+| 2 | Windows-Shell (2 Einträge) + neues Dashboard + Fenstergröße | mittel | ✅ fertig |
+| 3 | Einstellungen neu (Cloud + Sicherung), Aufgaben-Editor wandert | mittel | offen |
+| 4 | Assistent mit Pool-Flow | mittel | offen |
+| 5 | **Cloud-Explorer auf Fotos-Niveau** (Vorschaubilder, Datumsgruppierung) | mittel | offen |
+| 6 | Aufräumen: tote Zweige, Strings, Doku | niedrig | offen |
+| 7 | iOS/Android auf dasselbe Modell | hoch, eigene Planung | offen |
 
 Jede Phase ist ein eigener Commit mit grünem CI-Lauf dazwischen.
 
@@ -357,13 +358,38 @@ Jede Phase ist ein eigener Commit mit grünem CI-Lauf dazwischen.
    Vorschaubilder — siehe „Bekannte Grenze" unten.
 4. **Archiv** → entfällt. Übernehmen oder verwerfen, mit Protokollzeile.
 
-## 11. Bekannte Grenze: Cloud-Explorer ≠ Fotos-App
+## 11. Phase 5: Cloud-Explorer auf Fotos-Niveau
 
-`cloud_photos_screen.dart` zeigt Alben und nach Datum sortierte Aufnahmen,
-aber **keine Vorschaubilder** — die Kachel zeigt Name und Größe. Das ist eine
-bewusste Grenze (ein Miniaturbild pro Datei aus der Cloud laden wäre ein
-Datenvolumen, das niemand erwartet; WebDAV/S3/SFTP liefern keine
-serverseitigen Thumbnails). Zur Fotos-App von iOS/macOS fehlt damit genau das
-Merkmal, das sie ausmacht. Eine Annäherung wäre ein Thumbnail-Cache mit
-Vorschau-Anforderung (z. B. erste N Aufnahmen pro Album + Cache im
-App-Support) — eigener Punkt, nicht Teil dieses Umbaus.
+**Ausgangslage.** `cloud_photos_screen.dart` zeigt Alben und nach Datum
+sortierte Aufnahmen, aber **keine Vorschaubilder** — die Kachel zeigt Name und
+Größe. Genau das Merkmal, das die Fotos-App ausmacht, fehlt also.
+Vorschaubilder nachträglich aus der Cloud zu holen wäre der falsche Weg: ein
+Miniaturbild pro Datei bedeutet bei mehreren tausend Aufnahmen ein
+Datenvolumen, das niemand erwartet, und WebDAV/S3/SFTP liefern keine
+serverseitigen Thumbnails.
+
+**Ansatz: Vorschauen entstehen beim Sichern, nicht beim Betrachten.**
+
+1. **Beim Upload** wird zusätzlich ein JPEG-Thumbnail (Kantenlänge 256 px,
+   Qualität ~70, also 15–30 KB) nach `.fibu/thumbs/<Kennung>.jpg` geschrieben.
+   * iOS/Android: nativ über `PHImageManager` / `MediaStore` — das Gerät hat
+     das Bild ohnehin, HEIC inklusive.
+   * Windows: für Formate, die der Flutter-Decoder kann (JPEG, PNG, WebP,
+     GIF, BMP). **HEIC auf Windows geht nicht** ohne System-Codec — dort
+     bleibt die Datei-Kachel. Das ist eine echte Grenze, keine Ausrede.
+2. **Der Explorer lädt nur noch Thumbnails** und cached sie im App-Support
+   (`thumbs/`). Erstes Scrollen lädt, danach ist es sofort.
+3. **Bestände nachziehen:** ein eigener Lauf „Vorschauen erzeugen" für bereits
+   gesicherte Dateien, mit Fortschritt und Abbruch — sonst hätten alle
+   bestehenden Sicherungen dauerhaft leere Kacheln.
+4. **Datumsgruppierung** aus dem Aufnahmezeitpunkt (steht im Mirror-Zustand
+   als `taken`) statt nur aus der Änderungszeit, mit Monats-Trennern wie in
+   der Fotos-App.
+
+**Was ausdrücklich nicht kommt:** Bearbeitung, Personen, Orte, Erinnerungen,
+geteilte Alben. Fibu ist eine Sicherung, keine Fotoverwaltung.
+
+**Kosten:** einmalig 15–30 KB pro Aufnahme in der Cloud plus ein
+Hintergrundlauf für Bestände. **Reihenfolge:** nach dem Assistenten (Phase 4),
+weil der Explorer über die „Cloud"-Seite erreichbar ist und die erst dann
+steht.

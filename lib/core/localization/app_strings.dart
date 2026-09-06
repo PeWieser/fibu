@@ -673,6 +673,8 @@ class AppStrings {
       isGerman ? '$used von $total belegt' : '$used of $total used';
   String get quotaSummaryUnavailable =>
       isGerman ? 'Speicherplatz n. v.' : 'Storage n/a';
+  String quotaSummaryFree(String free) =>
+      isGerman ? '$free frei' : '$free free';
   /// „n/a" für Werte, die nicht ermittelt werden können (nicht „0 MB").
   /// Ausstehende lokale Löschungen aus einem Hintergrundtask.
   String pendingDeletionsNotice(int count) => isGerman

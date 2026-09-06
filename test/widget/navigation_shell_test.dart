@@ -71,18 +71,11 @@ void main() {
         await tester.pumpWidget(createWidgetUnderTest());
         await settleBounded(tester);
 
-        // Check initially Dashboard is visible
+        // Zwei Einträge, nicht drei: Den Aufgaben-Tab gibt es auf Windows
+        // nicht mehr — Modell ist „eine Cloud, eine Sicherung", und die
+        // Sicherung wird in den Einstellungen eingerichtet.
         expect(find.text(strings.navDashboard), findsWidgets);
-        
-        // Tap on Tasks Pane Item. Find by icon.
-        final tasksItemFinder = find.byIcon(fluent.FluentIcons.task_manager);
-        expect(tasksItemFinder, findsOneWidget);
-        await tester.tap(tasksItemFinder);
-        await settleBounded(tester);
-
-        // Check Tasks screen is loaded
-        expect(find.byType(TasksScreen), findsOneWidget);
-        expect(find.text(strings.tasksTitle), findsOneWidget);
+        expect(find.byIcon(fluent.FluentIcons.task_manager), findsNothing);
 
         // Tap on Settings Pane Item
         final settingsItemFinder = find.byIcon(fluent.FluentIcons.settings);

@@ -9,6 +9,9 @@ Stand der Planung: `main` @ `d0862c4`. **Noch nichts umgesetzt.**
    Knopf, danach läuft es automatisch mit.
 3. Umfang: **Raster mit Vorschaubildern** und **Vollbild-Ansicht** (Wischen,
    auf Windows Pfeiltasten).
+4. **Lokal vor Cloud:** Liegt die Aufnahme noch auf dem Gerät, wird sie
+   genommen — für das Vorschaubild *und* für die Vollbild-Ansicht. Aus der
+   Cloud kommt nur, was es lokal nicht (mehr) gibt.
 
 ## 1. Ziel und Nicht-Ziel
 
@@ -38,6 +41,47 @@ Alles Folgende ist am Code geprüft, nicht angenommen:
 Vorschaubilder als „neue Aufnahme" herunter, kein Papierkorb fasst sie an, und
 die Windows-Synchronisierung schließt sie aus.
 
+## 2.1 Lokale Auflösung — der wichtigste Grundsatz
+
+Eine gesicherte Aufnahme ist in aller Regel **noch auf dem Gerät**, von dem
+sie stammt. Für dieses Gerät wäre es Unsinn, ein Vorschaubild aus der Cloud zu
+laden oder die Originaldatei herunterzuladen: Sie liegt direkt daneben.
+
+**Reihenfolge für das Vorschaubild:**
+
+1. **Lokale Aufnahme gefunden** → Vorschaubild daraus erzeugen und in den
+   Cache legen. Kein Netz, sofort, in voller Qualität.
+2. **Nur in der Cloud** → `.fibu/thumbs/<hash>.jpg` laden.
+3. **Keines von beiden** → Dateikachel (Name + Größe).
+
+**Reihenfolge für die Vollbild-Ansicht:**
+
+1. **Lokale Aufnahme gefunden** → sie anzeigen. Kein Download, funktioniert
+   auch ohne Netz.
+2. **Nur in der Cloud** → Originaldatei herunterladen und anzeigen.
+
+**Wie „lokal vorhanden" bestimmt wird** — je Plattform anders, und beides ist
+am Code geprüft:
+
+| Plattform | Weg | Beleg |
+|---|---|---|
+| iOS / Android | `fibu_state/<scope>/mirror_state.json` bildet den Spiegel-Pfad auf die `photo_manager`-Asset-ID ab; `AssetEntity.fromId` liefert die Aufnahme, wenn es sie noch gibt | `VirtualMediaItem.assetId` (`virtual_mirror_sync.dart:21`), Scope-Ordner `ios_rclone_service.dart:1599` |
+| Windows | Quellordner der Sicherung + relativer Pfad → `File.exists()` | `FilesystemMirrorSource.root` (`filesystem_mirror_source.dart:21,175`) |
+
+Gibt es die lokale Aufnahme nicht mehr (gelöscht, Gerät gewechselt, Aufnahme
+stammt von einem anderen Gerät), greift automatisch Stufe 2.
+
+**Was das ändert:**
+
+* Auf dem Gerät, das die Fotos gemacht hat, kostet das Blättern **kein
+  Datenvolumen** — und die Vollbild-Ansicht funktioniert offline.
+* Die Vorschaubilder in der Cloud sind damit nicht überflüssig, aber sie
+  dienen einem anderen Zweck: **anderen** Geräten und Aufnahmen, die es nur
+  in der Cloud gibt (vom Partner-Gerät gesichert, lokal längst gelöscht).
+* Der Hinweis „Für N Aufnahmen gibt es noch keine Vorschau" zählt **nur** die
+  Aufnahmen, die weder lokal noch als Vorschaubild in der Cloud existieren.
+  Auf dem Ursprungsgerät ist N damit von Anfang an klein.
+
 ## 3. Datenlayout
 
 ```
@@ -64,6 +108,10 @@ Aufnahme. Bei 5 000 Aufnahmen sind das 75–150 MB in der Cloud. Das ist der
 Preis für sofortiges Scrollen auf jedem Gerät; er steht bewusst hier.
 
 ## 4. Erzeugung
+
+Die Erzeugung läuft nur für Aufnahmen, die es lohnt: Was lokal liegt, erzeugt
+sein Vorschaubild beim ersten Ansehen aus der lokalen Datei (§2.1). In die
+Cloud kommt ein Vorschaubild trotzdem — für die anderen Geräte.
 
 ### 4.1 Beim Sichern (der Normalfall)
 
@@ -140,8 +188,10 @@ Vollbild-Ansicht.
 
 **Drei Zustände pro Kachel**, alle ohne Flackern:
 
-1. **Platzhalter** — dezente Akzentfläche mit Dateisymbol, solange geladen wird
-2. **Vorschaubild** — aus dem Cache oder nach dem Download
+1. **Platzhalter** — dezente Akzentfläche mit Dateisymbol, solange aufgelöst
+   wird
+2. **Vorschaubild** — aus der lokalen Aufnahme, aus dem Cache oder aus der
+   Cloud (§2.1)
 3. **Dateikachel** — Name + Größe, wenn es kein Vorschaubild gibt (HEIC auf
    Windows) oder das Laden fehlschlug
 
@@ -175,8 +225,9 @@ Neuer Bildschirm `CloudPhotoViewer`, geöffnet aus der Kachel:
   herausgewandert sind
 * **Aktion:** „In Standard-App öffnen" bleibt (bestehender
   `FileViewerService.openInDefaultApp`)
-* **Laden:** Vollbild lädt die **Originaldatei** über
-  `FileViewerService.getLocalFile`, nicht das Vorschaubild. Bis sie da ist,
+* **Laden:** Liegt die Aufnahme lokal, wird sie direkt angezeigt — kein
+  Download, funktioniert offline (§2.1). Nur was es allein in der Cloud gibt,
+  wird über `FileViewerService.getLocalFile` geholt. Bis die Datei da ist,
   bleibt das Vorschaubild als Platzhalter stehen — kein schwarzes Loch
 * **HEIC auf Windows:** Die Originaldatei lässt sich nicht darstellen. Dann
   steht dort der Hinweis „Dieses Format kann Windows nicht anzeigen" mit dem
@@ -188,7 +239,7 @@ Neuer Bildschirm `CloudPhotoViewer`, geöffnet aus der Kachel:
 | Wert | Grenze |
 |---|---|
 | Vorschaubild | 256 px, JPEG q70, 15–30 KB |
-| Gleichzeitige Downloads | 4 |
+| Gleichzeitige Downloads | 4 — und nur für Aufnahmen, die es nicht lokal gibt |
 | Cache | 200 MB weich, ältestes Drittel raus |
 | Dekodieren | `cacheWidth: 512` — nie in voller Auflösung |
 | Nachzieh-Lauf | max. 50 Aufnahmen pro Durchlauf, dann Pause; abbrechbar |
@@ -229,7 +280,9 @@ Neuer Bildschirm `CloudPhotoViewer`, geöffnet aus der Kachel:
 * Cache: schreibt, liest, wirft das älteste Drittel über der Grenze raus
 * Warteschlange: maximal 4 gleichzeitig, kein Doppel-Download, Abbruch
 * Differenzrechnung: was fehlt, wenn die Cloud-Liste leer / voll / teilweise
-  ist
+  ist — und dass lokal vorhandene Aufnahmen **nicht** als fehlend zählen
+* Auflösungsreihenfolge: lokal vorhanden → lokal; fehlt lokal, Cloud-Vorschau
+  da → Cloud; beides fehlt → Dateikachel
 * Kodieren: eine kleine Testdatei rein, JPEG mit ≤ 256 px raus (rundet den
   Encoder-Verdacht ab)
 
@@ -278,11 +331,14 @@ allein sinnvoll; 5b ohne 5c bringt noch nichts Sichtbares.
 5. **Erster Lauf nach dem Update** zeigt überall Dateikacheln, bis der
    Nachzieh-Lauf durch ist. Der Hinweis erklärt das.
 
-## 14. Offene Punkte
+## 14. Festgelegt (die Fragen blieben offen, also gilt der Vorschlag)
 
-1. Soll es einen Schalter „Vorschaubilder in der Cloud speichern" geben?
-   Vorschlag: ja, in den Einstellungen unter „Sicherung", Standard an.
-2. Vorschaubilder auch für **Datei-Sicherungen** (PDF, Office) oder nur für
-   Bilder und Videos? Vorschlag: nur Bilder und Videos.
-3. Löschen verwaister Vorschaubilder (Aufnahme weg, Vorschaubild noch da)?
-   Vorschlag: beim Nachzieh-Lauf mit aufräumen, einmal pro Durchlauf.
+1. **Schalter „Vorschaubilder in der Cloud speichern":** ja, in den
+   Einstellungen unter „Sicherung", Standard an.
+2. **Nur Bilder und Videos** bekommen Vorschaubilder. PDF und Office-Dateien
+   bleiben Dateikacheln — ohne natives Rendering pro Plattform gäbe es dafür
+   kein sinnvolles Vorschaubild.
+3. **Verwaiste Vorschaubilder** räumt der Nachzieh-Lauf mit auf, einmal pro
+   Durchlauf.
+
+Alle drei Punkte sind mit einer Zeile geändert, wenn du sie anders willst.

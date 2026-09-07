@@ -87,6 +87,13 @@ void main() {
         )))!;
     await tester.pump();
 
+    // Der Dialog ist 540 px breit und auf 660 px gedeckelt und wird zentriert.
+    // Im Standard-Testfenster (800×600) liegt sein unterer Teil außerhalb des
+    // Fensters — Taps dort gehen still ins Leere (Run 34148777477: sowohl die
+    // Bestandteil-Zeile bei y=696 als auch die Fußleiste).
+    await tester.binding.setSurfaceSize(const Size(1000, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -162,6 +169,8 @@ void main() {
             'Sichtbare Texte: $visibleTexts');
 
     // --- Pool anlegen ---
+    await tester.ensureVisible(find.text(strings.testConnection).last);
+    await pumpBounded(tester);
     await tester.tap(find.text(strings.testConnection).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);

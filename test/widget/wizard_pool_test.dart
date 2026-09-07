@@ -31,6 +31,15 @@ Future<void> pumpBounded(WidgetTester tester,
   }
 }
 
+/// Alle Texte im Baum — für Fehlermeldungen, die sonst nur „No element"
+/// sagen und einen raten lassen, was der Assistent gerade zeigt.
+List<String> visibleTexts() => find
+    .byType(Text)
+    .evaluate()
+    .map((e) => (e.widget as Text).data)
+    .whereType<String>()
+    .toList();
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -162,22 +171,17 @@ void main() {
     // Der verschachtelte Assistent ist zu, das neue Laufwerk steht in der
     // Bestandteil-Liste. Im Fehlerfall zeigt `reason`, was wirklich im Baum
     // steht — sonst rät man, warum eine Zeile fehlt.
-    final visibleTexts = find
-        .byType(Text)
-        .evaluate()
-        .map((e) => (e.widget as Text).data)
-        .whereType<String>()
-        .toList();
     expect(find.text('Mega'), findsWidgets,
         reason: 'Das eben angelegte Laufwerk gehört in die Auswahl. '
-            'Sichtbare Texte: $visibleTexts');
+            'Sichtbare Texte: ${visibleTexts()}');
 
     // --- Pool anlegen ---
     // Virtuelle Backends haben keine Anmeldung, dort heißt der Knopf
     // „Verbindung prüfen" statt „Anmelden" (siehe _testButton).
     final validateFinder = find.text(strings.validateSetup);
     expect(validateFinder, findsOneWidget,
-        reason: 'Der Pool muss sich prüfen lassen, bevor er angelegt wird');
+        reason: 'Der Pool muss sich prüfen lassen, bevor er angelegt wird. '
+            'Sichtbare Texte: ${visibleTexts()}');
     await tester.ensureVisible(validateFinder);
     await pumpBounded(tester);
     await tester.tap(validateFinder);
@@ -190,8 +194,13 @@ void main() {
     // liest die Registry-Datei.
     final entries =
         (await tester.runAsync(() => registry.entries(forceReload: true)))!;
-    final pool = entries.firstWhere((e) => e.type == 'union',
-        orElse: () => throw StateError('Pool wurde nicht angelegt'));
+    final pool = entries.firstWhere(
+      (e) => e.type == 'union',
+      orElse: () => throw StateError(
+          'Pool wurde nicht angelegt. Laufwerke: '
+          '${entries.map((e) => '${e.name}(${e.type})').join(', ')} — '
+          'sichtbare Texte: ${visibleTexts()}'),
+    );
     final members = registry.poolMembersOf(pool.id);
 
     expect(registry.activeRemoteId, pool.id,

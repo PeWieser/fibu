@@ -83,6 +83,9 @@ void main() {
       (WidgetTester tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
+    // try/finally **im** Testkörper: flutter_test prüft die Foundation-
+    // Variablen am Ende des Körpers, bevor tearDown läuft.
+    try {
     final container = ProviderContainer(overrides: [
       localeProvider.overrideWith((ref) => AppLocale.de),
       rcloneServiceProvider.overrideWithValue(rclone),
@@ -174,5 +177,8 @@ void main() {
 
     // Auslaufen lassen, damit keine Timer in den Abbau des Containers ragen.
     await tester.pump(const Duration(seconds: 1));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

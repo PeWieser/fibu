@@ -163,6 +163,22 @@ void main() {
     await pumpBounded(tester);
     await tester.tap(find.text(strings.next).last);
     await pumpBounded(tester);
+
+    // Schritt 2 des verschachtelten Assistenten: E-Mail und Passwort. Ohne
+    // Inhalt verweigert die Anmeldung den Test („Bitte fülle alle
+    // Pflichtfelder aus.") und „Hinzufügen" bleibt deaktiviert — der
+    // Assistent geht dann nie zu (Run 34150581134).
+    // Auf Schritt 2 gehören alle TextBoxen dem verschachtelten Assistenten:
+    // Der äußere (Union) hat nur Laufwerk-Auswahl und Dropdown.
+    final boxes = find.byType(fluent.TextBox);
+    final boxCount = boxes.evaluate().length;
+    expect(boxCount, 2,
+        reason: 'Erwartet E-Mail + Passwort. Sichtbare Texte: ${visibleTexts()}');
+    await tester.enterText(boxes.at(0), 'test@example.com');
+    await pumpBounded(tester);
+    await tester.enterText(boxes.at(1), 'geheim123');
+    await pumpBounded(tester);
+
     await tester.tap(find.text(strings.testConnection).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);

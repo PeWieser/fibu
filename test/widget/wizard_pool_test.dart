@@ -112,6 +112,12 @@ void main() {
     expect(find.text(strings.wizardAddMemberCloud), findsOneWidget,
         reason: 'Weitere Clouds müssen im selben Durchgang entstehen können');
 
+    // Das vorhandene Laufwerk zuerst wählen — solange der Dialog noch nicht
+    // gescrollt ist. Nach dem verschachtelten Durchgang liegt die Zeile
+    // außerhalb des gebauten Bereichs (Run 34147406286).
+    await tester.tap(find.text('Backblaze'));
+    await pumpBounded(tester);
+
     // --- Zweite Cloud im selben Durchgang anlegen ---
     // Die Zeile liegt im Dialog unterhalb der Faltkante (der Dialog ist auf
     // 660 px gedeckelt) — ohne ensureVisible tippt der Test daneben.
@@ -142,16 +148,19 @@ void main() {
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
 
     // Der verschachtelte Assistent ist zu, das neue Laufwerk steht in der
-    // Bestandteil-Liste.
+    // Bestandteil-Liste. Im Fehlerfall zeigt `reason`, was wirklich im Baum
+    // steht — sonst rät man, warum eine Zeile fehlt.
+    final visibleTexts = find
+        .byType(Text)
+        .evaluate()
+        .map((e) => (e.widget as Text).data)
+        .whereType<String>()
+        .toList();
     expect(find.text('Mega'), findsWidgets,
-        reason: 'Das eben angelegte Laufwerk gehört in die Auswahl');
+        reason: 'Das eben angelegte Laufwerk gehört in die Auswahl. '
+            'Sichtbare Texte: $visibleTexts');
 
-    // --- Beide Laufwerke als Bestandteile wählen und den Pool anlegen ---
-    final backblazeFinder = find.text('Backblaze');
-    await tester.ensureVisible(backblazeFinder);
-    await pumpBounded(tester);
-    await tester.tap(backblazeFinder);
-    await pumpBounded(tester);
+    // --- Pool anlegen ---
     await tester.tap(find.text(strings.testConnection).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);

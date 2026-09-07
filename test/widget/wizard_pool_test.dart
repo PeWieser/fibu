@@ -120,10 +120,14 @@ void main() {
     expect(find.text(strings.wizardAddMemberCloud), findsOneWidget,
         reason: 'Weitere Clouds müssen im selben Durchgang entstehen können');
 
-    // Das vorhandene Laufwerk zuerst wählen — solange der Dialog noch nicht
-    // gescrollt ist. Nach dem verschachtelten Durchgang liegt die Zeile
-    // außerhalb des gebauten Bereichs (Run 34147406286).
-    await tester.tap(find.text('Backblaze'));
+    // Das vorhandene Laufwerk zuerst wählen. Die Zeile liegt im
+    // Scrollbereich des Dialogs — ohne ensureVisible trifft der Tap die
+    // Stelle, aber nicht die Zeile (Run 34149307936: RenderAbsorbPointer
+    // statt der Zeile im Hit-Test).
+    final backblazeFinder = find.text('Backblaze');
+    await tester.ensureVisible(backblazeFinder);
+    await pumpBounded(tester);
+    await tester.tap(backblazeFinder);
     await pumpBounded(tester);
 
     // --- Zweite Cloud im selben Durchgang anlegen ---
@@ -169,9 +173,14 @@ void main() {
             'Sichtbare Texte: $visibleTexts');
 
     // --- Pool anlegen ---
-    await tester.ensureVisible(find.text(strings.testConnection).last);
+    // Virtuelle Backends haben keine Anmeldung, dort heißt der Knopf
+    // „Verbindung prüfen" statt „Anmelden" (siehe _testButton).
+    final validateFinder = find.text(strings.validateSetup);
+    expect(validateFinder, findsOneWidget,
+        reason: 'Der Pool muss sich prüfen lassen, bevor er angelegt wird');
+    await tester.ensureVisible(validateFinder);
     await pumpBounded(tester);
-    await tester.tap(find.text(strings.testConnection).last);
+    await tester.tap(validateFinder);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));

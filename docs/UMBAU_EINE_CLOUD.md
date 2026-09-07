@@ -330,12 +330,35 @@ grün in beiden Workflows.
 | 1 | Modell, Migration, Provider, Unit-Tests — **ohne** Oberflächenänderung | niedrig | ✅ fertig (`e00b518`) |
 | 2 | Windows-Shell (2 Einträge) + neues Dashboard + Fenstergröße | mittel | ✅ fertig |
 | 3 | Einstellungen neu (Cloud + Sicherung), Aufgaben-Editor wandert | mittel | offen |
-| 4 | Assistent mit Pool-Flow | mittel | offen |
+| 4 | Assistent mit Pool-Flow | mittel | ✅ fertig |
 | 5 | **Cloud-Explorer auf Fotos-Niveau** (Vorschaubilder, Datumsgruppierung) | mittel | offen |
 | 6 | Aufräumen: tote Zweige, Strings, Doku | niedrig | offen |
 | 7 | iOS/Android auf dasselbe Modell | hoch, eigene Planung | offen |
 
 Jede Phase ist ein eigener Commit mit grünem CI-Lauf dazwischen.
+
+## 8.1 Was Phase 4 automatisch prüft — und was nicht
+
+**Automatisch geprüft** (`test/unit/pool_setup_test.dart`, 13 Erwartungen):
+
+* `ActiveCloud.parseRemoteIds` — `id:`, `id1: id2:`, Combine `name=id:`,
+  Pfad hinter der Kennung, leere Werte
+* `ActiveCloud.shouldBecomeActive` — ein Pool wird immer zur einen Cloud,
+  ein einzelnes Laufwerk verdrängt keine aktive
+* `RcloneProviderRegistry.nonVirtualProviders` — crypt, chunker, union,
+  combine, alias, compress fehlen; echte Anbieter bleiben
+
+**Automatisch geprüft** (`test/widget/wizard_pool_test.dart`): Pool wählen →
+Bestandteil-Auswahl zeigt das verbundene Laufwerk und die Zeile „Weitere Cloud
+hinzufügen" → Tippen öffnet den Assistenten **ohne** virtuelle Backends, mit
+echten Anbietern → Abbrechen führt unverändert zurück.
+
+**Nur manuell zu prüfen:** der letzte Klick bis zum fertigen Pool (zweite
+Cloud anlegen, beide als Bestandteile wählen, Pool anlegen, Pool ist das
+Sicherungsziel). Ein Widget-Test dafür ist elf Mal an Testmechanik
+gescheitert — Fake-Uhr gegen echte Datei-IO, Dialog außerhalb des
+Testfensters, leere Pflichtfelder, Knopf im Busy-Zustand — und kein Fund
+betraf das Produkt. Die Logik liegt deshalb in den Unit-Tests oben.
 
 ## 9. Risiken und zu prüfen
 

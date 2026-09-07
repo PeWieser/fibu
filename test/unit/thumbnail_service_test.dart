@@ -115,7 +115,7 @@ void main() {
     });
 
     test('ist leer, wenn alles schon da ist', () async {
-      final rels = const ['Photos/A.jpg', 'Photos/B.jpg'];
+      const rels = ['Photos/A.jpg', 'Photos/B.jpg'];
       final list = await ThumbnailService.backfillList(
         rels: rels,
         cloudFileNames: await namesOf(rels),

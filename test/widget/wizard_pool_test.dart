@@ -97,7 +97,9 @@ void main() {
     await pumpBounded(tester);
 
     // --- Schritt 1: den Pool wählen ---
-    await tester.enterText(find.byType(fluent.TextBox).first, 'Union');
+    // `.last` = das Suchfeld. Die erste TextBox auf Schritt 1 ist das
+    // Namensfeld — dort hineinzutippen lässt die Anbieterliste ungefiltert.
+    await tester.enterText(find.byType(fluent.TextBox).last, 'Union');
     await pumpBounded(tester);
     await tester.tap(find.text('Speicher-Pool (Union)'));
     await pumpBounded(tester);

@@ -31,6 +31,22 @@ Future<void> pumpBounded(WidgetTester tester,
   }
 }
 
+/// Wartet, bis beides durch ist: die Mock-Verzögerungen auf der Fake-Uhr
+/// **und** die echte Datei-IO dahinter.
+///
+/// `createRemote` holt erst die Laufwerksliste (150 ms Mock, Fake-Uhr) und
+/// schreibt dann `remotes.json` (echte IO). Nur pumpen lässt die IO nie
+/// fertig werden, nur `runAsync` lässt die Mock-Timer nie feuern — also
+/// beides im Wechsel. Ohne das bleibt „Hinzufügen" im Busy-Zustand stecken
+/// (Run 95b6e87: Fußleiste zeigte nur noch „Zurück").
+Future<void> settleWork(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)));
+  }
+}
+
 /// Alle Texte im Baum — für Fehlermeldungen, die sonst nur „No element"
 /// sagen und einen raten lassen, was der Assistent gerade zeigt.
 List<String> visibleTexts() => find
@@ -182,11 +198,14 @@ void main() {
     await tester.tap(find.text(strings.testConnection).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);
-    await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
+    await settleWork(tester);
 
     // Der verschachtelte Assistent ist zu, das neue Laufwerk steht in der
     // Bestandteil-Liste. Im Fehlerfall zeigt `reason`, was wirklich im Baum
     // steht — sonst rät man, warum eine Zeile fehlt.
+    expect(find.text(strings.back), findsNothing,
+        reason: 'Der verschachtelte Assistent muss nach dem Anlegen zu sein. '
+            'Sichtbare Texte: ${visibleTexts()}');
     expect(find.text('Mega'), findsWidgets,
         reason: 'Das eben angelegte Laufwerk gehört in die Auswahl. '
             'Sichtbare Texte: ${visibleTexts()}');
@@ -203,7 +222,7 @@ void main() {
     await tester.tap(validateFinder);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
     await tester.tap(find.text(strings.add).last);
-    await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
+    await settleWork(tester);
 
     // --- Ergebnis: der Pool ist die eine Cloud, mit beiden Bestandteilen ---
     // Wieder `runAsync`: forceReload fragt rclone ab (Mock-Verzögerung) und

@@ -11,7 +11,7 @@ import 'package:fibu/core/services/thumbnail_service.dart';
 /// „falsches Vorschaubild" oder „doppelter Download" im Explorer auftauchen
 /// und wäre dort kaum zu finden.
 void main() {
-  group('Name des Vorschaubilds', timeout: const Timeout(Duration(seconds: 30)), () {
+  group('Name des Vorschaubilds', () {
     test('ist deterministisch', () async {
       final a = await ThumbnailService.fileNameFor('Photos/Urlaub/IMG_0001.HEIC');
       final b = await ThumbnailService.fileNameFor('Photos/Urlaub/IMG_0001.HEIC');
@@ -81,7 +81,7 @@ void main() {
     });
   });
 
-  group('Nachzieh-Liste', timeout: const Timeout(Duration(seconds: 30)), () {
+  group('Nachzieh-Liste', () {
     Future<Set<String>> namesOf(List<String> rels) async =>
         {for (final r in rels) await ThumbnailService.fileNameFor(r)};
 
@@ -134,7 +134,7 @@ void main() {
     });
   });
 
-  group('Cache', timeout: const Timeout(Duration(seconds: 30)), () {
+  group('Cache', () {
     late Directory dir;
 
     setUp(() async {
@@ -193,7 +193,7 @@ void main() {
     });
   });
 
-  group('Warteschlange', timeout: const Timeout(Duration(seconds: 30)), () {
+  group('Warteschlange', () {
     test('läuft höchstens vier gleichzeitig', () async {
       final queue = ThumbnailQueue(maxConcurrent: 4);
       var running = 0;

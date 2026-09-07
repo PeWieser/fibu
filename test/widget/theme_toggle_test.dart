@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:fibu/core/localization/app_strings.dart';
+import 'package:fibu/core/services/active_cloud.dart';
 import 'package:fibu/core/localization/locale_provider.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
@@ -61,6 +62,14 @@ void main() {
         final container = ProviderContainer(overrides: [
           tasksLoadedProvider.overrideWith((ref) => true),
           localeProvider.overrideWith((ref) => AppLocale.de),
+          // Die Cloud-Bereiche der Einstellungen würden sonst die echte
+          // Engine starten (rclone.exe aufrufen). Hier geht es nur um das
+          // Erscheinungsbild.
+          activeRemoteIdProvider.overrideWith((ref) async => null),
+          activeRemoteProvider.overrideWith((ref) async => null),
+          activeCloudMembersProvider
+              .overrideWith((ref) async => const <String>[]),
+          activeCloudQuotaProvider.overrideWith((ref) async => null),
         ]);
         addTearDown(container.dispose);
 

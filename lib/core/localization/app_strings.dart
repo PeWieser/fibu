@@ -667,6 +667,45 @@ class AppStrings {
       : 'Select an album or file source first.';
   String get onlySpecificAlbums => isGerman ? 'Nur bestimmte Alben' : 'Specific albums only';
 
+  // --- Eine Cloud, eine Sicherung (Einstellungen) ---
+  String get cloudSection => isGerman ? 'Cloud' : 'Cloud';
+  String get cloudConnect => isGerman ? 'Cloud verbinden' : 'Connect a cloud';
+  String get cloudNone =>
+      isGerman ? 'Noch keine Cloud verbunden' : 'No cloud connected yet';
+  String get cloudManageHint => isGerman
+      ? 'Umbenennen, ersetzen oder trennen'
+      : 'Rename, replace or disconnect';
+  String cloudMembersCount(int n) => isGerman
+      ? '$n Laufwerke gebündelt'
+      : '$n drives bundled';
+
+  String get backupSection => isGerman ? 'Sicherung' : 'Backup';
+  String get backupCreate =>
+      isGerman ? 'Sicherung einrichten' : 'Set up the backup';
+  String get backupCreateHint => isGerman
+      ? 'Ordner wählen — Ziel ist die verbundene Cloud.'
+      : 'Pick folders — the target is the connected cloud.';
+  String get backupNeedsCloud => isGerman
+      ? 'Zuerst eine Cloud verbinden.'
+      : 'Connect a cloud first.';
+  String get backupSourceFolders =>
+      isGerman ? 'Quellordner' : 'Source folders';
+  String get backupAddFolder =>
+      isGerman ? 'Ordner hinzufügen' : 'Add folder';
+  String get backupNoFolder => isGerman
+      ? 'Noch kein Ordner gewählt — die Sicherung läuft erst mit einem.'
+      : 'No folder selected yet — the backup needs one.';
+  String get backupSyncMode => isGerman ? 'Abgleich' : 'Sync mode';
+  String get backupCloudFolder =>
+      isGerman ? 'Ordner in der Cloud' : 'Folder in the cloud';
+  String get backupActiveLabel =>
+      isGerman ? 'Sicherung aktiv' : 'Backup active';
+  String get backupActiveHint => isGerman
+      ? 'Nur eine aktive Sicherung läuft zum Zeitplan.'
+      : 'Only an active backup runs on schedule.';
+
+  String get systemSection => isGerman ? 'System' : 'System';
+
   // --- Speicherplatz-Anzeige der Cloud-Laufwerke ---
   String get storageNotAvailable => isGerman ? 'n. v.' : 'n/a';
   String quotaSummaryUsedOf(String used, String total) =>

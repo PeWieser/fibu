@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../core/widgets/liquid_glass.dart';
 import '../../../core/navigation/app_nav.dart';
+import 'backup_section.dart';
+import 'cloud_section.dart';
 import '../../../core/widgets/windows_controls.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
@@ -149,21 +151,37 @@ class SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Cloud Drives
-              Win.sectionHeader(strings.cloudStorage, theme),
+              // 1. Cloud — eine Cloud, keine Liste
+              Win.sectionHeader(strings.cloudSection, theme),
+              const CloudSection(),
+
+              // 2. Sicherung — eine Sicherung, direkt hier editierbar
+              Win.sectionHeader(strings.backupSection, theme),
+              const BackupSection(),
+              SizedBox(height: theme.xl),
+
+              // 3. System — Start mit Windows, Gerät-zu-Gerät, Diagnose
+              Win.sectionHeader(strings.systemSection, theme),
               Win.group(
                 theme: theme,
                 children: [
-                  // Echte ListTile statt GestureDetector: bringt Tastaturfokus,
-                  // Semantik und Fokus-Ring selbst mit.
-                  Win.tile(
+                  // Autostart: ohne ihn läuft der Zeitplan nur, solange die
+                  // App von Hand geöffnet ist. Der Schalter schreibt den
+                  // Run-Schlüssel des eigenen Benutzerkontens (keine
+                  // Admin-Rechte nötig).
+                  Win.toggle(
                     theme: theme,
-                    title: strings.manageCloudDrives,
-                    subtitle: strings.manageCloudDrivesSubtitle,
-                    leading: fluent.FluentIcons.cloud,
-                    trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
-                    onPressed: () => _navigateToCloudDrives(context),
-                    semanticLabel: strings.manageCloudDrives,
+                    title: strings.autostartLabel,
+                    subtitle: strings.autostartDescription,
+                    value: ref.watch(autostartEnabledProvider).valueOrNull ?? false,
+                    // Solange der Registry-Wert noch nicht gelesen ist, ist
+                    // der Schalter deaktiviert — er soll keinen Zustand
+                    // behaupten, den er nicht kennt. Bewusst kein
+                    // ProgressRing: Der ist eine Endlos-Animation, an der
+                    // pumpAndSettle in Tests nie zur Ruhe kommt.
+                    onChanged: ref.watch(autostartEnabledProvider).isLoading
+                        ? null
+                        : (val) => setAutostartEnabled(ref, val),
                     first: true,
                   ),
                   Win.tile(
@@ -174,50 +192,22 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
                     onPressed: () => _navigateToPairing(context),
                     semanticLabel: strings.pairingTitle,
-                    last: true,
                   ),
-                ],
-              ),
-
-              // 2. Network & Cellular
-              fluent.Text(strings.networkSectionTitle, style: fluent.FluentTheme.of(context).typography.subtitle),
-              SizedBox(height: theme.md),
-              Win.group(
-                theme: theme,
-                children: [
-                  Win.toggle(
+                  Win.tile(
                     theme: theme,
-                    title: strings.wifiOnlySyncLabel,
-                    subtitle: strings.tooltipNetwork,
-                    value: ref.watch(wifiOnlySyncProvider),
-                    onChanged: (val) =>
-                        ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val),
-                    first: true,
-                  ),
-                  // Autostart: ohne ihn läuft der Zeitplan nur, solange die App
-                  // von Hand geöffnet ist. Der Schalter schreibt den
-                  // Run-Schlüssel des eigenen Benutzerkontos (keine
-                  // Admin-Rechte nötig).
-                  Win.toggle(
-                    theme: theme,
-                    title: strings.autostartLabel,
-                    subtitle: strings.autostartDescription,
-                    value: ref.watch(autostartEnabledProvider).valueOrNull ?? false,
-                    // Solange der Registry-Wert noch nicht gelesen ist, ist der
-                    // Schalter deaktiviert — er soll keinen Zustand behaupten,
-                    // den er nicht kennt. Bewusst kein ProgressRing: Der ist
-                    // eine Endlos-Animation, an der pumpAndSettle in Tests nie
-                    // zur Ruhe kommt.
-                    onChanged: ref.watch(autostartEnabledProvider).isLoading
-                        ? null
-                        : (val) => setAutostartEnabled(ref, val),
+                    title: strings.debugLogTitle,
+                    subtitle: strings.debugLogSubtitle,
+                    leading: fluent.FluentIcons.document,
+                    trailing: const Icon(fluent.FluentIcons.chevron_right, size: 14),
+                    onPressed: () => _navigateToDebugLog(context),
+                    semanticLabel: strings.debugLogTitle,
                     last: true,
                   ),
                 ],
               ),
               SizedBox(height: theme.xl),
 
-              // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem
+              // 4. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem
               // System. Zwei Reihen (Hell/Dunkel) plus zwei Modus-Schalter
               // wären 18 Entscheidungen für etwas, das man einmal festlegt.
               Win.sectionHeader(strings.appearanceSection, theme),
@@ -267,7 +257,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SizedBox(height: theme.xl),
 
-              // 5. About
+              // 5. Über
               Win.sectionHeader(strings.aboutSectionTitle, theme),
               Win.group(
                 theme: theme,
@@ -288,17 +278,6 @@ class SettingsScreen extends ConsumerWidget {
                       theme: theme,
                       label: strings.licenseLabel,
                       value: strings.licenseValue),
-                  Win.tile(
-                    theme: theme,
-                    title: strings.debugLogTitle,
-                    subtitle: strings.debugLogSubtitle,
-                    leading: fluent.FluentIcons.document,
-                    trailing:
-                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
-                    onPressed: () => _navigateToDebugLog(context),
-                    semanticLabel: strings.debugLogTitle,
-                    last: true,
-                  ),
                 ],
               ),
 

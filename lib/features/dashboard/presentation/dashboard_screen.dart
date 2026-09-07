@@ -17,7 +17,6 @@ import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/widget_status_service.dart';
 import 'dashboard_controller.dart';
 import '../../tasks/presentation/tasks_controller.dart';
-import '../../tasks/presentation/tasks_screen.dart';
 import '../../settings/presentation/cloud_drives_screen.dart';
 import '../../shell/presentation/shell_controller.dart';
 import 'widgets/multi_remote_storage_card.dart';
@@ -99,7 +98,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _setupActionRow(
             context, theme, strings.addCloudDrive, () => _openCloudDrives(context))
       else if (!hasTasks)
-        _setupActionRow(context, theme, strings.addTask, () => _goToTasks(context)),
+        _setupActionRow(context, theme, strings.addTask, _goToTasks),
     ];
     if (rows.isEmpty) return null;
 
@@ -146,13 +145,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  void _goToTasks(BuildContext context) {
-    // Windows hat seit dem Umbau keinen Aufgaben-Tab mehr — die Sicherung
-    // öffnet sich als Seite, bis sie in die Einstellungen wandert.
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      AppNav.push(context, const TasksScreen());
-      return;
-    }
+  /// Zur Sicherung: zweiter Tab — auf Windows die Einstellungen, auf
+  /// iOS/Android der Aufgaben-Tab.
+  void _goToTasks() {
     ref.read(shellIndexProvider.notifier).state = 1;
   }
 
@@ -342,7 +337,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           semanticLabel: label,
           onPressed: () {
             if (hasCloud) {
-              _goToTasks(context);
+              _goToTasks();
             } else {
               _openCloudDrives(context);
             }

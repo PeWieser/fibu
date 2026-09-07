@@ -113,7 +113,12 @@ void main() {
         reason: 'Weitere Clouds müssen im selben Durchgang entstehen können');
 
     // --- Zweite Cloud im selben Durchgang anlegen ---
-    await tester.tap(find.text(strings.wizardAddMemberCloud));
+    // Die Zeile liegt im Dialog unterhalb der Faltkante (der Dialog ist auf
+    // 660 px gedeckelt) — ohne ensureVisible tippt der Test daneben.
+    final addRowFinder = find.text(strings.wizardAddMemberCloud);
+    await tester.ensureVisible(addRowFinder);
+    await pumpBounded(tester);
+    await tester.tap(addRowFinder);
     await pumpBounded(tester);
 
     // Der verschachtelte Assistent darf keine virtuellen Backends anbieten —
@@ -142,7 +147,10 @@ void main() {
         reason: 'Das eben angelegte Laufwerk gehört in die Auswahl');
 
     // --- Beide Laufwerke als Bestandteile wählen und den Pool anlegen ---
-    await tester.tap(find.text('Backblaze'));
+    final backblazeFinder = find.text('Backblaze');
+    await tester.ensureVisible(backblazeFinder);
+    await pumpBounded(tester);
+    await tester.tap(backblazeFinder);
     await pumpBounded(tester);
     await tester.tap(find.text(strings.testConnection).last);
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));

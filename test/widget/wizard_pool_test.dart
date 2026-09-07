@@ -57,7 +57,11 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('Mehrere Clouds im selben Durchgang anlegen und bündeln',
+  // Kurzes Timeout: Hängt der Test doch wieder an einer Uhr, soll das in
+  // zwei Minuten auffallen und nicht erst nach zehn.
+  testWidgets(
+      'Mehrere Clouds im selben Durchgang anlegen und bündeln',
+      timeout: const Timeout(Duration(minutes: 2)),
       (WidgetTester tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
@@ -70,14 +74,17 @@ void main() {
     final registry = container.read(remoteRegistryServiceProvider);
     // Eine Cloud ist schon verbunden — die zweite entsteht mitten im Setup.
     //
-    // Wichtig: In `testWidgets` tickt die **Fake-Uhr**. Die Verzögerungen des
-    // Mocks (250 ms) laufen also nur, wenn gepumpt wird — ein nacktes `await`
-    // würde bis zum Test-Timeout warten. Deshalb: Future starten, pumpen,
-    // dann auflösen.
-    final seeding = registry.createRemote(
-        displayName: 'Backblaze', type: 'b2', config: const {});
-    await tester.pump(const Duration(milliseconds: 400));
-    final seeded = await seeding;
+    // `runAsync` verlässt die Fake-Uhr des Widget-Tests: `createRemote`
+    // wartet auf eine Mock-Verzögerung **und** schreibt eine echte Datei.
+    // Beides läuft in der Fake-Uhr nur, wenn nebenbei gepumpt wird — und
+    // genau das tut hier niemand. Ohne `runAsync` hängt der Test bis zum
+    // Timeout (10 Minuten, siehe Run 34141804252).
+    final seeded = (await tester.runAsync(() => registry.createRemote(
+          displayName: 'Backblaze',
+          type: 'b2',
+          config: const {},
+        )))!;
+    await tester.pump();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -141,10 +148,10 @@ void main() {
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
 
     // --- Ergebnis: der Pool ist die eine Cloud, mit beiden Bestandteilen ---
-    // Wieder Fake-Uhr: erst pumpen, dann auflösen.
-    final reloading = registry.entries(forceReload: true);
-    await tester.pump(const Duration(milliseconds: 400));
-    final entries = await reloading;
+    // Wieder `runAsync`: forceReload fragt rclone ab (Mock-Verzögerung) und
+    // liest die Registry-Datei.
+    final entries =
+        (await tester.runAsync(() => registry.entries(forceReload: true)))!;
     final pool = entries.firstWhere((e) => e.type == 'union',
         orElse: () => throw StateError('Pool wurde nicht angelegt'));
     final members = registry.poolMembersOf(pool.id);

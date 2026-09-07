@@ -69,8 +69,15 @@ void main() {
 
     final registry = container.read(remoteRegistryServiceProvider);
     // Eine Cloud ist schon verbunden — die zweite entsteht mitten im Setup.
-    final seeded = await registry.createRemote(
+    //
+    // Wichtig: In `testWidgets` tickt die **Fake-Uhr**. Die Verzögerungen des
+    // Mocks (250 ms) laufen also nur, wenn gepumpt wird — ein nacktes `await`
+    // würde bis zum Test-Timeout warten. Deshalb: Future starten, pumpen,
+    // dann auflösen.
+    final seeding = registry.createRemote(
         displayName: 'Backblaze', type: 'b2', config: const {});
+    await tester.pump(const Duration(milliseconds: 400));
+    final seeded = await seeding;
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -134,7 +141,10 @@ void main() {
     await pumpBounded(tester, frames: 8, step: const Duration(milliseconds: 150));
 
     // --- Ergebnis: der Pool ist die eine Cloud, mit beiden Bestandteilen ---
-    final entries = await registry.entries(forceReload: true);
+    // Wieder Fake-Uhr: erst pumpen, dann auflösen.
+    final reloading = registry.entries(forceReload: true);
+    await tester.pump(const Duration(milliseconds: 400));
+    final entries = await reloading;
     final pool = entries.firstWhere((e) => e.type == 'union',
         orElse: () => throw StateError('Pool wurde nicht angelegt'));
     final members = registry.poolMembersOf(pool.id);
@@ -150,5 +160,8 @@ void main() {
       hasLength(1),
       reason: 'Die zweite Cloud wurde wirklich angelegt',
     );
+
+    // Auslaufen lassen, damit keine Timer in den Abbau des Containers ragen.
+    await tester.pump(const Duration(seconds: 1));
   });
 }

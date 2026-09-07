@@ -6,6 +6,8 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
+import '../../../core/navigation/app_nav.dart';
+import 'add_remote_wizard.dart';
 import '../../../core/services/provider_auth.dart';
 import '../../../core/services/rclone_provider_registry.dart';
 import '../../../core/services/remote_registry_service.dart';
@@ -229,27 +231,30 @@ class _ProviderLoginFieldsState extends ConsumerState<ProviderLoginFields> {
       );
     }
 
-    if (entries.isEmpty) {
-      return Container(
-        padding: EdgeInsets.all(theme.md),
-        decoration: BoxDecoration(
-          color: theme.warning.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(theme.radiusSm),
-          border: Border.all(color: theme.warning.withValues(alpha: 0.35)),
-        ),
-        child: Text(
-          strings.noBaseDrivesForVirtual,
-          style: TextStyle(color: theme.textPrimary, fontSize: 13, height: 1.35),
-        ),
-      );
-    }
-
     final multi = field.remotePicker == RemotePickerMode.multi;
     final selectedIds = _parseSelectedRemoteIds(controller.text);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Kein Laufwerk verbunden? Dann ist das hier der Ort, eines anzulegen
+        // — der Hinweis allein wäre eine Sackgasse mitten im Setup.
+        if (entries.isEmpty) ...[
+          Container(
+            padding: EdgeInsets.all(theme.md),
+            decoration: BoxDecoration(
+              color: theme.warning.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(theme.radiusSm),
+              border: Border.all(color: theme.warning.withValues(alpha: 0.35)),
+            ),
+            child: Text(
+              strings.noBaseDrivesForVirtual,
+              style:
+                  TextStyle(color: theme.textPrimary, fontSize: 13, height: 1.35),
+            ),
+          ),
+          SizedBox(height: theme.sm),
+        ],
         for (final entry in entries)
           _remoteChoiceRow(
             entry: entry,
@@ -275,7 +280,96 @@ class _ProviderLoginFieldsState extends ConsumerState<ProviderLoginFields> {
               onChanged();
             },
           ),
+        SizedBox(height: theme.xs),
+        _addMemberDriveRow(
+          multi: multi,
+          selectedIds: selectedIds,
+          controller: controller,
+          onChanged: onChanged,
+        ),
+        SizedBox(height: theme.sm),
+        Text(
+          strings.wizardMembersHint,
+          style: TextStyle(color: theme.textSecondary, fontSize: 12, height: 1.35),
+        ),
       ],
+    );
+  }
+
+  /// „Weitere Cloud hinzufügen" — mitten im Setup, ohne den Assistenten zu
+  /// verlassen.
+  ///
+  /// Genau dafür ist ein Pool da: mehrere Clouds anlegen und im selben
+  /// Durchgang verbinden. Der verschachtelte Assistent bekommt
+  /// `allowVirtual: false`, damit kein Pool im Pool entsteht. Das neue
+  /// Laufwerk wird sofort ausgewählt — wer es nicht will, tippt es wieder ab.
+  Widget _addMemberDriveRow({
+    required bool multi,
+    required Set<String> selectedIds,
+    required TextEditingController controller,
+    required VoidCallback onChanged,
+  }) {
+    Future<void> open() async {
+      final added = await AppNav.push<String>(
+        context,
+        AddRemoteWizardDialog(platform: platform, allowVirtual: false),
+      );
+      if (added == null || added.isEmpty) return;
+      ref.invalidate(remoteEntriesProvider);
+      final next = Set<String>.from(selectedIds);
+      if (multi) {
+        next.add(added);
+      } else {
+        next
+          ..clear()
+          ..add(added);
+      }
+      controller.text = next.map((id) => '$id:').join(' ');
+      if (mounted) setState(() {});
+      onChanged();
+    }
+
+    return Semantics(
+      button: true,
+      label: strings.wizardAddMemberCloud,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => open(),
+        child: Container(
+          margin: EdgeInsets.only(bottom: theme.xs),
+          decoration: BoxDecoration(
+            color: theme.accent.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: theme.accent.withValues(alpha: 0.35)),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding:
+                  EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.sm),
+              child: Row(
+                children: [
+                  Icon(cupertino.CupertinoIcons.add_circled,
+                      color: theme.accent,
+                      size: 22,
+                      semanticLabel: strings.wizardAddMemberCloud),
+                  SizedBox(width: theme.md),
+                  Expanded(
+                    child: Text(
+                      strings.wizardAddMemberCloud,
+                      style: TextStyle(
+                        color: theme.accent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

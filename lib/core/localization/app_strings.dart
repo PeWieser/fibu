@@ -706,6 +706,15 @@ class AppStrings {
 
   String get systemSection => isGerman ? 'System' : 'System';
 
+  /// Bestandteil-Auswahl im Assistenten: weitere Cloud im selben Durchgang
+  /// anlegen, statt den Assistenten zu verlassen.
+  String get wizardAddMemberCloud => isGerman
+      ? 'Weitere Cloud hinzufügen'
+      : 'Add another cloud';
+  String get wizardMembersHint => isGerman
+      ? 'Die ausgewählten Laufwerke werden zu einer Cloud gebündelt. Auf sie wird gesichert.'
+      : 'The selected drives are bundled into one cloud. That is the backup target.';
+
   // --- Speicherplatz-Anzeige der Cloud-Laufwerke ---
   String get storageNotAvailable => isGerman ? 'n. v.' : 'n/a';
   String quotaSummaryUsedOf(String used, String total) =>

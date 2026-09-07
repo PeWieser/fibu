@@ -22,9 +22,18 @@ import 'provider_login_fields.dart';
 /// Keine eigenen „gespeicherte Zugänge“-Buttons. Der Apple-Schlüsselbund
 /// füllt Benutzer/Passwort über Autofill + Associated Domains.
 class AddRemoteWizardDialog extends ConsumerStatefulWidget {
-  const AddRemoteWizardDialog({super.key, required this.platform});
+  const AddRemoteWizardDialog({
+    super.key,
+    required this.platform,
+    this.allowVirtual = true,
+  });
 
   final TargetPlatform platform;
+  final bool allowVirtual;
+
+  /// `false`, wenn der Assistent aus der Bestandteil-Auswahl eines Pools
+  /// geöffnet wurde: Ein Bestandteil ist immer ein echtes Laufwerk — wer hier
+  /// wieder einen Pool wählen könnte, würde Pools in Pools verschachteln.
 
   @override
   ConsumerState<AddRemoteWizardDialog> createState() =>
@@ -133,7 +142,14 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
   List<RcloneProviderDescriptor> _filteredProviders() {
     final query = _searchQuery.toLowerCase().trim();
-    const all = RcloneProviderRegistry.providers;
+    // Ohne virtuelle Backends, wenn dieser Assistent einen Bestandteil
+    // anlegt (siehe [AddRemoteWizardDialog.allowVirtual]).
+    final all = widget.allowVirtual
+        ? RcloneProviderRegistry.providers
+        : RcloneProviderRegistry.providers
+            .where((p) =>
+                p.fields.every((f) => f.remotePicker == RemotePickerMode.none))
+            .toList();
     if (query.isEmpty) {
       final popular = all.where((p) => p.isPopular).toList();
       final rest = all.where((p) => !p.isPopular).toList();
@@ -317,6 +333,32 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     );
   }
 
+  /// Die in der Bestandteil-Auswahl gewählten Laufwerke — leer, wenn der
+  /// Anbieter kein virtueller ist.
+  ///
+  /// Format im Feld: `id:` bzw. `id1: id2:` (rclone erwartet das
+  /// abschließende Doppelpunkt), bei Combine zusätzlich `name=id:`.
+  List<String> _selectedMemberIds() {
+    final fields =
+        _selectedDescriptor?.fields ?? const <ConfigFieldDefinition>[];
+    for (final f in fields) {
+      if (f.remotePicker == RemotePickerMode.none) continue;
+      final raw = _fieldControllers[f.key]?.text ?? '';
+      final ids = <String>[];
+      for (final token in raw.split(RegExp(r'\s+'))) {
+        final t = token.trim();
+        if (t.isEmpty) continue;
+        final eq = t.indexOf('=');
+        final body = eq >= 0 ? t.substring(eq + 1) : t;
+        final colon = body.indexOf(':');
+        final id = colon >= 0 ? body.substring(0, colon) : body;
+        if (id.isNotEmpty) ids.add(id);
+      }
+      return ids;
+    }
+    return const [];
+  }
+
   void _validateStep2Fields(AppStrings strings) {
     final missing =
         ProviderAuth.missingRequired(_selectedDescriptor, _fieldValues);
@@ -405,6 +447,16 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           );
       if (widget.platform == TargetPlatform.iOS && !_isOAuthProvider) {
         TextInput.finishAutofillContext();
+      }
+      // Welche Cloud „die eine" ist:
+      //  * Ein Pool wird es immer — genau dafür bündelt man Laufwerke.
+      //  * Ein einzelnes Laufwerk nur, wenn noch keins aktiv ist. Sonst würde
+      //    ein nachträglich verbundenes Laufwerk still das Sicherungsziel
+      //    ändern.
+      final members = _selectedMemberIds();
+      final registry = ref.read(remoteRegistryServiceProvider);
+      if (members.isNotEmpty || registry.activeRemoteId.isEmpty) {
+        await registry.setActiveRemote(entry.id, members: members);
       }
       ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);

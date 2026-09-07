@@ -83,6 +83,36 @@ class ActiveCloud {
     return chosen;
   }
 
+  /// Liest gewählte Laufwerk-Kennungen aus einem rclone-Feldwert.
+  ///
+  /// Formate: `id:` (Union), `id1: id2:` (mehrere), `name=id:` (Combine).
+  /// Reine Funktion — derselbe Code liest die Auswahl im Assistenten und im
+  /// Test.
+  static List<String> parseRemoteIds(String raw) {
+    final ids = <String>[];
+    for (final token in raw.split(RegExp(r'\s+'))) {
+      final t = token.trim();
+      if (t.isEmpty) continue;
+      final eq = t.indexOf('=');
+      final body = eq >= 0 ? t.substring(eq + 1) : t;
+      final colon = body.indexOf(':');
+      final id = colon >= 0 ? body.substring(0, colon) : body;
+      if (id.isNotEmpty) ids.add(id);
+    }
+    return ids;
+  }
+
+  /// Wird ein neu angelegtes Laufwerk zur einen Cloud?
+  ///
+  /// Ein Pool immer — genau dafür bündelt man Laufwerke. Ein einzelnes
+  /// Laufwerk nur, wenn noch keins aktiv ist; sonst würde ein nachträglich
+  /// verbundenes Laufwerk still das Sicherungsziel ändern.
+  static bool shouldBecomeActive({
+    required bool isPool,
+    required bool hasActiveCloud,
+  }) =>
+      isPool || !hasActiveCloud;
+
   /// Ziel-Laufwerk der Sicherung aus dem geladenen Zustand — ohne Datei-IO.
   static String? targetOfTasks(List<BackupTask> tasks) {
     if (tasks.isEmpty) return null;

@@ -6,6 +6,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/active_cloud.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/app_log_service.dart';
 import '../../../core/services/ios_rclone_service.dart';
@@ -146,10 +147,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     // anlegt (siehe [AddRemoteWizardDialog.allowVirtual]).
     final all = widget.allowVirtual
         ? RcloneProviderRegistry.providers
-        : RcloneProviderRegistry.providers
-            .where((p) =>
-                p.fields.every((f) => f.remotePicker == RemotePickerMode.none))
-            .toList();
+        : RcloneProviderRegistry.nonVirtualProviders;
     if (query.isEmpty) {
       final popular = all.where((p) => p.isPopular).toList();
       final rest = all.where((p) => !p.isPopular).toList();
@@ -344,17 +342,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
     for (final f in fields) {
       if (f.remotePicker == RemotePickerMode.none) continue;
       final raw = _fieldControllers[f.key]?.text ?? '';
-      final ids = <String>[];
-      for (final token in raw.split(RegExp(r'\s+'))) {
-        final t = token.trim();
-        if (t.isEmpty) continue;
-        final eq = t.indexOf('=');
-        final body = eq >= 0 ? t.substring(eq + 1) : t;
-        final colon = body.indexOf(':');
-        final id = colon >= 0 ? body.substring(0, colon) : body;
-        if (id.isNotEmpty) ids.add(id);
-      }
-      return ids;
+      return ActiveCloud.parseRemoteIds(raw);
     }
     return const [];
   }
@@ -455,7 +443,10 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       //    ändern.
       final members = _selectedMemberIds();
       final registry = ref.read(remoteRegistryServiceProvider);
-      if (members.isNotEmpty || registry.activeRemoteId.isEmpty) {
+      if (ActiveCloud.shouldBecomeActive(
+        isPool: members.isNotEmpty,
+        hasActiveCloud: registry.activeRemoteId.isNotEmpty,
+      )) {
         await registry.setActiveRemote(entry.id, members: members);
       }
       ref.invalidate(remoteEntriesProvider);

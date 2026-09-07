@@ -126,6 +126,16 @@ class RcloneProviderDescriptor {
 
 /// Central registry of all 70+ rclone storage providers.
 class RcloneProviderRegistry {
+  /// Anbieter ohne virtuelles Backend — also solche, die ein eigenes Konto
+  /// haben und als Bestandteil eines Pools taugen.
+  ///
+  /// Der Assistent nutzt diese Liste, wenn er aus der Bestandteil-Auswahl
+  /// heraus geöffnet wird: Ein Pool im Pool wäre Unsinn.
+  static List<RcloneProviderDescriptor> get nonVirtualProviders => providers
+      .where(
+          (p) => p.fields.every((f) => f.remotePicker == RemotePickerMode.none))
+      .toList();
+
   static const List<RcloneProviderDescriptor> providers = [
     // --- POPULAR / CONSUMER CLOUD STORAGE ---
     RcloneProviderDescriptor(

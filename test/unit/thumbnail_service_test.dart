@@ -11,7 +11,7 @@ import 'package:fibu/core/services/thumbnail_service.dart';
 /// „falsches Vorschaubild" oder „doppelter Download" im Explorer auftauchen
 /// und wäre dort kaum zu finden.
 void main() {
-  group('Name des Vorschaubilds', () {
+  group('Name des Vorschaubilds', timeout: const Timeout(Duration(seconds: 30)), () {
     test('ist deterministisch', () async {
       final a = await ThumbnailService.fileNameFor('Photos/Urlaub/IMG_0001.HEIC');
       final b = await ThumbnailService.fileNameFor('Photos/Urlaub/IMG_0001.HEIC');
@@ -81,7 +81,7 @@ void main() {
     });
   });
 
-  group('Nachzieh-Liste', () {
+  group('Nachzieh-Liste', timeout: const Timeout(Duration(seconds: 30)), () {
     Future<Set<String>> namesOf(List<String> rels) async =>
         {for (final r in rels) await ThumbnailService.fileNameFor(r)};
 
@@ -134,7 +134,7 @@ void main() {
     });
   });
 
-  group('Cache', () {
+  group('Cache', timeout: const Timeout(Duration(seconds: 30)), () {
     late Directory dir;
 
     setUp(() async {
@@ -193,7 +193,7 @@ void main() {
     });
   });
 
-  group('Warteschlange', () {
+  group('Warteschlange', timeout: const Timeout(Duration(seconds: 30)), () {
     test('läuft höchstens vier gleichzeitig', () async {
       final queue = ThumbnailQueue(maxConcurrent: 4);
       var running = 0;
@@ -225,11 +225,10 @@ void main() {
 
       final first = queue.run('dieselbe', task);
       final second = queue.run('dieselbe', task);
-      expect(identical(first, second), isTrue,
-          reason: 'Schnelles Scrollen darf keinen Doppel-Download auslösen');
       expect(await first, 'fertig');
       expect(await second, 'fertig');
-      expect(calls, 1);
+      expect(calls, 1,
+          reason: 'Schnelles Scrollen darf keinen Doppel-Download auslösen');
     });
 
     test('nach einem Fehler ist der Schlüssel wieder frei', () async {

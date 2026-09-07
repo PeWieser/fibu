@@ -240,33 +240,28 @@ class ThumbnailQueue {
   final List<Completer<void>> _waiting = [];
   int _active = 0;
 
-  /// Lädt [key]. Läuft für denselben Schlüssel schon etwas, wird dasselbe
-  /// Future zurückgegeben statt ein zweites Mal zu laden.
+  /// Lädt [key]. Läuft für denselben Schlüssel schon etwas, hängt sich der
+  /// Aufrufer an denselben Lauf — statt ein zweites Mal zu laden.
+  ///
+  /// Der Wert wird über `then` weitergereicht und nicht als
+  /// `Future<Object?> as Future<T>` gecastet: Dart-Generics sind kovariant,
+  /// eine Abwärts-Konvertierung wäre ein `TypeError` zur Laufzeit.
   Future<T> run<T>(String key, Future<T> Function() task) {
     final existing = _inFlight[key];
-    if (existing != null) return existing as Future<T>;
+    if (existing != null) return existing.then((value) => value as T);
 
-    final completer = Completer<Object?>();
-    _inFlight[key] = completer.future;
-    unawaited(_execute(key, task, completer));
-    return completer.future as Future<T>;
+    final future = _execute(key, task);
+    _inFlight[key] = future;
+    return future;
   }
 
   /// Wie viele Aufgaben gerade laufen — für Tests und Fortschritt.
   int get activeCount => _active;
 
-  Future<void> _execute<T>(
-    String key,
-    Future<T> Function() task,
-    Completer<Object?> completer,
-  ) async {
+  Future<T> _execute<T>(String key, Future<T> Function() task) async {
     await _acquire();
     try {
-      completer.complete(await task());
-    } catch (error, stackTrace) {
-      if (!completer.isCompleted) {
-        completer.completeError(error, stackTrace);
-      }
+      return await task();
     } finally {
       _inFlight.remove(key);
       _release();

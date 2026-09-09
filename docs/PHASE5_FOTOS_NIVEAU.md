@@ -306,11 +306,18 @@ Neuer Bildschirm `CloudPhotoViewer`, geöffnet aus der Kachel:
 
 | # | Inhalt | Risiko |
 |---|---|---|
-| 5a | `ThumbnailService` (Name, Cache, Warteschlange, Differenz) + Unit-Tests | niedrig — reine Logik |
-| 5b | `ThumbnailCreator` pro Plattform + Hook beim Sichern + Nachzieh-Lauf + Hinweis | mittel — neue Abhängigkeit `image` |
-| 5c | Explorer-Raster mit Vorschaubildern, Spalten nach Breite, Monats-Trenner | mittel |
-| 5d | Vollbild-Ansicht mit Blättern, Zoom, Tastatur | mittel |
-| 5e | Doku: DATENSCHUTZ (Datei **und** In-App), ARCHITECTURE, README | niedrig |
+| 5a | `ThumbnailService` (Name, Cache, Warteschlange, Differenz) + Unit-Tests | ✅ fertig |
+| 5b | `ThumbnailCreator` pro Plattform + Hook beim Sichern + Nachzieh-Lauf + Hinweis | ✅ fertig |
+| 5c | Explorer-Raster mit Vorschaubildern, Spalten nach Breite, Monats-Trenner | ✅ fertig |
+| 5d | Vollbild-Ansicht mit Blättern, Zoom, Tastatur | ✅ fertig |
+| 5e | Doku: DATENSCHUTZ (Datei **und** In-App), ARCHITECTURE, README | ✅ fertig |
+
+**Abweichung vom Plan:** Die Vorschaubilder werden beim Sichern sofort pro
+Aufnahme hochgeladen, nicht in einem gesammelten Block. Der Block hätte die
+Zahl der rclone-Aufrufe halbiert, aber entweder die Bytes aller Vorschaubilder
+im Speicher gehalten (30 MB bei 1 000 Aufnahmen) oder einen zweiten
+Temporär-Ordner gebraucht. Sofort hochladen ist einfacher und behält den
+Speicher flach; der Preis ist ein zusätzlicher Aufruf pro Aufnahme.
 
 Jede Phase ein Commit, dazwischen ein grüner CI-Lauf. 5a und 5e sind auch
 allein sinnvoll; 5b ohne 5c bringt noch nichts Sichtbares.

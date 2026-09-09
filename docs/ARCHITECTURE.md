@@ -135,6 +135,33 @@ Contrast for all 8 palettes × 2 modes is pinned by `test/unit/theme_contrast_te
 (WCAG AA ≥ 4.5:1). Old settings files with separate light/dark palettes are
 migrated on load (`ThemeNotifier.paletteFromSettings`: the light choice wins).
 
+## Vorschaubilder (Cloud-Explorer)
+
+Kleine JPEG-Vorschauen (256 px, q70) machen die gesicherte Mediathek als
+Raster sichtbar. **Lokal vor Cloud** ist die Regel:
+
+1. Liegt die Aufnahme noch auf dem Gerät, wird die Vorschau daraus erzeugt —
+   kein Netz, funktioniert offline. Quelle ist auf iOS/Android die
+   `photo_manager`-Aufnahme (versteht HEIC), auf Windows die Quelldatei.
+2. Sonst `.fibu/thumbs/<sha256(rel)[:32]>.jpg` aus der Cloud.
+3. Sonst bleibt die Dateikachel (Name + Größe).
+
+Erzeugt werden sie beim Sichern (`virtual_mirror_sync.dart`,
+`_uploadThumbnails`) und für Bestände per Knopf im Explorer
+(`ThumbnailPipeline`). Der lokale Cache liegt unter
+`<App Support>/thumb_cache` (200 MB weich, ältestes Drittel fliegt).
+
+Dekodieren und Kodieren laufen über `compute` in einem Isolat — sonst kostet
+eine 12-Megapixel-Aufnahme 100–300 ms auf dem UI-Thread.
+
+`.fibu/` wird von keinem Spiegel zurückgespielt
+(`virtual_mirror_sync.dart:769`, `filesystem_mirror_source.dart:54`,
+`rclone_service_impl.dart:231`) — die Vorschaubilder landen also nicht als
+„neue Aufnahme" in der Mediathek.
+
+**Grenze:** HEIC auf Windows bleibt Dateikachel — Flutter/Skia hat dafür
+keinen Decoder.
+
 ## Live data & status
 
 - `AutoRefreshService`: refreshes remotes, quota and sync-needed state every

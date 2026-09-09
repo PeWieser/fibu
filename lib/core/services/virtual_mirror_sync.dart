@@ -1,14 +1,18 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../localization/app_strings.dart';
+import '../utils/app_paths.dart';
 import '../utils/format.dart';
 import 'app_log_service.dart';
 import 'change_journal_service.dart';
 import 'device_storage.dart';
 import 'mirror_sync_engine.dart';
 import 'rclone_service.dart';
+import 'thumbnail_pipeline.dart';
+import 'thumbnail_service.dart';
 import 'trash_service.dart';
 
 /// Ein Medien-Eintrag aus der lokalen Bibliothek – nur Metadaten,
@@ -619,6 +623,19 @@ class VirtualMirrorSyncEngine {
       }
     }
 
+    // ---------- 1b) Vorschaubilder für die eben gesicherten Aufnahmen -----
+    // Streng additiv: Was hier schiefgeht, ändert nichts am Ergebnis der
+    // Sicherung. Die Aufnahmen sind zu diesem Zeitpunkt bereits übertragen.
+    if (uploadedRels.isNotEmpty) {
+      await _uploadThumbnails(
+        remoteName: remoteName,
+        items:
+            needUpload.where((item) => uploadedRels.contains(item.rel)).toList(),
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
+    }
+
     // ---------- 2) Lokale Tombstones remote ausführen (Lokal hat Vorrang) ----
     // Parallel mit begrenzter Nebenläufigkeit: pro Tombstone laufen sonst
     // 2-3 sequenzielle Netzwerk-Calls (Server-Kopie + Delete bzw. Fallback
@@ -1096,6 +1113,50 @@ class VirtualMirrorSyncEngine {
       await tmp.delete(recursive: true);
     } catch (_) {}
   }
+
+  /// Vorschaubilder für frisch gesicherte Aufnahmen erzeugen und hochladen.
+  ///
+  /// Die Quelle ist immer **lokal**: Auf iOS/Android die Aufnahme aus der
+  /// Mediathek, auf Windows die Quelldatei (dort ist `assetId` der absolute
+  /// Pfad, siehe `filesystem_mirror_source.dart:60`). Aus der Cloud wird
+  /// dafür nichts geladen.
+  ///
+  /// Jeder Fehler wird geschluckt und protokolliert. Ein Vorschaubild ist
+  /// niemals ein Grund, einen Lauf abzubrechen.
+  Future<void> _uploadThumbnails({
+    required String remoteName,
+    required List<VirtualMediaItem> items,
+    MirrorProgressCallback? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    try {
+      final support = await appSupportRoot();
+      final cache = ThumbnailCache(Directory('${support.path}/thumb_cache'));
+      final total = items.length;
+      for (var i = 0; i < items.length; i++) {
+        if (isCancelled?.call() ?? false) return;
+        final item = items[i];
+        onProgress?.call('thumbs', item.rel, i + 1, total);
+        try {
+          final bytes = await _thumbnailFor(item);
+          if (bytes == null) continue;
+          await cache.write(item.rel, bytes);
+          final local = await cache.fileFor(item.rel);
+          await _rclone.copyFileToRemote(local.path, remoteName,
+              await ThumbnailService.cloudPath(item.rel));
+        } catch (e) {
+          AppLog.warn('thumbs', 'Vorschaubild für „${item.rel}" übersprungen: $e');
+        }
+      }
+      await cache.prune();
+    } catch (e) {
+      AppLog.warn('thumbs', 'Vorschaubilder übersprungen: $e');
+    }
+  }
+
+  /// Vorschaubild aus der lokalen Quelle einer Aufnahme.
+  Future<Uint8List?> _thumbnailFor(VirtualMediaItem item) =>
+      LocalMediaResolver.create(assetId: item.assetId);
 
   File _tombstoneFile(String stateRoot) =>
       File('$stateRoot${Platform.pathSeparator}.fibu${Platform.pathSeparator}$tombstonesFileName');

@@ -437,6 +437,20 @@ class AppStrings {
     final m = months[day.month - 1];
     return isGerman ? '${day.day}. $m ${day.year}' : '$m ${day.day}, ${day.year}';
   }
+
+  /// Monats-Trenner im Raster („September 2026").
+  String cloudPhotosMonthLabel(DateTime day) {
+    const monthsDe = [
+      'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+    ];
+    const monthsEn = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final months = isGerman ? monthsDe : monthsEn;
+    return '${months[day.month - 1]} ${day.year}';
+  }
   String get remoteDriveSelectorLabel => isGerman ? 'Cloud-Laufwerk' : 'Remote Drive';
   String get emptyFolder => isGerman ? 'Dieser Ordner ist leer.' : 'This folder is empty.';
   String get noRemotesInExplorer => isGerman ? 'Keine Cloud-Laufwerke verbunden.' : 'No cloud drives connected.';
@@ -705,6 +719,19 @@ class AppStrings {
       : 'Only an active backup runs on schedule.';
 
   String get systemSection => isGerman ? 'System' : 'System';
+
+  // --- Vorschaubilder (Cloud-Explorer) ---
+  String get cannotDisplayFormat => isGerman
+      ? 'Dieses Format kann Flutter nicht anzeigen. Öffne es in der Standard-App.'
+      : 'Flutter cannot display this format. Open it in the default app.';
+  String thumbsMissing(int count) => isGerman
+      ? 'Für $count ${count == 1 ? 'Aufnahme fehlt' : 'Aufnahmen fehlen'} die Vorschau.'
+      : 'Missing previews for $count ${count == 1 ? 'item' : 'items'}.';
+  String get thumbsCreate =>
+      isGerman ? 'Jetzt erzeugen' : 'Create now';
+  String get thumbsLater => isGerman ? 'Später' : 'Later';
+  String get thumbsCreating =>
+      isGerman ? 'Vorschauen werden erzeugt …' : 'Creating previews …';
 
   /// Bestandteil-Auswahl im Assistenten: weitere Cloud im selben Durchgang
   /// anlegen, statt den Assistenten zu verlassen.

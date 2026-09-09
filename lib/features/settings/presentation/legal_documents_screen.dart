@@ -111,6 +111,10 @@ class LegalDocuments {
                 'Anbieters.',
           ),
           const LegalDocSection(
+            'Vorschaubilder',
+            'Damit die gesicherte Mediathek als Raster mit Bildern erscheint, '                'erzeugt die App kleine Vorschaubilder (256 Pixel, JPEG) aus '                'deinen eigenen Aufnahmen und legt sie im Ordner '                '„fibu-backup/.fibu/thumbs/“ in deiner Cloud ab.\n\n'                'Das sind abgeleitete Bilddaten: Sie gehen an denselben '                'Anbieter wie die Aufnahmen selbst und an niemanden sonst. '                'Erzeugt werden sie auf deinem Gerät, nicht in der Cloud. '                'Löschst du die Sicherung, verschwinden sie mit ihr.\n\n'                'Auf dem Gerät, von dem die Aufnahmen stammen, zeigt die App '                'die lokalen Dateien — dafür wird nichts heruntergeladen.',
+          ),
+          const LegalDocSection(
             'Berechtigungen',
             '• Fotos: Nur nach deiner Freigabe. Bei eingeschränkter Freigabe '
                 '(„Auswahl …“) sieht die App ausschließlich die von dir gewählten '

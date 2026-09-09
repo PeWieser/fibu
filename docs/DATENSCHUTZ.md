@@ -119,6 +119,19 @@ Sitzt dein Anbieter außerhalb der EU, stützt er den Transfer in der Regel auf
 die Standardvertragsklauseln der EU-Kommission. Einzelheiten findest du in der
 Datenschutzerklärung des jeweiligen Anbieters.
 
+## Vorschaubilder
+
+Damit die gesicherte Mediathek als Raster mit Bildern erscheint, erzeugt die
+App kleine Vorschaubilder (256 Pixel, JPEG) aus deinen eigenen Aufnahmen und
+legt sie im Ordner `fibu-backup/.fibu/thumbs/` in deiner Cloud ab.
+
+Das sind abgeleitete Bilddaten: Sie gehen an denselben Anbieter wie die
+Aufnahmen selbst und an niemanden sonst. Erzeugt werden sie auf deinem Gerät,
+nicht in der Cloud. Löschst du die Sicherung, verschwinden sie mit ihr.
+
+Auf dem Gerät, von dem die Aufnahmen stammen, zeigt die App die lokalen
+Dateien — dafür wird nichts heruntergeladen.
+
 ## Berechtigungen
 
 - **Fotos:** Nur nach deiner Freigabe. Bei eingeschränkter Freigabe

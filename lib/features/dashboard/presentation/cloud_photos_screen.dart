@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart' as material;
@@ -6,13 +8,20 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
-import '../../../core/services/file_viewer_service.dart';
+import '../../../core/navigation/app_nav.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/remote_registry_service.dart';
+import '../../../core/services/thumbnail_creator.dart';
+import '../../../core/services/thumbnail_pipeline.dart';
+import '../../../core/services/thumbnail_service.dart';
+import '../../../core/utils/app_paths.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/theme.dart';
+import 'cloud_photo_viewer.dart';
+import 'widgets/thumb_image.dart';
 
 /// Wurzelordner der Sicherung im Laufwerk.
 const String kFibuBackupRoot = 'fibu-backup';
@@ -93,6 +102,17 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
   /// Datei, die gerade geladen/geöffnet wird — für den Kachel-Spinner.
   String? _openingPath;
 
+  /// Spiegel-Pfad → Asset-ID bzw. absoluter Pfad (Windows). Einmal geladen,
+  /// damit die Kacheln nicht jede für sich die Spiegel-Zustände lesen.
+  Map<String, String> _assetIds = const {};
+
+  /// Aufnahmen ohne Vorschaubild in der Cloud — für den Hinweis.
+  List<String> _missingThumbs = const [];
+  bool _thumbsDismissed = false;
+  bool _creatingThumbs = false;
+  int _thumbsDone = 0;
+  int _thumbsTotal = 0;
+
   @override
   void initState() {
     super.initState();
@@ -111,7 +131,9 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
         return;
       }
       setState(() => _remote ??= remotes.first);
+      _assetIds = await LocalMediaResolver.loadAssetIds();
       await _loadAlbums();
+      await _refreshMissingThumbs();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -164,6 +186,107 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
         _loading = false;
         _error = '$e';
       });
+    }
+  }
+
+  /// Spiegel-Pfad aus dem Cloud-Pfad: `fibu-backup/Photos/A/x.jpg` →
+  /// `Photos/A/x.jpg`. Daraus wird der Name des Vorschaubilds, und das ist
+  /// der Schlüssel in `mirror_state.json`.
+  String _relOf(String cloudPath) {
+    const prefix = '$kFibuBackupRoot/';
+    return cloudPath.startsWith(prefix)
+        ? cloudPath.substring(prefix.length)
+        : cloudPath;
+  }
+
+  /// Zählt, für welche Aufnahmen das Vorschaubild in der Cloud fehlt.
+  ///
+  /// Lokal vorhandene Aufnahmen zählen mit — ihr Vorschaubild entsteht aus
+  /// der lokalen Datei und muss für die anderen Geräte trotzdem hoch.
+  Future<void> _refreshMissingThumbs() async {
+    final remote = _remote;
+    if (remote == null) return;
+    try {
+      final service = ref.read(rcloneServiceProvider);
+      final cloudThumbs =
+          await ThumbnailPipeline.listCloudThumbs(service, remote);
+      final rels = <String>[];
+      await _collectRels(remote, kFibuPhotosRoot, rels);
+      final missing = await ThumbnailService.backfillList(
+        rels: rels,
+        cloudFileNames: cloudThumbs,
+        // Bewusst immer false: Auch lokal vorhandene Aufnahmen brauchen ihr
+        // Vorschaubild in der Cloud — für die anderen Geräte.
+        existsLocally: (rel) => false,
+      );
+      if (!mounted) return;
+      setState(() => _missingThumbs = missing.map((e) => e.rel).toList());
+    } catch (e) {
+      AppLog.warn('thumbs', 'Vorschaubild-Bestand nicht lesbar: $e');
+    }
+  }
+
+  Future<void> _collectRels(
+      String remote, String path, List<String> out) async {
+    final entries = await ref.read(rcloneServiceProvider).listFiles(remote, path);
+    for (final entry in entries) {
+      if (entry.isDir) {
+        await _collectRels(remote, '$path/${entry.name}', out);
+      } else {
+        out.add(_relOf('$path/${entry.name}'));
+      }
+    }
+  }
+
+  /// Vorschaubilder erzeugen und hochladen. Mit Fortschritt und Abbruch.
+  Future<void> _createThumbnails() async {
+    final remote = _remote;
+    if (remote == null || _creatingThumbs || _missingThumbs.isEmpty) return;
+    setState(() {
+      _creatingThumbs = true;
+      _thumbsDone = 0;
+      _thumbsTotal = _missingThumbs.length;
+    });
+    try {
+      final support = await appSupportRoot();
+      final cache = ThumbnailCache(Directory('${support.path}/thumb_cache'));
+      final service = ref.read(rcloneServiceProvider);
+      final rels = List<String>.from(_missingThumbs);
+      await ThumbnailPipeline.run(
+        rclone: service,
+        remoteName: remote,
+        rels: rels,
+        cache: cache,
+        createFor: (rel) async {
+          // 1) lokale Aufnahme — der billige Weg
+          final assetId = _assetIds[rel];
+          if (assetId != null && assetId.isNotEmpty) {
+            final local = await LocalMediaResolver.create(assetId: assetId);
+            if (local != null) return local;
+          }
+          // 2) nur in der Cloud: Original holen, Vorschaubild bauen
+          final tmp = File('${support.path}/backfill_${rel.hashCode}.tmp');
+          try {
+            await service.downloadFile(
+                remote, '$kFibuBackupRoot/$rel', tmp.path);
+            return await ThumbnailCreator.fromFile(tmp);
+          } catch (_) {
+            return null;
+          } finally {
+            try {
+              if (await tmp.exists()) await tmp.delete();
+            } catch (_) {}
+          }
+        },
+        onProgress: (done, total) {
+          if (mounted) setState(() => _thumbsDone = done);
+        },
+      );
+      await _refreshMissingThumbs();
+    } catch (e) {
+      AppLog.warn('thumbs', 'Vorschaubilder nicht erzeugt: $e');
+    } finally {
+      if (mounted) setState(() => _creatingThumbs = false);
     }
   }
 
@@ -253,21 +376,37 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
     return out;
   }
 
-  Future<void> _openPhoto(_Photo photo) async {
+  /// Öffnet die Vollbild-Ansicht mit allen Aufnahmen der aktuellen Liste.
+  ///
+  /// Liegt die Aufnahme lokal, zeigt die Ansicht sie ohne Download
+  /// (`CloudPhotoViewer`, §2.1) — „In Standard-App öffnen" bleibt dort als
+  /// Aktion für Formate, die Flutter nicht darstellen kann.
+  void _openPhoto(_Photo photo) {
     final remote = _remote;
     if (remote == null) return;
     if (defaultTargetPlatform == TargetPlatform.iOS) IosHaptics.light();
-    setState(() => _openingPath = photo.path);
-    final ok = await ref.read(fileViewerServiceProvider).openInDefaultApp(
-          remoteName: remote,
-          remotePath: photo.path,
-          fileName: photo.name,
-        );
-    if (!mounted) return;
-    setState(() => _openingPath = null);
-    if (!ok) {
-      setState(() => _error = ref.read(stringsProvider).previewLoadFailed);
-    }
+
+    final photos = (_openAlbumPath != null ? _albumPhotos : _recent);
+    final list = photos.isEmpty ? [photo] : photos;
+    final index = list.indexWhere((p) => p.path == photo.path);
+    AppNav.push(
+      context,
+      CloudPhotoViewer(
+        remote: remote,
+        initialIndex: index < 0 ? 0 : index,
+        assetIds: _assetIds,
+        photos: [
+          for (final p in list)
+            ViewerPhoto(
+              name: p.name,
+              cloudPath: p.path,
+              rel: _relOf(p.path),
+              size: p.size,
+              modified: p.modified,
+            ),
+        ],
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -302,6 +441,10 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
           _segmented(theme, strings, platform)
         else
           _backRow(theme, strings, platform),
+        if (_missingThumbs.isNotEmpty && !_thumbsDismissed) ...[
+          SizedBox(height: theme.md),
+          _thumbsBanner(theme, strings),
+        ],
         SizedBox(height: theme.md),
       ],
     );
@@ -631,43 +774,123 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
     final keys = groups.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
-    return ListView.builder(
-      padding: EdgeInsets.only(bottom: theme.xl),
-      itemCount: keys.length,
-      itemBuilder: (context, gi) {
-        final key = keys[gi];
-        final items = groups[key]!;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: gi == 0 ? 0 : theme.lg, bottom: theme.sm),
-              child: Text(
-                key == DateTime(0)
-                    ? strings.cloudPhotosUnknownDate
-                    : strings.cloudPhotosDayLabel(key),
-                style: TextStyle(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600),
-              ),
-            ),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: theme.xs,
-                mainAxisSpacing: theme.xs,
-                childAspectRatio: 1.0,
-              ),
-              itemCount: items.length,
-              itemBuilder: (context, i) => _photoTile(items[i], theme, strings),
-            ),
-          ],
+    // Spalten nach verfügbarer Breite statt nach Plattform: Drei Spalten sind
+    // auf einem Telefon richtig und auf einem Fenster zu grob.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = _columnCount(constraints.maxWidth);
+        return ListView.builder(
+          padding: EdgeInsets.only(bottom: theme.xl),
+          itemCount: keys.length,
+          itemBuilder: (context, gi) {
+            final key = keys[gi];
+            final items = groups[key]!;
+            // Monats-Trenner, wenn der Monat wechselt — wie in der Fotos-App.
+            final previous = gi == 0 ? null : keys[gi - 1];
+            final newMonth = key != DateTime(0) &&
+                (previous == null ||
+                    previous.year != key.year ||
+                    previous.month != key.month);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (newMonth)
+                  Padding(
+                    padding: EdgeInsets.only(top: gi == 0 ? 0 : theme.lg, bottom: theme.xs),
+                    child: Text(
+                      strings.cloudPhotosMonthLabel(key),
+                      style: TextStyle(
+                          color: theme.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                Padding(
+                  padding: EdgeInsets.only(top: newMonth ? 0 : (gi == 0 ? 0 : theme.lg), bottom: theme.sm),
+                  child: Text(
+                    key == DateTime(0)
+                        ? strings.cloudPhotosUnknownDate
+                        : strings.cloudPhotosDayLabel(key),
+                    style: TextStyle(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: theme.xs,
+                    mainAxisSpacing: theme.xs,
+                    childAspectRatio: 1.0,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) => _photoTile(items[i], theme, strings),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  /// Hinweis, dass Vorschaubilder fehlen — mit Knopf, nicht automatisch.
+  ///
+  /// Der Nutzer entscheidet, wann Datenvolumen fließt. Der Hinweis steht
+  /// dort, wo der Mangel sichtbar wird.
+  Widget _thumbsBanner(AppThemeData theme, AppStrings strings) {
+    return Container(
+      padding: EdgeInsets.all(theme.md),
+      decoration: BoxDecoration(
+        color: theme.accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _creatingThumbs
+                ? '${strings.thumbsCreating} $_thumbsDone/$_thumbsTotal'
+                : strings.thumbsMissing(_missingThumbs.length),
+            style: TextStyle(
+                color: theme.textPrimary, fontSize: 13, height: 1.35),
+          ),
+          SizedBox(height: theme.sm),
+          Row(
+            children: [
+              if (_creatingThumbs)
+                const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: material.CircularProgressIndicator(strokeWidth: 2))
+              else ...[
+                material.TextButton(
+                  onPressed: _createThumbnails,
+                  child: Text(strings.thumbsCreate),
+                ),
+                SizedBox(width: theme.sm),
+                material.TextButton(
+                  onPressed: () => setState(() => _thumbsDismissed = true),
+                  child: Text(strings.thumbsLater),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Spaltenzahl nach Breite — Telefon 3, Tablet 4–5, Fenster 6.
+  static int _columnCount(double width) {
+    if (width >= 1100) return 6;
+    if (width >= 800) return 5;
+    if (width >= 520) return 4;
+    return 3;
   }
 
   Widget _photoTile(_Photo photo, AppThemeData theme, AppStrings strings) {
@@ -677,7 +900,26 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: isOpening ? null : () => _openPhoto(photo),
-        child: Container(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(theme.radiusSm),
+          // Vorschaubild, sobald es da ist — lokal vor Cloud (§2.1). Bis
+          // dahin und ohne Vorschaubild bleibt die Dateikachel.
+          child: ThumbImage(
+            remote: _remote ?? '',
+            cloudPath: photo.path,
+            rel: _relOf(photo.path),
+            assetIds: _assetIds,
+            fallback: _fileTile(photo, theme, strings, isOpening),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Dateikachel: Name und Größe — der Zustand ohne Vorschaubild.
+  Widget _fileTile(
+      _Photo photo, AppThemeData theme, AppStrings strings, bool isOpening) {
+    return Container(
           decoration: BoxDecoration(
             color: theme.accent.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(theme.radiusSm),
@@ -719,8 +961,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
                   style: TextStyle(color: theme.textSecondary, fontSize: 9)),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }

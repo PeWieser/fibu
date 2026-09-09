@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
@@ -154,7 +155,7 @@ class ThumbnailCache {
   Future<File> fileFor(String rel) async =>
       File('${root.path}/${await ThumbnailService.fileNameFor(rel)}');
 
-  Future<List<int>?> read(String rel) async {
+  Future<Uint8List?> read(String rel) async {
     final file = await fileFor(rel);
     if (!await file.exists()) return null;
     try {

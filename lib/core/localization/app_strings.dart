@@ -1261,6 +1261,7 @@ class AppStrings {
 
   /// Kompakte, lokalisierte Datums-/Zeitformatierung (ohne intl-Paket).
   String formatDateTime(DateTime dt) {
+    String two(int v) => v.toString().padLeft(2, '0');
     final d = dt.toLocal();
     final date = isGerman
         ? '${two(d.day)}.${two(d.month)}.${d.year}'

@@ -50,6 +50,17 @@ dependencies:
   # Weg zum selben Ziel gewesen — und ein Kamera-Scanner dafuer haette eine
   # native Abhaengigkeit plus Kamera-Berechtigung aufgemacht.
   cryptography: ^2.7.0
+  # Vorschaubilder fuer den Cloud-Explorer (Phase 5, siehe
+  # docs/PHASE5_FOTOS_NIVEAU.md). Reine Dart-Implementierung: kein nativer
+  # Code, kein Privacy-Manifest-Eintrag, Lizenz erscheint automatisch in der
+  # In-App-Lizenzliste.
+  #
+  # Warum nicht dart:ui: Frame.image.toByteData kann nur PNG, und
+  # PNG-Vorschaubilder waeren mit 80-120 KB pro Aufnahme zu gross. Auf
+  # iOS/Android kommt das Vorschaubild ueber photo_manager (JPEG, versteht
+  # auch HEIC); dieses Paket ist der Weg fuer Windows und fuer alles, was
+  # als Bytes vorliegt.
+  image: ^4.1.0
 
 dev_dependencies:
   flutter_test:

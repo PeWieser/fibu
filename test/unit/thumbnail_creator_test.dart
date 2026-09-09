@@ -33,14 +33,17 @@ void main() {
       expect(decoded.height, 192, reason: '640×480 → 256×192');
     });
 
-    test('kodiert JPEG und wird kleiner als die Aufnahme', () async {
-      final png = sourceImage();
-      final thumb = await ThumbnailCreator.fromBytes(png);
+    test('kodiert JPEG und bleibt im Größenbudget', () async {
+      final thumb = await ThumbnailCreator.fromBytes(sourceImage());
       expect(thumb, isNotNull);
-      expect(thumb!.lengthInBytes, lessThan(png.lengthInBytes));
       // JPEG-Magie: FF D8
-      expect(thumb[0], 0xFF);
+      expect(thumb![0], 0xFF);
       expect(thumb[1], 0xD8);
+      // „Kleiner als die Aufnahme" wäre hier keine sinnvolle Prüfung: Die
+      // einfarbige Test-PNG ist mit 1,9 KB bereits winzig — ein echtes Foto
+      // ist es nicht. Geprüft wird das Budget aus dem Plan (15–30 KB für ein
+      // echtes Foto, also deutlich unter 64 KB für 256 px).
+      expect(thumb.lengthInBytes, lessThan(64 * 1024));
     });
 
     test('kleinere Bilder werden nicht hochskaliert', () async {

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -42,7 +41,9 @@ class ThumbnailCreator {
   static Future<Uint8List?> fromFile(File file) async {
     try {
       if (!await file.exists()) return null;
-      return fromBytes(await file.readAsBytes());
+      // `await` statt nacktem return: Ohne ihn würde ein Fehler aus
+      // fromBytes am try/catch vorbeilaufen (unawaited_return_in_try_block).
+      return await fromBytes(await file.readAsBytes());
     } catch (_) {
       return null;
     }

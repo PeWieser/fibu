@@ -712,7 +712,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   late final TextEditingController _targetFolderController;
 
   late List<String> _selectedRemotes;
-  late DistributionStrategy _selectedDistribution;
   late TargetFolderMode _selectedTargetFolderMode;
   late SyncMode _selectedSyncMode;
 
@@ -762,7 +761,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
         ? List<String>.from(task.targetRemotes)
         : (remotesList.isNotEmpty ? [remotesList.first] : []);
 
-    _selectedDistribution = task?.distributionStrategy ?? DistributionStrategy.mirrorAll;
     _selectedTargetFolderMode = task?.targetFolderMode ?? TargetFolderMode.newFolder;
     _selectedSyncMode = task?.syncMode ?? SyncMode.incremental;
 
@@ -1325,7 +1323,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       runMissedOnStartup: true,
       excludedFiles: widget.existingTask?.excludedFiles ?? const [],
       syncMode: _selectedSyncMode,
-      distributionStrategy: _selectedRemotes.length > 1 ? _selectedDistribution : DistributionStrategy.mirrorAll,
       targetFolderMode: _selectedTargetFolderMode,
       targetFolderName: finalTargetFolder,
       // wifiOnly wird bewusst NICHT mehr pro Task gesetzt (Default bleibt für
@@ -1826,105 +1823,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
           ),
         ],
 
-        // Distribution Strategy (Shown only if > 1 remote selected)
-        if (_selectedRemotes.length > 1) ...[
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          fluent.Card(
-            padding: EdgeInsets.all(theme.sm),
-            backgroundColor: _selectedDistribution == DistributionStrategy.mirrorAll
-                ? theme.accent.withValues(alpha: 0.08)
-                : theme.surface,
-            borderColor: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : null,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.mirrorAll),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _selectedDistribution == DistributionStrategy.mirrorAll
-                          ? fluent.FluentIcons.radio_bullet
-                          : fluent.FluentIcons.radio_btn_off,
-                      color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
-                      size: 18,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            strings.distributionMirrorAll,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.distributionMirrorAllDesc,
-                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: theme.xs),
-          fluent.Card(
-            padding: EdgeInsets.all(theme.sm),
-            backgroundColor: _selectedDistribution == DistributionStrategy.balance
-                ? theme.accent.withValues(alpha: 0.08)
-                : theme.surface,
-            borderColor: _selectedDistribution == DistributionStrategy.balance ? theme.accent : null,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.balance),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _selectedDistribution == DistributionStrategy.balance
-                          ? fluent.FluentIcons.radio_bullet
-                          : fluent.FluentIcons.radio_btn_off,
-                      color: _selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
-                      size: 18,
-                    ),
-                    SizedBox(width: theme.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            strings.distributionBalance,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          SizedBox(height: theme.xs / 2),
-                          Text(
-                            strings.distributionBalanceDesc,
-                            style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
 
         // Target Folder Mode
         SizedBox(height: theme.lg),
@@ -2620,33 +2518,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
           SizedBox(height: theme.xs),
           Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
         ],
-        if (_selectedRemotes.length > 1) ...[
-          SizedBox(height: theme.lg),
-          Row(
-            children: [
-              Text(strings.distributionStrategyLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              SizedBox(width: theme.xs),
-              TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
-            ],
-          ),
-          SizedBox(height: theme.xs),
-          cupertino.CupertinoSlidingSegmentedControl<DistributionStrategy>(
-            groupValue: _selectedDistribution,
-            children: {
-              DistributionStrategy.mirrorAll: Padding(
-                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                child: Text(strings.distributionBadgeMirrorAll, style: const TextStyle(fontSize: 11)),
-              ),
-              DistributionStrategy.balance: Padding(
-                padding: EdgeInsets.symmetric(horizontal: theme.sm, vertical: theme.xs),
-                child: Text(strings.distributionBadgeBalance, style: const TextStyle(fontSize: 11)),
-              ),
-            },
-            onValueChanged: (val) {
-              if (val != null) setState(() => _selectedDistribution = val);
-            },
-          ),
-        ],
         SizedBox(height: theme.lg),
         // Zielordner – klar & verständlich: Root / Vorhandener Ordner / Neuer Ordner
         Row(
@@ -3133,96 +3004,6 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
           if (_remotesError != null) ...[
             SizedBox(height: theme.xs),
             Text(_remotesError!, style: TextStyle(color: theme.error, fontSize: 11, fontWeight: FontWeight.w500)),
-          ],
-          if (_selectedRemotes.length > 1) ...[
-            SizedBox(height: theme.lg),
-            Row(
-              children: [
-                Text(strings.distributionStrategyLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(width: theme.xs),
-                TasksScreen._buildInfoTooltip(context, theme, strings.distributionTooltip),
-              ],
-            ),
-            SizedBox(height: theme.xs),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                side: BorderSide(
-                  color: _selectedDistribution == DistributionStrategy.mirrorAll
-                      ? theme.accent
-                      : material.Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent.withValues(alpha: 0.08) : null,
-              child: material.InkWell(
-                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.mirrorAll),
-                child: Padding(
-                  padding: EdgeInsets.all(theme.sm),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _selectedDistribution == DistributionStrategy.mirrorAll
-                            ? material.Icons.radio_button_checked
-                            : material.Icons.radio_button_unchecked,
-                        color: _selectedDistribution == DistributionStrategy.mirrorAll ? theme.accent : theme.textSecondary,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(strings.distributionMirrorAll, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            SizedBox(height: theme.xs / 2),
-                            Text(strings.distributionMirrorAllDesc, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: theme.xs),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusSm),
-                side: BorderSide(
-                  color: _selectedDistribution == DistributionStrategy.balance
-                      ? theme.accent
-                      : material.Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              color: _selectedDistribution == DistributionStrategy.balance ? theme.accent.withValues(alpha: 0.08) : null,
-              child: material.InkWell(
-                onTap: () => setState(() => _selectedDistribution = DistributionStrategy.balance),
-                child: Padding(
-                  padding: EdgeInsets.all(theme.sm),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _selectedDistribution == DistributionStrategy.balance
-                            ? material.Icons.radio_button_checked
-                            : material.Icons.radio_button_unchecked,
-                        color: _selectedDistribution == DistributionStrategy.balance ? theme.accent : theme.textSecondary,
-                      ),
-                      SizedBox(width: theme.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(strings.distributionBalance, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            SizedBox(height: theme.xs / 2),
-                            Text(strings.distributionBalanceDesc, style: TextStyle(fontSize: 11, color: theme.textSecondary)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ],
           SizedBox(height: theme.lg),
           material.DropdownButtonFormField<TargetFolderMode>(

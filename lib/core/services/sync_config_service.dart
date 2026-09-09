@@ -50,7 +50,6 @@ class FibuRemoteTaskConfig {
   final String name;
   final String sourcePath;
   final String syncMode;
-  final String distributionStrategy;
   final List<String> linkedRemotes;
 
   /// Provider-Typen (rclone-Backend, z. B. `mega`, `drive`) parallel zu
@@ -76,7 +75,6 @@ class FibuRemoteTaskConfig {
     required this.name,
     required this.sourcePath,
     required this.syncMode,
-    required this.distributionStrategy,
     required this.linkedRemotes,
     this.linkedProviders = const [],
     required this.targetFolder,
@@ -90,7 +88,6 @@ class FibuRemoteTaskConfig {
     'name': name,
     'sourcePath': sourcePath,
     'syncMode': syncMode,
-    'distributionStrategy': distributionStrategy,
     'linkedRemotes': linkedRemotes,
     'linkedProviders': linkedProviders,
     'targetFolder': targetFolder,
@@ -108,7 +105,6 @@ class FibuRemoteTaskConfig {
       name: json['name'] as String? ?? 'Cloud Backup Task',
       sourcePath: json['sourcePath'] as String? ?? '',
       syncMode: json['syncMode'] as String? ?? 'mirror',
-      distributionStrategy: json['distributionStrategy'] as String? ?? 'mirrorAll',
       linkedRemotes: (json['linkedRemotes'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -251,10 +247,6 @@ class SyncConfigService {
   ]) {
     return config.tasks.map((t) {
       final syncMode = t.syncMode == 'mirror' ? SyncMode.mirror : SyncMode.incremental;
-      final dist = t.distributionStrategy == 'balance'
-          ? DistributionStrategy.balance
-          : DistributionStrategy.mirrorAll;
-
       String sourcePath = localDestinationPath ?? t.sourcePath;
       if (sourcePath.startsWith('files:') && localDestinationPath == null) {
         // Lokale Ordnerpfade sind geräteabhängig → leer, Nutzer wählt neu.
@@ -282,7 +274,6 @@ class SyncConfigService {
         isActive: true,
         runMissedOnStartup: true,
         syncMode: syncMode,
-        distributionStrategy: dist,
         targetFolderMode: TargetFolderMode.newFolder,
         targetFolderName: t.targetFolder.isNotEmpty ? t.targetFolder : defaultRemoteFolder,
         selectedAlbums: t.selectedAlbums,
@@ -389,9 +380,6 @@ class SyncConfigService {
                 name: t.name,
                 sourcePath: t.sourcePath,
                 syncMode: t.syncMode == SyncMode.mirror ? 'mirror' : 'incremental',
-                distributionStrategy: t.distributionStrategy == DistributionStrategy.balance
-                    ? 'balance'
-                    : 'mirrorAll',
                 linkedRemotes: t.targetRemotes,
                 linkedProviders: t.targetRemotes
                     .map((id) => providerTypes[id] ?? '')

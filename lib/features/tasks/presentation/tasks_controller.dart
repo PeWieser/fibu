@@ -16,11 +16,6 @@ enum SyncMode {
 }
 
 /// Distribution strategy when multiple cloud drives are selected for a task.
-enum DistributionStrategy {
-  mirrorAll, // Full redundancy: every file is uploaded to all selected remotes.
-  balance,   // Space balancing: files are distributed across remotes based on available free space.
-}
-
 /// Mode for specifying where files are stored in the cloud remote.
 enum TargetFolderMode {
   root,      // Root directory (/)
@@ -42,7 +37,6 @@ class BackupTask {
   final bool runMissedOnStartup; // Catch-up task flag
   final List<String> excludedFiles; // Files excluded from backup (e.g. deleted from cloud)
   final SyncMode syncMode; // Incremental vs Mirror (2-Way Echo)
-  final DistributionStrategy distributionStrategy; // Mirror all vs Balance
   final TargetFolderMode targetFolderMode; // Root vs Custom vs New Folder
   final String targetFolderName; // Subfolder path (e.g. "backup/pictures")
   final bool wifiOnly; // Sync restricted to Wi-Fi only (no cellular data)
@@ -62,7 +56,6 @@ class BackupTask {
     this.runMissedOnStartup = true,
     this.excludedFiles = const [],
     this.syncMode = SyncMode.incremental,
-    this.distributionStrategy = DistributionStrategy.mirrorAll,
     this.targetFolderMode = TargetFolderMode.newFolder,
     this.targetFolderName = 'fibu-backup',
     this.wifiOnly = true,
@@ -158,7 +151,6 @@ class BackupTask {
       scheduleTime: '02:00',
       isActive: true,
       syncMode: SyncMode.mirror,
-      distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
       targetFolderName: 'fibu-backup/Photos',
       wifiOnly: true,
@@ -183,7 +175,6 @@ class BackupTask {
       scheduleTime: '02:00',
       isActive: true,
       syncMode: SyncMode.incremental,
-      distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
       targetFolderName: 'fibu-backup/Photos',
       wifiOnly: true,
@@ -208,7 +199,6 @@ class BackupTask {
       scheduleTime: '02:00',
       isActive: true,
       syncMode: SyncMode.incremental,
-      distributionStrategy: DistributionStrategy.mirrorAll,
       targetFolderMode: TargetFolderMode.newFolder,
       targetFolderName: 'fibu-backup/Dateien',
       wifiOnly: true,
@@ -240,7 +230,6 @@ class BackupTask {
     bool? runMissedOnStartup,
     List<String>? excludedFiles,
     SyncMode? syncMode,
-    DistributionStrategy? distributionStrategy,
     TargetFolderMode? targetFolderMode,
     String? targetFolderName,
     bool? wifiOnly,
@@ -259,7 +248,6 @@ class BackupTask {
       runMissedOnStartup: runMissedOnStartup ?? this.runMissedOnStartup,
       excludedFiles: excludedFiles ?? this.excludedFiles,
       syncMode: syncMode ?? this.syncMode,
-      distributionStrategy: distributionStrategy ?? this.distributionStrategy,
       targetFolderMode: targetFolderMode ?? this.targetFolderMode,
       targetFolderName: targetFolderName ?? this.targetFolderName,
       wifiOnly: wifiOnly ?? this.wifiOnly,
@@ -295,11 +283,6 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             mode = SyncMode.mirror;
           }
 
-          DistributionStrategy dist = DistributionStrategy.mirrorAll;
-          if (j['distributionStrategy'] == 'balance') {
-            dist = DistributionStrategy.balance;
-          }
-
           TargetFolderMode folderMode = TargetFolderMode.custom;
           if (j['targetFolderMode'] == 'root') {
             folderMode = TargetFolderMode.root;
@@ -327,7 +310,6 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
             runMissedOnStartup: j['runMissedOnStartup'] as bool? ?? true,
             excludedFiles: (j['excludedFiles'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
             syncMode: mode,
-            distributionStrategy: dist,
             targetFolderMode: folderMode,
             targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
             wifiOnly: j['wifiOnly'] as bool? ?? true,
@@ -394,7 +376,6 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
         'runMissedOnStartup': t.runMissedOnStartup,
         'excludedFiles': t.excludedFiles,
         'syncMode': t.syncMode == SyncMode.mirror ? 'mirror' : 'incremental',
-        'distributionStrategy': t.distributionStrategy == DistributionStrategy.balance ? 'balance' : 'mirrorAll',
         'targetFolderMode': t.targetFolderMode == TargetFolderMode.root
             ? 'root'
             : (t.targetFolderMode == TargetFolderMode.newFolder ? 'newFolder' : 'custom'),

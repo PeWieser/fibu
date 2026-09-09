@@ -370,8 +370,3 @@ final remoteEntryProvider =
   return null;
 });
 
-/// true, wenn die ID aktuell als rclone-Sektion existiert.
-final remoteExistsProvider = Provider.family<bool, String>((ref, String id) {
-  final entries = ref.watch(remoteEntriesProvider).valueOrNull ?? const [];
-  return entries.any((e) => e.id == id);
-});

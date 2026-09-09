@@ -57,11 +57,6 @@ final primaryQuotaProvider = FutureProvider<QuotaInfo?>((ref) async {
   return null;
 });
 
-/// Riverpod provider to load all supported providers asynchronously.
-final providersProvider = FutureProvider<List<RcloneProviderInfo>>((ref) {
-  return ref.watch(rcloneServiceProvider).listProviders();
-});
-
 /// Quota für ein einzelnes Remote.
 ///
 /// Liefert null (statt Fehler), wenn der Provider kein `about` unterstützt

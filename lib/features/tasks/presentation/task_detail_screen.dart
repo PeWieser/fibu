@@ -992,18 +992,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     const fluent.Divider(),
                     const SizedBox(height: 8),
                     _buildWindowsInfoRow(strings.targetFolderLabel, _formatTargetFolder(strings, task), theme),
-                    if (task.targetRemotes.length > 1) ...[
-                      const SizedBox(height: 8),
-                      const fluent.Divider(),
-                      const SizedBox(height: 8),
-                      _buildWindowsInfoRow(
-                        strings.distributionLabel,
-                        task.distributionStrategy == DistributionStrategy.mirrorAll
-                            ? strings.distributionMirrorAll
-                            : strings.distributionBalance,
-                        theme,
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -1244,16 +1232,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         task.excludedFiles.join(', '),
                         style: TextStyle(
                             color: theme.textSecondary, fontSize: 13),
-                      ),
-                    ),
-                  if (task.targetRemotes.length > 1)
-                    cupertino.CupertinoListTile(
-                      title: Text(strings.distributionLabel, style: const TextStyle(fontSize: 16)),
-                      trailing: Text(
-                        task.distributionStrategy == DistributionStrategy.mirrorAll
-                            ? strings.distributionMirrorAll
-                            : strings.distributionBalance,
-                        style: TextStyle(color: theme.textSecondary, fontSize: 14),
                       ),
                     ),
                 ],
@@ -1650,17 +1628,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     title: Text(strings.targetFolderLabel),
                     trailing: Text(_formatTargetFolder(strings, task)),
                   ),
-                  if (task.targetRemotes.length > 1) ...[
-                    const material.Divider(height: 1),
-                    material.ListTile(
-                      title: Text(strings.distributionLabel),
-                      trailing: Text(
-                        task.distributionStrategy == DistributionStrategy.mirrorAll
-                            ? strings.distributionMirrorAll
-                            : strings.distributionBalance,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

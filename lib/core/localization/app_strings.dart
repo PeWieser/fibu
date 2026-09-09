@@ -294,6 +294,14 @@ class AppStrings {
   String get daySaturday => isGerman ? 'Samstag' : 'Saturday';
   String get daySunday => isGerman ? 'Sonntag' : 'Sunday';
   String get dayManual => isGerman ? 'Manuell' : 'Manual';
+  String scheduleDisplay({required String day, required String time}) {
+    if (day == 'Manual') return isGerman ? 'Manuell' : 'Manual';
+    if (day == 'Daily') return isGerman ? 'Täglich um $time' : 'Daily at $time';
+    return isGerman ? 'Wöchentlich ($day) um $time' : 'Weekly on ${day}s at $time';
+  }
+
+  // --- Tooltips for Tasks ---
+  String get tooltipSourcePath => isGerman ? 'Lokaler Ordner auf deinem Computer, dessen Inhalt gesichert wird.' : 'Local folder on your PC that will be backed up.';
   String get tooltipDestinationRemote => isGerman ? 'Ziel-Cloud-Laufwerke und Remote-Ordner.' : 'Destination cloud drives and target folder.';
   String get tooltipCatchUp => isGerman ? 'Wenn dein PC zur geplanten Zeit aus war, wird das Backup beim nächsten Systemstart automatisch nachgeholt.' : 'If PC was offline during scheduled time, backup runs on next startup.';
   String get tooltipSchedule => isGerman ? 'Intervall und Uhrzeit für die automatische Ausführung des Backups.' : 'Interval and time for automatic backup execution.';
@@ -949,6 +957,249 @@ class AppStrings {
   // --- Sprachauswahl (Einstellungen) ---
   String get languageModeSystem => isGerman ? 'System (automatisch)' : 'System (automatic)';
 
+  /// Übersetzt die (deutsch gepflegten) Feldlabels der Provider-Registry
+  /// für die englische Oberfläche. Unbekannte oder bereits englische Labels
+  /// werden unverändert durchgereicht.
+  String providerFieldLabel(String label) {
+    if (isGerman) return label;
+    const map = <String, String>{
+      '2FA Code (falls aktiv)': '2FA code (if enabled)',
+      'API-Key / Passwort': 'API key / password',
+      'API-Schlüssel': 'API key',
+      'Account Key oder SAS-Token': 'Account key or SAS token',
+      'App-Passwort': 'App password',
+      'Basis-Remote & Pfad': 'Base remote & path',
+      'Benutzer-Token': 'User token',
+      'Benutzerdefinierter Endpoint (optional)': 'Custom endpoint (optional)',
+      'Benutzername / E-Mail': 'Username / email',
+      'Benutzername': 'Username',
+      'Chunk-Größe': 'Chunk size',
+      'Dateinamen-Passwort (Salt / optional)': 'Filename password (salt, optional)',
+      'Dateinamen-Verschlüsselung': 'Filename encryption',
+      'E-Mail / Telefonnummer': 'Email / phone number',
+      'E-Mail': 'Email',
+      'E-Mail-Adresse': 'Email address',
+      'Explizites FTPS (TLS) verwenden': 'Use explicit FTPS (TLS)',
+      'FTP Hostname / IP': 'FTP hostname / IP',
+      'GCP Projektnummer (optional)': 'GCP project number (optional)',
+      'HTTP Ordner URL': 'HTTP folder URL',
+      'Hadoop Benutzer': 'Hadoop user',
+      'Hauptpasswort für Verschlüsselung': 'Master password for encryption',
+      'Laufwerk-Typ': 'Drive type',
+      'Passwort / API-Token': 'Password / API token',
+      'Passwort / App-Token': 'Password / app token',
+      'Passwort': 'Password',
+      'Pfad zum privaten SSH-Key (optional)': 'Path to private SSH key (optional)',
+      'SSH Benutzername': 'SSH username',
+      'SSH Passwort (optional falls Key genutzt)': 'SSH password (optional if key is used)',
+      'Satellite Adresse (optional)': 'Satellite address (optional)',
+      'Schreib-Strategie': 'Write strategy',
+      'Server Host / IP': 'Server host / IP',
+      'Server-Typ': 'Server type',
+      'Server-URL': 'Server URL',
+      'Service Account JSON Pfad (optional)': 'Service account JSON path (optional)',
+      'Tenant Name (optional)': 'Tenant name (optional)',
+      'Upstreams (z.B. ordner1=drive:a ordner2=b2:b)':
+          'Upstreams (e.g. folder1=drive:a folder2=b2:b)',
+      'Verknüpfte Remotes (getrennt durch Leerzeichen)':
+          'Linked remotes (space-separated)',
+      'Verschlüsselungs-Passphrase': 'Encryption passphrase',
+      'Wasabi Access Key': 'Wasabi access key',
+      'Wasabi Secret Key': 'Wasabi secret key',
+      'Windows Domain (optional)': 'Windows domain (optional)',
+      'Ziel-Remote & Pfad': 'Target remote & path',
+    };
+    return map[label] ?? label;
+  }
+
+  /// Einstellungs-Erklärung für Anbieter, deren Einrichtung über die einfache
+  /// Eingabe von E-Mail/Benutzername + Passwort hinausgeht. Beschreibt in
+  /// klaren Worten, WAS man braucht, WAS passiert und WIE es funktioniert.
+  /// null, wenn der Anbieter selbsterklärend ist (z. B. MEGA).
+  String? providerSetupGuide(String providerId) {
+    final id = providerId.trim().toLowerCase();
+    if (isGerman) {
+      const de = <String, String>{
+        'drive':
+            'Die Anmeldung erfolgt direkt bei Google im Browser — Fibu erhält dabei nur die Berechtigung, Dateien in deinem Drive zu lesen und zu schreiben. Dein Passwort wird nicht in der App gespeichert. Fortgeschrittene Nutzer können optional eine eigene Client-ID aus der Google Cloud Console hinterlegen, um höhere Übertragungsraten zu erreichen.',
+        'google photos':
+            'Die Anmeldung erfolgt direkt bei Google im Browser. Fibu erhält Zugriff auf deine Foto-Mediathek, um sie zu sichern. Dein Passwort wird nicht in der App gespeichert.',
+        'onedrive':
+            'Die Anmeldung erfolgt direkt bei Microsoft im Browser. In den erweiterten Optionen kannst du zwischen privatem OneDrive, OneDrive for Business und SharePoint wählen.',
+        'dropbox':
+            'Die Anmeldung erfolgt direkt bei Dropbox im Browser — Fibu erhält nur Zugriff auf seinen eigenen App-Ordner bzw. die erteilte Berechtigung. Dein Passwort wird nicht in der App gespeichert.',
+        'crypt':
+            'Der Tresor verschlüsselt jede Datei bereits auf deinem Gerät, bevor sie in ein bereits verbundenes Cloud-Laufwerk hochgeladen wird. Wähle unten ein vorhandenes Laufwerk und vergib ein eigenes Hauptpasswort. Die Cloud sieht ausschließlich verschlüsselte Inhalte. Wichtig: Ohne das Hauptpasswort sind die Daten unwiederbringlich verloren — bewahre es sicher auf.',
+        'chunker':
+            'Chunker teilt große Dateien beim Hochladen automatisch in handliche Blöcke auf und setzt sie beim Herunterladen wieder zusammen — sinnvoll für Clouds mit Beschränkungen der Dateigröße. Wähle unten ein verbundenes Basis-Laufwerk. Die Chunk-Größe bestimmt die maximale Größe der Einzelteile (Standard: 2 GB).',
+        'union':
+            'Union fasst mehrere Cloud-Laufwerke zu einem einzigen großen virtuellen Laufwerk zusammen. Wähle unten mindestens zwei bereits verbundene Laufwerke aus. Neue Dateien werden je nach Schreib-Strategie verteilt: „epall“ schreibt auf alle Laufwerke, „lfs“ auf das Laufwerk mit dem meisten freien Speicher, „rand“ zufällig. Gelesen wird übergreifend aus allen Laufwerken.',
+        'combine':
+            'Combine bündelt Ordner verschiedener Cloud-Laufwerke in einem einzigen virtuellen Laufwerk, in dem jede Quelle als eigener Unterordner erscheint. Wähle unten die gewünschten, bereits verbundenen Laufwerke aus.',
+        'alias':
+            'Ein Alias ist eine einfache Verknüpfung auf ein vorhandenes Laufwerk — praktisch, um es unter einem eigenen Namen anzusprechen. Wähle unten das Ziel-Laufwerk aus.',
+        'compress':
+            'Dieses Laufwerk komprimiert Dateien vor dem Hochladen transparent mit gzip und entpackt sie beim Zugriff automatisch. Wähle unten ein verbundenes Basis-Laufwerk. Gut geeignet für Dokumente; bei bereits komprimierten Medien wie Fotos oder Videos ist der Gewinn gering.',
+        's3':
+            'Du benötigst ein Zugriffsschlüssel-Paar aus AWS IAM (Access Key ID und Secret Access Key) sowie die Region deines Buckets. Fibu erstellt keine Buckets — der Bucket muss bereits existieren. Neue Schlüssel legst du in der AWS-Konsole unter „IAM → Zugriffsdaten“ an.',
+        's3-wasabi':
+            'Du benötigst einen Wasabi Access Key und Secret Key (in der Wasabi-Konsole unter „Access Keys“) sowie den zu deiner Region passenden Endpoint. Der europäische Standard-Endpoint ist bereits vorbelegt.',
+        's3-b2':
+            'Backblaze B2 wird hier über die S3-Schnittstelle angesprochen. Du benötigst eine Application Key ID und einen Application Key aus der B2-Konsole („App Keys“) sowie den zur Bucket-Region passenden S3-Endpoint, z. B. s3.eu-central-003.backblazeb2.com.',
+        's3-r2':
+            'Cloudflare R2 verzichtet auf Egress-Gebühren. Du benötigst ein R2-API-Token-Paar (im Cloudflare-Dashboard unter „R2 → Manage R2 API Tokens“) und deine Account-ID für den Endpoint im Format https://<ACCOUNT_ID>.r2.cloudflarestorage.com.',
+        's3-minio':
+            'MinIO läuft üblicherweise in deinem eigenen Netzwerk. Du benötigst die Server-URL deines MinIO sowie die dort eingerichteten Zugangsdaten (Access Key und Secret Key).',
+        's3-digitalocean':
+            'Du benötigst einen Spaces Access Key und Secret Key aus dem DigitalOcean-Control-Panel sowie den Endpoint deiner Spaces-Region (z. B. fra1.digitaloceanspaces.com).',
+        's3-idrive':
+            'Du benötigst Access Key ID und Secret Access Key sowie die Endpoint-URL aus der IDrive-e2-Konsole.',
+        's3-synology':
+            'Du benötigst Access Key ID und Secret Key aus dem Synology C2 Storage Portal sowie den dort angezeigten S3-Endpoint.',
+        's3-ceph':
+            'Du benötigst den S3-Endpoint deines Ceph-Clusters sowie die dafür ausgestellten Zugangsdaten (Access Key und Secret Key).',
+        's3-generic':
+            'Für jeden beliebigen S3-kompatiblen Speicher: Trage die Endpoint-URL des Dienstes sowie deine Access Key ID und den Secret Access Key ein. Die Region ist optional.',
+        'b2':
+            'Die native B2-API benötigt deine Account-ID (Backblaze-Konsole → „Account“) und einen Application Key („App Keys“). Alternativ kannst du Backblaze B2 auch über die S3-Schnittstelle verbinden.',
+        'gcs':
+            'Die Anmeldung erfolgt über dein Google-Konto im Browser. Projektnummer und Service-Account sind optional und nur für spezielle Enterprise-Konstellationen nötig.',
+        'azureblob':
+            'Du benötigst den Namen deines Azure Storage Accounts sowie einen Account Key oder ein SAS-Token (im Azure-Portal unter „Storage Account → Access keys“). Fibu greift damit auf deine Blob-Container zu.',
+        'azurefiles':
+            'Du benötigst den Namen deines Azure Storage Accounts und den zugehörigen Account Key (im Azure-Portal unter „Storage Account → Access keys“).',
+        'storj':
+            'Storj ist dezentraler Objektspeicher. Du benötigst einen API-Key und die Verschlüsselungs-Passphrase aus deinem Storj-Projekt (Dashboard → „Access → Create Access“). Die Satellite-Adresse kann auf dem Standardwert bleiben.',
+        'swift':
+            'OpenStack Swift benötigt die Auth-URL deines Identity-Endpunkts (Keystone) sowie Benutzername und API-Key bzw. Passwort. Der Tenant (Projektname) ist optional.',
+        'qingstor':
+            'Du benötigst Access Key ID, Secret Access Key und die Zone deines QingStor-Buckets aus der QingCloud-Konsole.',
+        'internetarchive':
+            'Du benötigst deine S3-Zugangsdaten von archive.org („Account Settings → S3-like API keys“). Damit lädst du Dateien in deine Archive.org-Items hoch.',
+        'webdav':
+            'Gib die vollständige WebDAV-Adresse deines Servers an und wähle den passenden Server-Typ. Bei Nextcloud und ownCloud empfiehlt sich ein App-Token statt des normalen Passworts — Du erzeugst es in den Server-Einstellungen unter „Sicherheit“.',
+        'sftp':
+            'Du benötigst Host, Port und Benutzernamen deines SSH-Servers. Die Anmeldung funktioniert entweder per Passwort oder — sicherer — per SSH-Schlüssel; den Pfad zum privaten Schlüssel findest du in den erweiterten Optionen.',
+        'ftp':
+            'Klassischer Datei-Transfer. Explizites FTPS (TLS) ist aus Sicherheitsgründen aktiviert und sollte nur für ältere Server ohne TLS-Unterstützung deaktiviert werden.',
+        'smb':
+            'Für Windows-Netzwerkfreigaben und Samba: Du benötigst Host, Benutzernamen und Passwort der Freigabe. In Active-Directory-Umgebungen kann zusätzlich die Domäne angegeben werden.',
+        'http':
+            'Bindet einen öffentlichen Web-Ordner schreibgeschützt ein. Unterstützt werden HTTP(S)-Verzeichnislisten; Uploads sind bei diesem Protokoll nicht möglich.',
+        'hdfs':
+            'Du benötigst die Adresse des NameNode-Knotens (host:port) sowie den Hadoop-Benutzernamen, unter dem Fibu auf das Dateisystem zugreift.',
+        'protondrive':
+            'Melde dich mit deinen Proton-Zugangsdaten an. Falls du die Zwei-Faktor-Authentifizierung aktiviert hast, trage zusätzlich den aktuellen 2FA-Code ein.',
+        'mailru':
+            'Verwende ein Mail.ru-App-Passwort statt des normalen Kontopassworts — du erzeugst es im Mail.ru-Konto unter „Sicherheit → App-Passwörter“.',
+        'koofr':
+            'Verwende ein Koofr-App-Passwort statt deines normalen Passworts — zu finden im Koofr-Konto unter „Preferences → Password → App password“.',
+        'sugarsync':
+            'SugarSync nutzt Entwickler-Zugangsdaten statt Benutzername und Passwort: Fordere einmalig eine App-ID und Access Key ID bei SugarSync an („Developer“-Bereich) und trage beide hier ein. Der Refresh-Token wird danach automatisch verwaltet.',
+        '1fichier':
+            'Du benötigst deinen persönlichen API-Schlüssel — zu finden im 1Fichier-Konto unter „Account → API Key“.',
+        'uptobox':
+            'Du benötigst dein persönliches Benutzer-Token aus den Uptobox-Kontoeinstellungen.',
+        'quatrix':
+            'Du benötigst einen API-Schlüssel sowie den Hostnamen deiner Quatrix-Instanz (z. B. firma.quatrix.it).',
+        'seafile':
+            'Du benötigst die URL deines Seafile-Servers sowie deine Zugangsdaten. Statt des Passworts kann auch ein in Seafile erzeugtes API-Token verwendet werden.',
+      };
+      return de[id];
+    }
+    const en = <String, String>{
+      'drive':
+          'You sign in directly with Google in your browser — Fibu only receives permission to read and write files in your Drive. Your password is never stored in the app. Advanced users can optionally provide their own client ID from the Google Cloud Console for higher transfer quotas.',
+      'google photos':
+          'You sign in directly with Google in your browser. Fibu gains access to your photo library in order to back it up. Your password is never stored in the app.',
+      'onedrive':
+          'You sign in directly with Microsoft in your browser. Advanced options let you choose between personal OneDrive, OneDrive for Business and SharePoint.',
+      'dropbox':
+          'You sign in directly with Dropbox in your browser — Fibu only receives the granted permission. Your password is never stored in the app.',
+      'crypt':
+          'The vault encrypts every file on your device before it is uploaded to an already connected cloud drive. Pick an existing drive below and set your own master password. The cloud only ever sees encrypted content. Important: without the master password the data cannot be recovered — keep it somewhere safe.',
+      'chunker':
+          'Chunker automatically splits large files into manageable pieces on upload and reassembles them on download — useful for clouds with file size limits. Pick a connected base drive below. The chunk size defines the maximum size of each part (default: 2 GB).',
+      'union':
+          'Union pools multiple cloud drives into one single large virtual drive. Select at least two already connected drives below. New files are distributed according to the write policy: “epall” writes to all drives, “lfs” to the drive with the most free space, “rand” randomly. Reads work across all drives.',
+      'combine':
+          'Combine merges folders from different cloud drives into one virtual drive where each source appears as its own subfolder. Select the connected drives you want below.',
+      'alias':
+          'An alias is a simple shortcut to an existing drive — handy for addressing it under its own name. Pick the target drive below.',
+      'compress':
+          'This drive transparently compresses files with gzip before uploading and unpacks them on access. Pick a connected base drive below. Works well for documents; photos and videos gain little.',
+      's3':
+          'You need an access key pair from AWS IAM (Access Key ID and Secret Access Key) and the region of your bucket. Fibu does not create buckets — the bucket must already exist. Create new keys in the AWS console under “IAM → Access keys”.',
+      's3-wasabi':
+          'You need a Wasabi access key and secret key (in the Wasabi console under “Access Keys”) plus the endpoint matching your region. The European default endpoint is pre-filled.',
+      's3-b2':
+          'Backblaze B2 is addressed via its S3 interface here. You need an Application Key ID and Application Key from the B2 console (“App Keys”) plus the S3 endpoint matching your bucket region, e.g. s3.eu-central-003.backblazeb2.com.',
+      's3-r2':
+          'Cloudflare R2 has zero egress fees. You need an R2 API token pair (Cloudflare dashboard → “R2 → Manage R2 API Tokens”) and your account ID for the endpoint of the form https://<ACCOUNT_ID>.r2.cloudflarestorage.com.',
+      's3-minio':
+          'MinIO usually runs on your own network. You need the server URL of your MinIO instance and its access credentials (access key and secret key).',
+      's3-digitalocean':
+          'You need a Spaces access key and secret key from the DigitalOcean control panel plus the endpoint of your Spaces region (e.g. fra1.digitaloceanspaces.com).',
+      's3-idrive':
+          'You need the Access Key ID, Secret Access Key and endpoint URL from the IDrive e2 console.',
+      's3-synology':
+          'You need the Access Key ID and secret key from the Synology C2 Storage portal plus the S3 endpoint shown there.',
+      's3-ceph':
+          'You need the S3 endpoint of your Ceph cluster plus the credentials issued for it (access key and secret key).',
+      's3-generic':
+          'For any S3-compatible storage: enter the service’s endpoint URL plus your Access Key ID and Secret Access Key. The region is optional.',
+      'b2':
+          'The native B2 API needs your account ID (Backblaze console → “Account”) and an application key (“App Keys”). Alternatively connect Backblaze B2 via its S3 interface.',
+      'gcs':
+          'You sign in with your Google account in the browser. Project number and service account are optional and only needed for special enterprise setups.',
+      'azureblob':
+          'You need the name of your Azure storage account and an account key or SAS token (Azure portal → “Storage Account → Access keys”). Fibu uses them to access your blob containers.',
+      'azurefiles':
+          'You need the name of your Azure storage account and its account key (Azure portal → “Storage Account → Access keys”).',
+      'storj':
+          'Storj is decentralized object storage. You need an API key and the encryption passphrase from your Storj project (dashboard → “Access → Create Access”). The satellite address can stay on its default.',
+      'swift':
+          'OpenStack Swift needs the auth URL of your identity endpoint (Keystone) plus username and API key or password. The tenant (project name) is optional.',
+      'qingstor':
+          'You need the Access Key ID, Secret Access Key and the zone of your QingStor bucket from the QingCloud console.',
+      'internetarchive':
+          'You need your S3 credentials from archive.org (“Account Settings → S3-like API keys”). They are used to upload files into your Archive.org items.',
+      'webdav':
+          'Enter the full WebDAV URL of your server and choose the matching server type. For Nextcloud and ownCloud an app token is recommended instead of the regular password — create it in the server settings under “Security”.',
+      'sftp':
+          'You need the host, port and username of your SSH server. Sign-in works either with a password or — more securely — with an SSH key; the path to the private key is available in the advanced options.',
+      'ftp':
+          'Classic file transfer. Explicit FTPS (TLS) is enabled for security and should only be disabled for older servers without TLS support.',
+      'smb':
+          'For Windows network shares and Samba: you need the host, username and password of the share. In Active Directory environments the domain can be provided as well.',
+      'http':
+          'Connects a public web folder read-only. HTTP(S) directory listings are supported; uploads are not possible with this protocol.',
+      'hdfs':
+          'You need the address of the NameNode (host:port) and the Hadoop username Fibu should use to access the file system.',
+      'protondrive':
+          'Sign in with your Proton credentials. If you have two-factor authentication enabled, also enter the current 2FA code.',
+      'mailru':
+          'Use a Mail.ru app password instead of your regular account password — create it in your Mail.ru account under “Security → App passwords”.',
+      'koofr':
+          'Use a Koofr app password instead of your regular password — find it in your Koofr account under “Preferences → Password → App password”.',
+      'sugarsync':
+          'SugarSync uses developer credentials instead of username and password: request an App ID and Access Key ID once from SugarSync (its “Developer” section) and enter both here. The refresh token is then managed automatically.',
+      '1fichier':
+          'You need your personal API key — find it in your 1Fichier account under “Account → API Key”.',
+      'uptobox':
+          'You need your personal user token from the Uptobox account settings.',
+      'quatrix':
+          'You need an API key and the hostname of your Quatrix instance (e.g. company.quatrix.it).',
+      'seafile':
+          'You need the URL of your Seafile server and your credentials. An API token generated in Seafile can be used instead of the password.',
+    };
+    return en[id];
+  }
+
+  // --- Speicherdetails-Dialog ---
+  String get storageDetailedUtilization => isGerman
+      ? 'Detaillierte Speicherbelegung:'
+      : 'Detailed storage space utilization:';
   String get legendPhotos => isGerman ? 'Fotos & Bilder' : 'Photos & Images';
   String get legendVideos => isGerman ? 'Videos' : 'Videos';
   String get legendOtherDocs => isGerman ? 'Andere Dokumente' : 'Other Documents';

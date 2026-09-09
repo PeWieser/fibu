@@ -166,7 +166,6 @@ void main() {
         scheduleTime: '14:00',
         isActive: true,
         syncMode: SyncMode.mirror,
-        distributionStrategy: DistributionStrategy.mirrorAll,
         targetFolderMode: TargetFolderMode.custom,
         targetFolderName: testRemoteFolder,
       );

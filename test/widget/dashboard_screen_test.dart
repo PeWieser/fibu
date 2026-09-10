@@ -103,9 +103,9 @@ void main() {
         expect(find.byType(fluent.ScaffoldPage), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
 
-        // Mock hat Remotes, aber keine Tasks → nur „Aufgabe erstellen“.
-        // Kein Pseudo-Erfolg „Alles synchronisiert“ ohne Aufgabe.
-        expect(find.text(strings.addTask), findsOneWidget);
+        // Mock hat Laufwerke, aber keine Sicherung → nur „Sicherung
+        // einrichten“. Kein Pseudo-Erfolg „Alles synchronisiert“ ohne Sicherung.
+        expect(find.text(strings.backupCreate), findsOneWidget);
         expect(find.text(strings.addCloudDrive), findsNothing);
         expect(find.text(strings.allFilesSynced), findsNothing);
       } finally {
@@ -157,7 +157,7 @@ void main() {
         expect(find.text(strings.navDashboard), findsOneWidget);
 
         // Mit Mock-Remotes ohne Tasks: nur Aufgabe erstellen.
-        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.backupCreate), findsOneWidget);
         expect(find.text(strings.addCloudDrive), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -207,7 +207,7 @@ void main() {
         expect(find.byType(material.AppBar), findsOneWidget);
         expect(find.text(strings.navDashboard), findsOneWidget);
 
-        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.backupCreate), findsOneWidget);
         expect(find.text(strings.addCloudDrive), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -227,7 +227,7 @@ void main() {
         await settleBounded(tester);
 
         // Drei Objekte: Statuskarte (hier: Einrichtung), Speicher, Button.
-        expect(find.text(strings.addTask), findsOneWidget);
+        expect(find.text(strings.backupCreate), findsOneWidget);
         expect(find.textContaining('belegt'), findsOneWidget);
         expect(
           find.widgetWithText(fluent.FilledButton, strings.syncAll),
@@ -294,7 +294,7 @@ void main() {
         // Mit Sicherung + Cloud: normales Dashboard (kein Einrichtungs-Hinweis).
         // Der Speicherplatz steht als Zeile unter der Statuskarte.
         expect(find.textContaining('belegt'), findsOneWidget);
-        expect(find.text(strings.addTask), findsNothing);
+        expect(find.text(strings.backupCreate), findsNothing);
         expect(find.text(strings.addCloudDrive), findsNothing);
 
         // Identify and tap the Sync All button

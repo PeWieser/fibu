@@ -20,8 +20,6 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/autostart_service.dart';
 import 'device_pairing_screen.dart';
-import '../../../core/services/settings_service.dart';
-import 'cloud_drives_screen.dart';
 import 'debug_log_screen.dart';
 import 'legal_documents_screen.dart';
 import 'licenses_screen.dart';
@@ -53,9 +51,6 @@ class SettingsScreen extends ConsumerWidget {
   /// Gerät-zu-Gerät-Übertragung der Konfiguration.
   void _navigateToPairing(BuildContext context) =>
       AppNav.push(context, const DevicePairingScreen());
-
-  void _navigateToCloudDrives(BuildContext context) =>
-      AppNav.push(context, const CloudDrivesScreen());
 
   void _navigateToDebugLog(BuildContext context) =>
       AppNav.push(context, const DebugLogScreen());

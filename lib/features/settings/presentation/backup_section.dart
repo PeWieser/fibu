@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/active_cloud.dart';
+import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/widgets/ui.dart';
 import '../../../theme/theme.dart';

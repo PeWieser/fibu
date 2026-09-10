@@ -1,4 +1,4 @@
-import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,7 +7,7 @@ import '../../../core/navigation/app_nav.dart';
 import '../../../core/services/active_cloud.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/widgets/windows_controls.dart';
+import '../../../core/widgets/ui.dart';
 import '../../../theme/theme.dart';
 import '../../dashboard/presentation/cloud_photos_screen.dart';
 import 'add_remote_wizard.dart';
@@ -15,14 +15,12 @@ import 'cloud_drives_screen.dart';
 
 /// „Cloud" in den Einstellungen — **eine** Cloud, keine Liste.
 ///
-/// Modell seit dem Umbau: Die App sichert auf genau ein Ziel. Das kann ein
-/// gewöhnliches Laufwerk sein oder ein virtuelles (Union, Combine, Crypt,
-/// Chunker), das im Assistent aus mehreren Laufwerken gebündelt wird; die
-/// Bestandteile stehen dann als Zahl dabei.
+/// Plattformneutral über [Ui]: dieselbe Struktur auf Windows, iOS und
+/// Android, plattformabhängig ist nur die Darstellung.
 ///
 /// Umbenennen, Ersetzen und Trennen bleiben in der Laufwerksverwaltung — dort
 /// stehen die Bestätigungsdialoge mit Klartext-Folge bereits (AGENTS.md
-/// Regel 6), und sie zweimal zu bauen wäre zweimal dieselbe Wahrheit.
+/// Regel 6), und sie dreimal zu bauen wäre dreimal dieselbe Wahrheit.
 class CloudSection extends ConsumerWidget {
   const CloudSection({super.key});
 
@@ -36,13 +34,12 @@ class CloudSection extends ConsumerWidget {
         ref.watch(activeCloudMembersProvider).valueOrNull ?? const <String>[];
 
     if (cloud == null) {
-      return Win.tile(
+      return Ui.tile(
         theme: theme,
         title: strings.cloudConnect,
         subtitle: strings.cloudNone,
-        leading: fluent.FluentIcons.cloud_add,
-        trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
-        onPressed: () => _connect(context, ref),
+        leading: Ui.cloudAdd,
+        onTap: () => _connect(context, ref),
         semanticLabel: strings.cloudConnect,
         first: true,
         last: true,
@@ -57,32 +54,30 @@ class CloudSection extends ConsumerWidget {
       if (members.isNotEmpty) strings.cloudMembersCount(members.length),
     ].join('  ·  ');
 
-    return Win.group(
+    return Ui.group(
       theme: theme,
       children: [
-        Win.tile(
+        Ui.tile(
           theme: theme,
           title: cloud.name,
           subtitle: subtitle,
-          leading: fluent.FluentIcons.cloud,
+          leading: Ui.cloud,
           first: true,
         ),
-        Win.tile(
+        Ui.tile(
           theme: theme,
           title: strings.exploreRemoteFiles,
-          leading: fluent.FluentIcons.photo2,
-          trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
-          onPressed: () => AppNav.push(
-              context, CloudPhotosScreen(initialRemote: cloud.id)),
+          leading: Ui.folder,
+          onTap: () =>
+              AppNav.push(context, CloudPhotosScreen(initialRemote: cloud.id)),
           semanticLabel: strings.exploreRemoteFiles,
         ),
-        Win.tile(
+        Ui.tile(
           theme: theme,
           title: strings.manageCloudDrives,
           subtitle: strings.cloudManageHint,
-          leading: fluent.FluentIcons.settings,
-          trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
-          onPressed: () => AppNav.push(context, const CloudDrivesScreen()),
+          leading: Ui.settings,
+          onTap: () => AppNav.push(context, const CloudDrivesScreen()),
           semanticLabel: strings.manageCloudDrives,
           last: true,
         ),
@@ -90,15 +85,12 @@ class CloudSection extends ConsumerWidget {
     );
   }
 
-  /// Assistent öffnen und danach die Laufwerksliste neu lesen — sonst steht
-  /// die neue Cloud zwar in rclone, aber nicht in der Anzeige.
+  /// Assistent öffnen und danach die Laufwerksliste neu lesen.
   Future<void> _connect(BuildContext context, WidgetRef ref) async {
     final added = await AppNav.push<String>(
       context,
-      const AddRemoteWizardDialog(platform: TargetPlatform.windows),
+      AddRemoteWizardDialog(platform: defaultTargetPlatform),
     );
-    if (added != null) {
-      ref.invalidate(remoteEntriesProvider);
-    }
+    if (added != null) ref.invalidate(remoteEntriesProvider);
   }
 }

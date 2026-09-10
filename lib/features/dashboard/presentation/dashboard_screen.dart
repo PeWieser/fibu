@@ -98,7 +98,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _setupActionRow(
             context, theme, strings.addCloudDrive, () => _openCloudDrives(context))
       else if (!hasTasks)
-        _setupActionRow(context, theme, strings.addTask, _goToTasks),
+        _setupActionRow(context, theme, strings.backupCreate, _goToBackup),
     ];
     if (rows.isEmpty) return null;
 
@@ -147,7 +147,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   /// Zur Sicherung: zweiter Tab — auf Windows die Einstellungen, auf
   /// iOS/Android der Aufgaben-Tab.
-  void _goToTasks() {
+  /// Zur Sicherung — die liegt in den Einstellungen, auf allen drei
+  /// Plattformen an Index 1 (Modell „eine Cloud, eine Sicherung").
+  void _goToBackup() {
     ref.read(shellIndexProvider.notifier).state = 1;
   }
 
@@ -309,7 +311,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Noch nichts eingerichtet: Die Karte ist die Aufforderung. Eine echte
     // ListTile, damit sie Tastaturfokus, Semantik und Fokus-Ring hat.
     if (!running && tasksLoaded && (!hasCloud || !hasBackup)) {
-      final label = hasCloud ? strings.addTask : strings.addCloudDrive;
+      final label = hasCloud ? strings.backupCreate : strings.addCloudDrive;
       final hint = hasCloud ? strings.noActiveTasksError : strings.noDrivesConfigured;
       return _windowsCardShell(
         theme,
@@ -337,7 +339,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           semanticLabel: label,
           onPressed: () {
             if (hasCloud) {
-              _goToTasks();
+              _goToBackup();
             } else {
               _openCloudDrives(context);
             }

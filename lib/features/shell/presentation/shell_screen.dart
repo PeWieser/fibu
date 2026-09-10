@@ -11,7 +11,6 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/widgets/liquid_glass.dart';
 import 'shell_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
-import '../../tasks/presentation/tasks_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 
 /// Platform-adaptive root navigation shell for Fibu.
@@ -164,18 +163,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           BottomNavigationBarItem(
             icon: const Padding(
               padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
-              child: Icon(cupertino.CupertinoIcons.list_bullet, semanticLabel: 'Tasks'),
-            ),
-            activeIcon: const Padding(
-              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
-              child: Icon(cupertino.CupertinoIcons.list_bullet_indent, semanticLabel: 'Tasks Active'),
-            ),
-            label: strings.navTasks,
-            tooltip: strings.navTasks,
-          ),
-          BottomNavigationBarItem(
-            icon: const Padding(
-              padding: EdgeInsets.only(top: 5.0, bottom: 2.0),
               child: Icon(cupertino.CupertinoIcons.settings, semanticLabel: 'Settings'),
             ),
             activeIcon: const Padding(
@@ -199,12 +186,12 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       controller: _tabController,
       tabBar: bar,
       tabBuilder: (context, index) {
+        // Zwei Einträge, nicht drei: Die Sicherung wird in den
+        // Einstellungen eingerichtet (Modell „eine Cloud, eine Sicherung").
         switch (index) {
           case 0:
             return const DashboardScreen();
           case 1:
-            return const TasksScreen();
-          case 2:
             return const SettingsScreen();
           default:
             return const DashboardScreen();
@@ -239,7 +226,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         index: activeIndex,
         children: const [
           DashboardScreen(),
-          TasksScreen(),
           SettingsScreen(),
         ],
       ),
@@ -254,12 +240,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             selectedIcon: Icon(material.Icons.dashboard, semanticLabel: strings.navDashboard),
             label: strings.navDashboard,
             tooltip: strings.navDashboard,
-          ),
-          material.NavigationDestination(
-            icon: Icon(material.Icons.list_alt_outlined, semanticLabel: strings.navTasks),
-            selectedIcon: Icon(material.Icons.list_alt, semanticLabel: strings.navTasks),
-            label: strings.navTasks,
-            tooltip: strings.navTasks,
           ),
           material.NavigationDestination(
             icon: Icon(material.Icons.settings_outlined, semanticLabel: strings.navSettings),

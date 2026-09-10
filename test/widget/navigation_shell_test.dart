@@ -13,7 +13,6 @@ import 'package:fibu/core/services/rclone_provider.dart';
 import 'package:fibu/core/services/mock_rclone_service.dart';
 import 'package:fibu/features/shell/presentation/shell_screen.dart';
 import 'package:fibu/features/dashboard/presentation/dashboard_screen.dart';
-import 'package:fibu/features/tasks/presentation/tasks_screen.dart';
 import 'package:fibu/features/settings/presentation/settings_screen.dart';
 import '../helpers/platform_mocks.dart';
 import 'package:fibu/features/tasks/presentation/tasks_controller.dart';
@@ -108,17 +107,21 @@ void main() {
         );
         await settleBounded(tester);
 
-        // Check initially Dashboard is visible (find by type to avoid label/appbar text conflicts)
+        // Dashboard sichtbar (per Typ gesucht, damit Titel/AppBar-Text nicht
+        // kollidieren).
         expect(find.byType(DashboardScreen), findsOneWidget);
-        
-        // Tap on Tasks navigation destination
-        final tasksDestination = find.byIcon(material.Icons.list_alt_outlined);
-        expect(tasksDestination, findsOneWidget);
-        await tester.tap(tasksDestination);
+
+        // Zwei Einträge, nicht drei: Den Aufgaben-Tab gibt es nicht mehr,
+        // die Sicherung wird in den Einstellungen eingerichtet.
+        expect(find.byIcon(material.Icons.list_alt_outlined), findsNothing);
+
+        final settingsDestination =
+            find.byIcon(material.Icons.settings_outlined);
+        expect(settingsDestination, findsOneWidget);
+        await tester.tap(settingsDestination);
         await settleBounded(tester);
 
-        expect(find.byType(TasksScreen), findsOneWidget);
-        expect(find.text(strings.tasksTitle), findsOneWidget);
+        expect(find.byType(SettingsScreen), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

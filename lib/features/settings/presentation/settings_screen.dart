@@ -11,6 +11,7 @@ import '../../../core/widgets/liquid_glass.dart';
 import '../../../core/navigation/app_nav.dart';
 import 'backup_section.dart';
 import 'cloud_section.dart';
+import '../../../core/widgets/ui.dart';
 import '../../../core/widgets/windows_controls.dart';
 import '../../../theme/ios_theme.dart';
 import '../../../core/utils/ios_haptics.dart';
@@ -361,58 +362,36 @@ class SettingsScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              // 1. Cloud Drives Section
-              cupertino.CupertinoListSection.insetGrouped(
-                backgroundColor: theme.surface,
-                header: IosTheme.sectionHeader(strings.cloudStorage, theme),
-                children: [
-                  cupertino.CupertinoListTile(
-                    leading: Icon(
-                      cupertino.CupertinoIcons.cloud,
-                      color: theme.accent,
-                      size: 22,
-                      semanticLabel: strings.manageCloudDrives,
-                    ),
-                    title: Text(
-                      strings.manageCloudDrives,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                    ),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () => _navigateToCloudDrives(context),
-                  ),
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.arrow_2_squarepath,
-                        color: theme.accent, size: 22),
-                    title: Text(strings.pairingTitle,
-                        style: const TextStyle(fontSize: 16)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () => _navigateToPairing(context),
-                  ),
-                ],
-              ),
+              // 1. Cloud — eine Cloud, keine Liste
+              Ui.sectionHeader(strings.cloudSection, theme),
+              const CloudSection(),
 
-              // 2. Network & Cellular Section
-              cupertino.CupertinoListSection.insetGrouped(
-                backgroundColor: theme.surface,
-                header: IosTheme.sectionHeader(strings.networkSectionTitle, theme),
+              // 2. Sicherung — eine Sicherung, direkt hier editierbar
+              Ui.sectionHeader(strings.backupSection, theme),
+              const BackupSection(),
+
+              // 3. System — Kopplung und Diagnose
+              Ui.sectionHeader(strings.systemSection, theme),
+              Ui.group(
+                theme: theme,
                 children: [
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.wifiOnlySyncLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: cupertino.CupertinoSwitch(
-                      value: ref.watch(wifiOnlySyncProvider),
-                      onChanged: (val) {
-                        IosHaptics.selection();
-                        ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                      },
-                    ),
+                  Ui.tile(
+                    theme: theme,
+                    title: strings.pairingTitle,
+                    subtitle: strings.pairingSubtitle,
+                    leading: Ui.sync,
+                    onTap: () => _navigateToPairing(context),
+                    semanticLabel: strings.pairingTitle,
+                    first: true,
+                  ),
+                  Ui.tile(
+                    theme: theme,
+                    title: strings.debugLogTitle,
+                    subtitle: strings.debugLogSubtitle,
+                    leading: Ui.document,
+                    onTap: () => _navigateToDebugLog(context),
+                    semanticLabel: strings.debugLogTitle,
+                    last: true,
                   ),
                 ],
               ),
@@ -591,61 +570,39 @@ class SettingsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Cloud Storage
-            Text(strings.cloudStorage, style: material.Theme.of(context).textTheme.titleSmall),
-            SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: material.ListTile(
-                minTileHeight: 48,
-                leading: Icon(material.Icons.cloud_queue, color: theme.accent, semanticLabel: strings.manageCloudDrives),
-                title: Text(strings.manageCloudDrives, style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: Icon(material.Icons.chevron_right, color: theme.textSecondary, semanticLabel: strings.manageCloudDrives),
-                onTap: () => _navigateToCloudDrives(context),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.radiusSm)),
-              ),
-            ),
-            SizedBox(height: theme.sm),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: material.ListTile(
-                minTileHeight: 48,
-                leading: Icon(material.Icons.swap_horiz, color: theme.accent),
-                title: Text(strings.pairingTitle,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: Icon(material.Icons.chevron_right,
-                    color: theme.textSecondary),
-                onTap: () => _navigateToPairing(context),
-              ),
-            ),
-            SizedBox(height: theme.xl),
+            // 1. Cloud — eine Cloud, keine Liste
+            Ui.sectionHeader(strings.cloudSection, theme),
+            const CloudSection(),
 
-            // 2. Network & Cellular
-            Text(strings.networkSectionTitle, style: material.Theme.of(context).textTheme.titleSmall),
-            SizedBox(height: theme.md),
-            material.Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(theme.radiusLg),
-                side: BorderSide(color: material.Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: material.SwitchListTile(
-                title: Text(strings.wifiOnlySyncLabel),
-                value: ref.watch(wifiOnlySyncProvider),
-                onChanged: (val) {
-                  ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val);
-                },
-              ),
+            // 2. Sicherung — eine Sicherung, direkt hier editierbar
+            Ui.sectionHeader(strings.backupSection, theme),
+            const BackupSection(),
+
+            // 3. System — Kopplung und Diagnose
+            Ui.sectionHeader(strings.systemSection, theme),
+            Ui.group(
+              theme: theme,
+              children: [
+                Ui.tile(
+                  theme: theme,
+                  title: strings.pairingTitle,
+                  subtitle: strings.pairingSubtitle,
+                  leading: Ui.sync,
+                  onTap: () => _navigateToPairing(context),
+                  semanticLabel: strings.pairingTitle,
+                  first: true,
+                ),
+                Ui.tile(
+                  theme: theme,
+                  title: strings.debugLogTitle,
+                  subtitle: strings.debugLogSubtitle,
+                  leading: Ui.document,
+                  onTap: () => _navigateToDebugLog(context),
+                  semanticLabel: strings.debugLogTitle,
+                  last: true,
+                ),
+              ],
             ),
-            SizedBox(height: theme.xl),
 
             // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem System
             Text(strings.appearanceSection, style: material.Theme.of(context).textTheme.titleSmall),

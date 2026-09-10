@@ -1,13 +1,11 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/active_cloud.dart';
-import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/settings_service.dart';
-import '../../../core/widgets/windows_controls.dart';
+import '../../../core/widgets/ui.dart';
 import '../../../theme/theme.dart';
 import '../../tasks/presentation/tasks_controller.dart';
 
@@ -17,6 +15,9 @@ import '../../tasks/presentation/tasks_controller.dart';
 /// Dialog. Es gibt aber genau eine Sicherung: Ordner, Abgleich, Zielordner,
 /// Zeitplan, zwei Schalter. Das passt in eine Einstellungen-Seite und braucht
 /// weder Liste noch Dialog.
+///
+/// Plattformneutral über [Ui] — dieselbe Struktur auf Windows, iOS und
+/// Android.
 ///
 /// „Nur WLAN" schreibt auf den **globalen** Schalter
 /// (`wifiOnlySyncProvider`), nicht auf ein Feld der Sicherung — es gibt eine
@@ -48,8 +49,8 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     super.dispose();
   }
 
-  /// Dasselbe Schlüsselvokabular wie der Aufgaben-Editor und der Planer:
-  /// `Daily`, die Wochentage, `Manual`.
+  /// Dasselbe Schlüsselvokabular wie der Planer: `Daily`, die Wochentage,
+  /// `Manual`.
   static const List<String> _dayKeys = [
     'Daily',
     'Monday',
@@ -85,6 +86,9 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     }
   }
 
+  Map<String, String> _dayItems(AppStrings strings) =>
+      {for (final key in _dayKeys) key: _dayLabel(strings, key)};
+
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
@@ -95,11 +99,11 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     // Ohne Cloud gibt es nichts zu sichern — die Cloud-Sektion darüber
     // fordert zum Verbinden auf, hier steht nur der Grund.
     if (!hasCloud) {
-      return Win.tile(
+      return Ui.tile(
         theme: theme,
         title: strings.backupSection,
         subtitle: strings.backupNeedsCloud,
-        leading: fluent.FluentIcons.lock,
+        leading: Ui.lock,
         first: true,
         last: true,
       );
@@ -108,13 +112,12 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     // Ohne Sicherung: eine Zeile, die sie anlegt. Die Felder stehen danach
     // direkt darunter — kein Dialog, kein Wizard.
     if (tasks.isEmpty) {
-      return Win.tile(
+      return Ui.tile(
         theme: theme,
         title: strings.backupCreate,
         subtitle: strings.backupCreateHint,
-        leading: fluent.FluentIcons.add,
-        trailing: const Icon(fluent.FluentIcons.chevron_right, size: 12),
-        onPressed: _createBackup,
+        leading: Ui.add,
+        onTap: _createBackup,
         semanticLabel: strings.backupCreate,
         first: true,
         last: true,
@@ -124,114 +127,80 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     final task = tasks.first;
     final notifier = ref.read(tasksListProvider.notifier);
 
-    return Win.group(
+    return Ui.group(
       theme: theme,
       children: [
-        _folders(theme, strings, task, notifier),
-        Win.tile(
+        ..._folders(theme, strings, task, notifier),
+        Ui.tile(
           theme: theme,
           title: strings.backupSyncMode,
           subtitle: task.syncMode == SyncMode.mirror
               ? strings.syncModeMirrorDescription
               : strings.syncModeIncrementalDescription,
-          leading: fluent.FluentIcons.sync,
-          trailing: fluent.ComboBox<SyncMode>(
+          leading: Ui.sync,
+          trailing: Ui.picker<SyncMode>(
+            context: context,
+            theme: theme,
             value: task.syncMode,
-            items: [
-              fluent.ComboBoxItem(
-                value: SyncMode.incremental,
-                child: Text(strings.syncModeIncremental),
-              ),
-              fluent.ComboBoxItem(
-                value: SyncMode.mirror,
-                child: Text(strings.syncModeMirror),
-              ),
-            ],
+            items: {
+              SyncMode.incremental: strings.syncModeIncremental,
+              SyncMode.mirror: strings.syncModeMirror,
+            },
             onChanged: (mode) {
               if (mode == null) return;
-              notifier.updateTask(
-                  task.id, task.copyWith(syncMode: mode));
+              notifier.updateTask(task.id, task.copyWith(syncMode: mode));
             },
           ),
         ),
-        Win.tile(
+        Ui.tile(
           theme: theme,
           title: strings.backupCloudFolder,
-          leading: fluent.FluentIcons.folder,
-          trailing: SizedBox(
-            width: 220,
-            child: fluent.TextBox(
-              controller: _folderCtrl,
-              placeholder: 'fibu-backup',
-              onSubmitted: (value) {
-                notifier.updateTask(
-                  task.id,
-                  task.copyWith(
-                    targetFolderName: value.trim().isEmpty
-                        ? 'fibu-backup'
-                        : value.trim(),
-                  ),
-                );
-              },
-            ),
+          leading: Ui.folder,
+          trailing: Ui.textField(
+            theme: theme,
+            controller: _folderCtrl,
+            placeholder: 'fibu-backup',
+            onSubmitted: (value) {
+              notifier.updateTask(
+                task.id,
+                task.copyWith(
+                  targetFolderName:
+                      value.trim().isEmpty ? 'fibu-backup' : value.trim(),
+                ),
+              );
+            },
           ),
         ),
-        if (task.scheduleDay != 'Manual') ...[
-          Win.tile(
+        Ui.tile(
+          theme: theme,
+          title: strings.scheduleDayLabel,
+          leading: Ui.calendar,
+          trailing: Ui.picker<String>(
+            context: context,
             theme: theme,
-            title: strings.scheduleDayLabel,
-            leading: fluent.FluentIcons.calendar,
-            trailing: fluent.ComboBox<String>(
-              value: task.scheduleDay,
-              items: _dayKeys
-                  .map((key) => fluent.ComboBoxItem(
-                      value: key, child: Text(_dayLabel(strings, key))))
-                  .toList(),
-              onChanged: (day) {
-                if (day == null) return;
-                notifier.updateTask(
-                  task.id,
-                  task.copyWith(
-                    scheduleDay: day,
-                    schedule: strings.scheduleDescriptionFor(
-                        day, task.scheduleTime),
-                  ),
-                );
-              },
-            ),
+            value: task.scheduleDay,
+            items: _dayItems(strings),
+            onChanged: (day) {
+              if (day == null) return;
+              notifier.updateTask(
+                task.id,
+                task.copyWith(
+                  scheduleDay: day,
+                  schedule:
+                      strings.scheduleDescriptionFor(day, task.scheduleTime),
+                ),
+              );
+            },
           ),
-          Win.tile(
+        ),
+        if (task.scheduleDay != 'Manual')
+          Ui.tile(
             theme: theme,
             title: strings.scheduleTimeLabel,
-            leading: fluent.FluentIcons.clock,
-            trailing: _timePickers(theme, strings, task, notifier),
+            leading: Ui.clock,
+            trailing: _timePickers(context, theme, strings, task, notifier),
           ),
-        ] else
-          Win.tile(
-            theme: theme,
-            title: strings.scheduleDayLabel,
-            subtitle: strings.dayManual,
-            leading: fluent.FluentIcons.calendar,
-            trailing: fluent.ComboBox<String>(
-              value: task.scheduleDay,
-              items: _dayKeys
-                  .map((key) => fluent.ComboBoxItem(
-                      value: key, child: Text(_dayLabel(strings, key))))
-                  .toList(),
-              onChanged: (day) {
-                if (day == null) return;
-                notifier.updateTask(
-                  task.id,
-                  task.copyWith(
-                    scheduleDay: day,
-                    schedule:
-                        strings.scheduleDescriptionFor(day, task.scheduleTime),
-                  ),
-                );
-              },
-            ),
-          ),
-        Win.toggle(
+        Ui.toggle(
           theme: theme,
           title: strings.wifiOnlySyncLabel,
           subtitle: strings.tooltipNetwork,
@@ -239,7 +208,7 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
           onChanged: (val) =>
               ref.read(wifiOnlySyncProvider.notifier).setWifiOnly(val),
         ),
-        Win.toggle(
+        Ui.toggle(
           theme: theme,
           title: strings.backupActiveLabel,
           subtitle: strings.backupActiveHint,
@@ -252,64 +221,62 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     );
   }
 
-  /// Quellordner: Liste mit Entfernen, plus eine Zeile zum Hinzufügen.
-  Widget _folders(AppThemeData theme, AppStrings strings, BackupTask task,
+  /// Quellordner: eine Zeile pro Ordner mit Entfernen, plus eine Zeile zum
+  /// Hinzufügen.
+  List<Widget> _folders(AppThemeData theme, AppStrings strings, BackupTask task,
       TasksListNotifier notifier) {
     final folders = task.selectedFolders;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < folders.length; i++)
-          Win.tile(
-            theme: theme,
-            title: folders[i],
-            leading: fluent.FluentIcons.folder,
-            trailing: fluent.IconButton(
-              icon: Icon(fluent.FluentIcons.delete,
-                  semanticLabel: strings.delete),
-              onPressed: () {
-                final next = List<String>.from(folders)..removeAt(i);
-                notifier.updateTask(
-                  task.id,
-                  task.copyWith(
-                    selectedFolders: next,
-                    sourcePath: next.isEmpty ? '' : 'files:${next.join('|')}',
-                  ),
-                );
-              },
-            ),
-            first: i == 0,
-          ),
-        Win.tile(
+    return [
+      for (var i = 0; i < folders.length; i++)
+        Ui.tile(
           theme: theme,
-          title: folders.isEmpty
-              ? strings.backupNoFolder
-              : strings.backupAddFolder,
-          leading: fluent.FluentIcons.add,
-          onPressed: () => _addFolder(task, notifier),
-          semanticLabel: strings.backupAddFolder,
-          first: folders.isEmpty,
+          title: folders[i],
+          leading: Ui.folder,
+          trailing: Ui.iconButton(
+            icon: Ui.delete,
+            semanticLabel: strings.delete,
+            onPressed: () {
+              final next = List<String>.from(folders)..removeAt(i);
+              notifier.updateTask(
+                task.id,
+                task.copyWith(
+                  selectedFolders: next,
+                  sourcePath: next.isEmpty ? '' : 'files:${next.join('|')}',
+                ),
+              );
+            },
+          ),
+          first: i == 0,
         ),
-      ],
-    );
+      Ui.tile(
+        theme: theme,
+        title:
+            folders.isEmpty ? strings.backupNoFolder : strings.backupAddFolder,
+        leading: Ui.add,
+        onTap: () => _addFolder(task, notifier),
+        semanticLabel: strings.backupAddFolder,
+      ),
+    ];
   }
 
-  Widget _timePickers(AppThemeData theme, AppStrings strings, BackupTask task,
-      TasksListNotifier notifier) {
+  Widget _timePickers(BuildContext context, AppThemeData theme,
+      AppStrings strings, BackupTask task, TasksListNotifier notifier) {
     final parts = task.scheduleTime.split(':');
     final hour = parts.isNotEmpty ? parts[0] : '02';
     final minute = parts.length > 1 ? parts[1] : '00';
-    final hours =
-        List.generate(24, (i) => i.toString().padLeft(2, '0'));
-    final minutes = List.generate(12, (i) => (i * 5).toString().padLeft(2, '0'));
+    final hours = {
+      for (var h = 0; h < 24; h++) h.toString().padLeft(2, '0'): h.toString().padLeft(2, '0'),
+    };
+    final minutes = {
+      for (var m = 0; m < 60; m += 5) m.toString().padLeft(2, '0'): m.toString().padLeft(2, '0'),
+    };
 
-    void setTime(String h, String m) {
+    void setTime(String h, String mi) {
       notifier.updateTask(
         task.id,
         task.copyWith(
-          scheduleTime: '$h:$m',
-          schedule:
-              strings.scheduleDescriptionFor(task.scheduleDay, '$h:$m'),
+          scheduleTime: '$h:$mi',
+          schedule: strings.scheduleDescriptionFor(task.scheduleDay, '$h:$mi'),
         ),
       );
     }
@@ -317,23 +284,23 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        fluent.ComboBox<String>(
+        Ui.picker<String>(
+          context: context,
+          theme: theme,
           value: hour,
-          items: hours
-              .map((h) => fluent.ComboBoxItem(value: h, child: Text(h)))
-              .toList(),
+          items: hours,
           onChanged: (h) {
             if (h != null) setTime(h, minute);
           },
         ),
-        SizedBox(width: theme.xs),
-        fluent.ComboBox<String>(
+        const Text(' : '),
+        Ui.picker<String>(
+          context: context,
+          theme: theme,
           value: minute,
-          items: minutes
-              .map((m) => fluent.ComboBoxItem(value: m, child: Text(m)))
-              .toList(),
-          onChanged: (m) {
-            if (m != null) setTime(hour, m);
+          items: minutes,
+          onChanged: (mi) {
+            if (mi != null) setTime(hour, mi);
           },
         ),
       ],
@@ -355,17 +322,17 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     );
   }
 
-  /// Legt die eine Sicherung mit sinnvollen Vorgaben an. Ziel ist die
-  /// verbundene Cloud, Ordner und Zeitplan stehen danach direkt hier.
+  /// Legt die eine Sicherung mit sinnvollen Vorgaben an.
   void _createBackup() {
     final strings = ref.read(stringsProvider);
     final cloud = ref.read(activeRemoteIdProvider).valueOrNull ?? '';
     final cloudName = ref.read(remoteDisplayNameProvider(cloud));
     final now = DateTime.now();
+    final minute = ((now.minute ~/ 5) * 5 + 5) % 60;
     final time =
-        '${now.hour.toString().padLeft(2, '0')}:${((now.minute ~/ 5) * 5 + 5).toString().padLeft(2, '0')}';
-
+        '${now.hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
     _folderCtrl.text = 'fibu-backup';
+
     ref.read(tasksListProvider.notifier).addTask(
           BackupTask(
             id: 'backup_${now.millisecondsSinceEpoch}',

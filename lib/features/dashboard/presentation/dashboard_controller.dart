@@ -262,9 +262,7 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
   /// auf JEDES verbundene Ziel synchronisiert.
   Future<bool> _syncSingleTask(BackupTask task) async {
     final strings = _ref.read(stringsProvider);
-    final targets = task.targetRemotes.isNotEmpty
-        ? task.targetRemotes
-        : (task.targetRemote.isNotEmpty ? [task.targetRemote] : const <String>[]);
+    final targets = task.targetRemotes;
 
     if (targets.isEmpty) {
       final t = _timestamp();
@@ -310,9 +308,6 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     String target,
     AppStrings strings,
   ) async {
-    final parts = target.split(':');
-    final remoteName = parts[0];
-
     // Importierte Aufgaben können ohne Quelle ankommen: Zeigt eine von einem
     // anderen Gerät importierte Aufgabe auf dessen Mediathek, wird die Quelle
     // beim Import geleert (siehe TasksNotifier.importTasks). Ohne diese
@@ -326,12 +321,11 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
       );
       return false;
     }
-    final targetFolder = task.targetFolderMode == TargetFolderMode.root
-        ? ''
-        : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');
-    final remotePath = parts.length > 1 && parts[1].isNotEmpty
-        ? (targetFolder.isNotEmpty ? '${parts[1]}/$targetFolder' : parts[1])
-        : targetFolder;
+    // Gemeinsame Pfad-Auflösung mit dem Planer — derselbe Zielpfad für
+    // manuelle UND geplante Läufe (docs/SZENARIEN_AUDIT_2026-09.md, H3).
+    final resolved = BackupTask.resolveTarget(task, target);
+    final remoteName = resolved.remoteName;
+    final remotePath = resolved.remotePath;
 
     final List<String> includeFilters = [];
     final srcLower = task.sourcePath.toLowerCase();

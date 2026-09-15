@@ -590,8 +590,12 @@ class IosRcloneService implements RcloneService {
   /// unsichtbar bis zum Ende weiter.
   final Set<String> _cancelledJobs = <String>{};
 
+  /// Instanz-Zähler PLUS prozessweiter Guard: Ein geplanter Lauf auf einer
+  /// eigenen Engine-Instanz (Scheduler/Workmanager) sieht sonst keinen hier
+  /// laufenden manuellen Lauf — und umgekehrt
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, H4).
   @override
-  bool get isSyncRunning => _runningJobIds.isNotEmpty;
+  bool get isSyncRunning => _runningJobIds.isNotEmpty || SyncRunGuard.isBusy;
 
   @override
   Future<String> startBackupJob({
@@ -604,22 +608,37 @@ class IosRcloneService implements RcloneService {
     // Scheduler, Quick Actions). Ohne sie könnte ein geplanter Lauf mitten in
     // einen manuellen starten — beide teilen sich Mirror-Zustand und
     // rclone-Statistiken und würden sich gegenseitig korrumpieren.
-    if (_runningJobIds.isNotEmpty) {
-      AppLog.warn('sync',
-          'Sync-Anfrage abgelehnen: Lauf ${_runningJobIds.first} ist noch aktiv');
-      throw StateError(AppStrings.current.syncAlreadyRunning);
+    if (_runningJobIds.isNotEmpty || SyncRunGuard.isBusy) {
+      // Kulanz nach „Abbrechen": Ein abgebrochener Lauf wickelt noch die
+      // aktuelle Einzeldatei ab. Sind ALLE laufenden Läufe bereits
+      // abgebrochen, kurz auf das Freiwerden warten statt hart abzulehnen —
+      // sonst folgt auf jedes Abbrechen ein irritierendes „läuft bereits"
+      // (docs/SZENARIEN_AUDIT_2026-09.md, N-F11).
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      while (_runningJobIds.isNotEmpty &&
+          _runningJobIds.every(_cancelledJobs.contains) &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+      if (_runningJobIds.isNotEmpty || SyncRunGuard.isBusy) {
+        AppLog.warn('sync',
+            'Sync-Anfrage abgelehnen: Lauf ${_runningJobIds.isNotEmpty ? _runningJobIds.first : '(anderer Einstieg)'} ist noch aktiv');
+        throw StateError(AppStrings.current.syncAlreadyRunning);
+      }
     }
 
     final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
     final progressController = StreamController<RcloneProgressEvent>.broadcast();
     _progressControllers[jobId] = progressController;
     _runningJobIds.add(jobId);
+    SyncRunGuard.enter();
 
     _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.syncing));
     unawaited(_runJob(jobId, localPath, remoteName, remotePath, options, progressController)
         .whenComplete(() {
       _runningJobIds.remove(jobId);
       _cancelledJobs.remove(jobId);
+      SyncRunGuard.exit();
     }));
     return jobId;
   }

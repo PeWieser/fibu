@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../utils/app_paths.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../../features/tasks/presentation/tasks_controller.dart';
 import 'app_log_service.dart';
 import 'rclone_provider.dart';
 import 'rclone_service.dart';
@@ -228,15 +229,23 @@ class SchedulerService {
   /// Führt eine einzelne Aufgabe aus und notiert den Ausgang im persistenten
   /// Laufprotokoll — die Grundlage für [runMissedSyncs].
   ///
-  /// Liefert true, wenn der Sync tatsächlich gestartet wurde.
+  /// Liefert true, wenn der Sync tatsächlich gestartet wurde UND auf allen
+  /// Zielen durchgelaufen ist.
+  ///
+  /// **Wichtig:** Der Lauf wird BIS ZUM ENDE erwartet (`_runAndWait`). Vorher
+  /// wurde nur der Job-START abgewartet und sofort „Erfolg" gebucht sowie die
+  /// Cloud-Sperre freigegeben — ein fehlgeschlagener Hintergrund-Sync galt
+  /// dann als Erfolg und die Sperre schützte nicht während des Laufs
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, H1/H2).
   static Future<bool> _runOneTask(
     Map<String, dynamic> task, {
     required String reason,
   }) async {
-    final id = task['id'] as String? ?? '';
-    final name = task['name'] as String? ?? '(ohne Namen)';
+    final parsed = BackupTask.fromJson(task);
+    final id = parsed.id;
+    final name = parsed.name.isEmpty ? '(ohne Namen)' : parsed.name;
 
-    final sourcePath = task['sourcePath'] as String? ?? '';
+    final sourcePath = parsed.sourcePath;
     // Importierte Aufgaben können ohne Quelle dastehen (Quelle eines anderen
     // Geräts). Ohne Prüfung würde der Sync still nichts tun und als Erfolg
     // verbucht — genau das verbietet das Laufprotokoll.
@@ -249,11 +258,8 @@ class SchedulerService {
       return false;
     }
 
-    final remotes = (task['targetRemotes'] as List<dynamic>? ?? const [])
-        .cast<String>()
-        .toList();
-    final remoteName = remotes.isNotEmpty ? remotes.first : null;
-    if (remoteName == null) {
+    final targets = parsed.targetRemotes;
+    if (targets.isEmpty) {
       AppLog.warn('scheduler',
           'Aufgabe „$name" übersprungen ($reason): kein Ziellaufwerk');
       if (id.isNotEmpty) {
@@ -299,52 +305,142 @@ class SchedulerService {
     // Plattformgerecht — auf Windows ist das die EXE-basierte Engine, nicht
     // der librclone-MethodChannel.
     final engine = createRcloneServiceForPlatform();
-    // Kein Start, solange ein anderer Lauf aktiv ist (manuell ausgelöst
-    // oder eine frühere Aufgabe dieser Runde) — sonst überlappen sich
-    // zwei Syncs auf demselben Mirror-Zustand.
+    // Kein Start, solange ein anderer Lauf aktiv ist — der prozessweite
+    // [SyncRunGuard] deckt dabei ALLE Engine-Instanzen ab (manueller Lauf im
+    // Dashboard, frühere Aufgabe dieser Runde, andere Einstiege)
+    // (docs/SZENARIEN_AUDIT_2026-09.md, H4).
     if (engine.isSyncRunning) {
       AppLog.info('scheduler',
           'Aufgabe „$name" übersprungen ($reason): Es läuft bereits ein Sync');
       return false;
     }
 
-    final targetFolder = task['targetFolderName'] as String? ?? 'fibu-backup';
-    final isEcho = task['syncMode'] == 'mirror';
+    final isEcho = parsed.syncMode == SyncMode.mirror;
 
-    // Geräteübergreifende Sperre — dieselbe wie beim manuellen Lauf.
-    // Ohne sie würde ein geplanter Hintergrund-Lauf auf einem Gerät einem
-    // manuellen Lauf auf einem anderen in denselben Zielordner schreiben.
-    // Bei einem Spiegel mit Löschrecht zieht sich das gegenseitig die
-    // Dateien weg (docs/TESTMATRIX_IOS_WINDOWS.md, B14).
-    final lockHolder =
-        await SyncLock.acquire(engine, remoteName, targetFolder);
-    if (lockHolder != null) {
-      AppLog.info('scheduler',
-          'Aufgabe „$name" übersprungen ($reason): $lockHolder synct gerade');
-      if (id.isNotEmpty) {
-        await SchedulerRunLog.record(id, success: false, error: 'skipped');
+    // Alle Ziele nacheinander (früher: nur das erste
+    // — docs/SZENARIEN_AUDIT_2026-09.md, H3). Scheitert ein Ziel, wird der
+    // Lauf insgesamt als Fehlschlag gebucht und beim nächsten Start
+    // nachgeholt.
+    for (final target in targets) {
+      // Gemeinsame Auflösung mit dem Dashboard — derselbe Cloud-Pfad für
+      // manuelle und geplante Läufe, dieselbe Sperre, derselbe Zustand.
+      final resolved = BackupTask.resolveTarget(parsed, target);
+
+      // Geräteübergreifende Sperre — dieselbe wie beim manuellen Lauf.
+      final lockHolder = await SyncLock.acquire(
+          engine, resolved.remoteName, resolved.remotePath);
+      if (lockHolder != null) {
+        AppLog.info('scheduler',
+            'Aufgabe „$name" übersprungen ($reason): $lockHolder synct gerade');
+        if (id.isNotEmpty) {
+          await SchedulerRunLog.record(id, success: false, error: 'skipped');
+        }
+        return false;
       }
-      return false;
+
+      try {
+        final ok = await _runAndWait(
+          engine,
+          sourcePath: sourcePath,
+          remoteName: resolved.remoteName,
+          remotePath: resolved.remotePath,
+          isEchoMode: isEcho,
+        );
+        if (!ok) {
+          if (id.isNotEmpty) {
+            await SchedulerRunLog.record(id, success: false,
+                error: 'failed on ${resolved.remoteName}:${resolved.remotePath}');
+          }
+          AppLog.warn('scheduler',
+              'Aufgabe „$name" fehlgeschlagen ($reason) auf ${resolved.remoteName}:${resolved.remotePath}');
+          return false;
+        }
+      } catch (e) {
+        if (id.isNotEmpty) {
+          await SchedulerRunLog.record(id, success: false, error: '$e');
+        }
+        AppLog.warn('scheduler', 'Aufgabe „$name" fehlgeschlagen ($reason): $e');
+        return false;
+      } finally {
+        // Die Sperre bleibt, BIS der Lauf fertig ist — Freigabe erst hier.
+        await SyncLock.release(
+            engine, resolved.remoteName, resolved.remotePath);
+      }
     }
 
+    if (id.isNotEmpty) await SchedulerRunLog.record(id, success: true);
+    AppLog.info('scheduler',
+        'Aufgabe „$name" ausgeführt ($reason), ${targets.length} Ziel(e) abgeschlossen');
+    return true;
+  }
+
+  /// Startet den Sync und wartet auf dessen ENDE.
+  ///
+  /// `startBackupJob` kehrt schon nach dem Job-Start zurück; das eigentliche
+  /// Ergebnis kommt über den Status-Stream. Ohne dieses Warten würde der
+  /// Planer „Erfolg" buchen, während der Lauf noch (oder gar nicht mehr)
+  /// läuft. Ereignisse, die während des Starts eintreffen, werden gepuffert,
+  /// damit nichts durchs Raster fällt.
+  static Future<bool> _runAndWait(
+    RcloneService engine, {
+    required String sourcePath,
+    required String remoteName,
+    required String remotePath,
+    required bool isEchoMode,
+  }) async {
+    final completion = Completer<bool>();
+    String? jobId;
+    final buffered = <RcloneJobEvent>[];
+
+    void handle(RcloneJobEvent e) {
+      final known = jobId;
+      if (known == null || e.jobId != known || completion.isCompleted) return;
+      switch (e.status) {
+        case RcloneJobStatus.completed:
+          completion.complete(true);
+          break;
+        case RcloneJobStatus.failed:
+        case RcloneJobStatus.cancelled:
+          completion.complete(false);
+          break;
+        case RcloneJobStatus.pending:
+        case RcloneJobStatus.syncing:
+          break;
+      }
+    }
+
+    final sub = engine.watchJobStatus().listen((e) {
+      if (jobId == null) {
+        buffered.add(e);
+        return;
+      }
+      handle(e);
+    });
+
     try {
-      await engine.startBackupJob(
+      jobId = await engine.startBackupJob(
         localPath: sourcePath,
         remoteName: remoteName,
-        remotePath: targetFolder,
-        options: SyncOptions(isEchoMode: isEcho, isBackground: true),
+        remotePath: remotePath,
+        options: SyncOptions(isEchoMode: isEchoMode, isBackground: true),
       );
-      if (id.isNotEmpty) await SchedulerRunLog.record(id, success: true);
-      AppLog.info('scheduler', 'Aufgabe „$name" ausgeführt ($reason)');
-      return true;
-    } catch (e) {
-      if (id.isNotEmpty) {
-        await SchedulerRunLog.record(id, success: false, error: '$e');
+      for (final e in buffered) {
+        handle(e);
       }
-      AppLog.warn('scheduler', 'Aufgabe „$name" fehlgeschlagen ($reason): $e');
-      return false;
+      if (!completion.isCompleted) {
+        // Sicherheitsnetz: Ein Lauf, der nie ein End-Ereignis meldet, darf
+        // den Planer nicht für immer blockieren. Nach dem Zeitdeckel gilt
+        // der Lauf als fehlgeschlagen und wird später nachgeholt.
+        await completion.future.timeout(const Duration(hours: 6),
+            onTimeout: () {
+          AppLog.warn('scheduler',
+              'Zeitdeckel erreicht — Lauf gilt als fehlgeschlagen');
+          return false;
+        });
+      }
+      return completion.isCompleted ? (completion.future.value ?? false) : false;
     } finally {
-      await SyncLock.release(engine, remoteName, targetFolder);
+      await sub.cancel();
     }
   }
 

@@ -58,12 +58,17 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   /// wurde — wird in der Erfolgsmeldung genannt, nicht still verschwiegen.
   int _downgradedMirror = 0;
 
-  /// Spiegelung mit Zustand, Tombstones und Bremse gibt es nur auf
-  /// iOS/Android. Empfängt ein Desktop, wird der Modus herabgestuft;
-  /// empfängt ein Mobilgerät, bleibt er erhalten.
+  /// Spiegelung mit Zustand, Tombstones und Bremse: iOS/Android über die
+  /// Mediathek, Windows über `FilesystemMirrorSource` in dieselbe Engine
+  /// (docs/TESTMATRIX_IOS_WINDOWS.md, Abschnitt 0). Eine Herabstufung auf
+  /// „Inkrementell" ist daher auf keiner der drei Plattformen mehr nötig —
+  /// der Empfänger behält den Modus des Senders
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, N-F10).
   static bool get _platformHasTwoWayMirror {
     final platform = defaultTargetPlatform;
-    return platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+    return platform == TargetPlatform.iOS ||
+        platform == TargetPlatform.android ||
+        platform == TargetPlatform.windows;
   }
 
   /// Angekommen, aber noch nicht übernommen — wartet auf die Bestätigung.
@@ -211,12 +216,10 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
           next['selectedAlbums'] = const <String>[];
         }
 
-        // „Spiegelung" vom Mobilgerät ist ein echter 2-Wege-Algorithmus mit
-        // Zustand, Tombstones und Sicherheitsbremse. Der Desktop hat nichts
-        // davon — dort ist es `rclone sync`, also 1-Weg mit Löschrecht. Auf
-        // einem geteilten Zielordner würde das die Dateien des anderen Geräts
-        // löschen (docs/TESTMATRIX_IOS_WINDOWS.md, B9). Deshalb wird der Modus
-        // beim Import auf den Desktop heruntergestuft.
+        // „Spiegelung" ist auf allen drei Plattformen derselbe 2-Wege-
+        // Algorithmus (Zustand, Tombstones, Sicherheitsbremse). Nur für den
+        // theoretischen Fall einer Plattform OHNE diese Engine (z. B. ein
+        // künftiger Mock-Empfänger) wird sicherheitshalber herabgestuft.
         if (next['syncMode'] == 'mirror' && !_platformHasTwoWayMirror) {
           next['syncMode'] = 'incremental';
           downgradedMirror++;

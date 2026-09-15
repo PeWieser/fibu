@@ -857,6 +857,16 @@ class AppStrings {
       ? 'Kein Zugriff auf Fotos & Mediathek (Berechtigung verweigert)'
       : 'No access to Photos library (permission denied)';
 
+  /// Quellordner existiert nicht mehr (verschoben, umbenannt, Laufwerk weg).
+  ///
+  /// Bewusst ein HARTER Fehler statt eines leeren Scans: Ein leerer Scan
+  /// würde die Cloud-Seite als „lokal gelöscht" deuten und bei kleinen
+  /// Beständen (< 10 Dateien) echte Löschungen auslösen
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, N-F5).
+  String errSourceFolderMissing(String path) => isGerman
+      ? 'Quellordner nicht gefunden: „$path". Prüfung beendet, es wurde nichts gelöscht.'
+      : 'Source folder not found: "$path". Run aborted, nothing was deleted.';
+
   // --- Zeitplan-Beschreibung (lokalisiert UND plattformabhängig) ---
   //
   // Wer den Zeitpunkt bestimmt, unterscheidet sich je Plattform — und die

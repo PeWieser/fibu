@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
@@ -7,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/remote_registry_service.dart';
+import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/sync_config_service.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/theme.dart';
@@ -42,6 +45,15 @@ class _RemoteTaskImportScreenState
     if (tasks.isEmpty) return;
     ref.read(tasksListProvider.notifier).importTasks(tasks);
     ref.invalidate(remoteTaskCandidatesProvider);
+    // Adoption statt Re-Download: Eine aus der Cloud importierte Aufgabe ist
+    // der typische Wiederherstellungsweg nach einer Neuinstallation. Ohne
+    // lokales Vorwissen würde der erste Mirror-Lauf den gesamten Bestand
+    // zurück in die Mediathek laden (Duplikate, danach Re-Upload unter
+    // Konflikt-Namen — docs/SZENARIEN_AUDIT_2026-09.md, N-F7). Mit der
+    // Flagge übernimmt der nächste Lauf die vorhandenen Cloud-Dateien als
+    // „adoptiert". Auf Windows ist die Flagge ein No-Op (dort gilt der
+    // dateibasierte Spiegel, unverändert).
+    unawaited(ref.read(rcloneServiceProvider).markMirrorAdoption());
     if (defaultTargetPlatform == TargetPlatform.iOS) IosHaptics.success();
     Navigator.of(context).pop(tasks.length);
   }

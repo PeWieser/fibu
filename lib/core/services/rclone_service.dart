@@ -2,6 +2,34 @@ import 'dart:async';
 
 import 'pending_deletions_store.dart';
 
+/// Prozessweiter „läuft gerade ein Sync?"-Wächter.
+///
+/// **Warum zusätzlich zu den Instanz-Zählern.** Engines werden an mehreren
+/// Stellen erzeugt (Riverpod-Provider für das Dashboard, eigener Aufruf im
+/// Planer, Workmanager-Callback). `engine.isSyncRunning` auf einer FRISCHEN
+/// Instanz ist immer falsch — ein geplanter Lauf sah deshalb nie einen
+/// laufenden manuellen Lauf und umgekehrt
+/// (docs/SZENARIEN_AUDIT_2026-09.md, H4/N5).
+///
+/// Jeder Einstieg (`startBackupJob`) zählt hier hoch, jeder Abschluss
+/// (erfolgreich, Fehler, Abbruch) zählt herunter — unabhängig davon, WELCHE
+/// Engine-Instanz den Lauf gestartet hat. Bewusst statisch und ohne
+/// Plattform-Logik: Der Guard ist reine Buchhaltung.
+class SyncRunGuard {
+  SyncRunGuard._();
+
+  static int _active = 0;
+
+  /// True, solange irgendwo in diesem Prozess/Isolat ein Sync läuft.
+  static bool get isBusy => _active > 0;
+
+  static void enter() => _active++;
+
+  static void exit() {
+    if (_active > 0) _active--;
+  }
+}
+
 /// Model representing a sync/copy job options.
 class SyncOptions {
   final bool isEchoMode; // true = sync (deletes extra target files), false = copy (incremental)
@@ -26,8 +54,7 @@ class SyncOptions {
 }
 
 /// Model representing remote storage quota info.
-class QuotaInfo {
-  final int totalBytes;
+class QuotaInfo {  final int totalBytes;
   final int usedBytes;
   final int freeBytes;
 

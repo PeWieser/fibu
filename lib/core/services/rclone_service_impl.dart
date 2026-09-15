@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../localization/app_strings.dart';
 import 'app_log_service.dart';
 import 'change_journal_service.dart';
 import 'device_identity_service.dart';
@@ -169,8 +170,17 @@ class WindowsRcloneService implements RcloneService {
     }
   }
 
+  /// Job-IDs laufender Syncs (Mirror UND rclone-Prozesse).
+  ///
+  /// Vorher war hier hartkodiert `false` — der Desktop-Timer des Planers
+  /// konnte dadurch einen zweiten Lauf in einen laufenden starten, beide
+  /// teilten denselben Mirror-Zustand
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, H5/N5).
+  final Set<String> _runningJobIds = <String>{};
+
+  /// Instanz-Zähler PLUS prozessweiter Guard (siehe H4 im Audit).
   @override
-  bool get isSyncRunning => false;
+  bool get isSyncRunning => _runningJobIds.isNotEmpty || SyncRunGuard.isBusy;
 
   @override
   Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(
@@ -191,6 +201,15 @@ class WindowsRcloneService implements RcloneService {
     required String remotePath,
     required SyncOptions options,
   }) async {
+    // Parallel-Sperre wie auf iOS: Ein zweiter Lauf (z. B. der 5-Minuten-
+    // Timer des Planers, während der manuelle noch läuft) würde denselben
+    // Mirror-Zustand von zwei Seiten gleichzeitig lesen und schreiben.
+    if (_runningJobIds.isNotEmpty || SyncRunGuard.isBusy) {
+      AppLog.warn('sync',
+          'Sync-Anfrage abgelehnt: Es läuft bereits eine Synchronisierung');
+      throw StateError(AppStrings.current.syncAlreadyRunning);
+    }
+
     final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
 
     // 2-Wege-Spiegelung läuft über dieselbe Engine wie iOS, nur mit
@@ -198,8 +217,26 @@ class WindowsRcloneService implements RcloneService {
     // mit Löschrecht und hätte auf einem geteilten Zielordner die Dateien
     // des anderen Geräts gelöscht (docs/TESTMATRIX_IOS_WINDOWS.md, B9).
     if (options.isEchoMode) {
+      // Fehlender Quellordner ist ein hartes Scheitern, KEIN leerer Scan:
+      // Ein leerer Scan würde die gesamte Cloud-Seite als „lokal gelöscht"
+      // deuten und bei kleinen Beständen (< 10 Dateien, unterhalb der
+      // Anomalie-Bremse) in den Papierkorb räumen
+      // (docs/SZENARIEN_AUDIT_2026-09.md, N-F5).
+      if (!await Directory(localPath).exists()) {
+        final msg = AppStrings.current.errSourceFolderMissing(localPath);
+        AppLog.error('sync', msg);
+        _statusController.add(RcloneJobEvent(
+            jobId: jobId, status: RcloneJobStatus.failed, error: msg));
+        throw StateError(msg);
+      }
+      _runningJobIds.add(jobId);
+      SyncRunGuard.enter();
       unawaited(_runFilesystemMirror(
-          jobId, localPath, remoteName, remotePath, options));
+              jobId, localPath, remoteName, remotePath, options)
+          .whenComplete(() {
+        _runningJobIds.remove(jobId);
+        SyncRunGuard.exit();
+      }));
       return jobId;
     }
 
@@ -239,6 +276,8 @@ class WindowsRcloneService implements RcloneService {
       args.add('--bwlimit=${options.maxSpeedKbps}k');
     }
 
+    _runningJobIds.add(jobId);
+    SyncRunGuard.enter();
     try {
       final process = await Process.start(_executablePath, args);
       _activeProcesses[jobId] = process;
@@ -260,6 +299,8 @@ class WindowsRcloneService implements RcloneService {
       // Handle process completion
       process.exitCode.then((code) {
         _activeProcesses.remove(jobId);
+        _runningJobIds.remove(jobId);
+        SyncRunGuard.exit();
         _progressControllers.remove(jobId);
         if (!progressController.isClosed) progressController.close();
 
@@ -276,6 +317,8 @@ class WindowsRcloneService implements RcloneService {
 
       return jobId;
     } catch (e) {
+      _runningJobIds.remove(jobId);
+      SyncRunGuard.exit();
       _statusController.add(RcloneJobEvent(
         jobId: jobId,
         status: RcloneJobStatus.failed,
@@ -389,12 +432,15 @@ class WindowsRcloneService implements RcloneService {
           '🗑${result.trashedLocal}/${result.trashedRemote} '
           'Δ${result.deletedLocal}/${result.deletedRemote}');
 
+      // Abbruch VOR dem Entfernen auswerten — sonst meldet ein abgebrochener
+      // Lauf „abgeschlossen" (docs/SZENARIEN_AUDIT_2026-09.md, M-W3).
+      final wasCancelled = _cancelledMirrorJobs.contains(jobId);
       if (!progress.isClosed) await progress.close();
       _progressControllers.remove(jobId);
       _cancelledMirrorJobs.remove(jobId);
       _statusController.add(RcloneJobEvent(
         jobId: jobId,
-        status: _cancelledMirrorJobs.contains(jobId)
+        status: wasCancelled
             ? RcloneJobStatus.cancelled
             : RcloneJobStatus.completed,
       ));

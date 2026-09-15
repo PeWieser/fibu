@@ -177,6 +177,7 @@ flutter run -d android
 - [`docs/TESTMATRIX_IOS_WINDOWS.md`](docs/TESTMATRIX_IOS_WINDOWS.md) — iOS/Windows test matrix: which cross-device scenarios hold, which are risky, with file/line evidence (German).
 - [`docs/VEREINFACHUNG.md`](docs/VEREINFACHUNG.md) — simplification pass: what was removed, what was deliberately kept, and why (German).
 - [`docs/STRESSTEST_DAU.md`](docs/STRESSTEST_DAU.md) — stress-test scenario catalogue with a verdict per case (German).
+- [`docs/SZENARIEN_AUDIT_2026-09.md`](docs/SZENARIEN_AUDIT_2026-09.md) — full scenario & resilience audit incl. lifecycle/reinstall flows and platform specifics (German, 2026-09).
 - [`docs/ZEITPUNKT_WIEDERHERSTELLUNG.md`](docs/ZEITPUNKT_WIEDERHERSTELLUNG.md) — point-in-time restore: what can be recovered as of when (German).
 
 ## Continuous Integration

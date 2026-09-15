@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart' as material;
@@ -1055,7 +1057,13 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
             );
         ref.read(tasksListProvider.notifier).importTasks(tasks);
         ref.invalidate(remoteTaskCandidatesProvider);
-        
+        // Adoption statt Re-Download: Der Import aus der Cloud ist der
+        // typische Wiederherstellungsweg nach einer Neuinstallation. Die
+        // Flagge verhindert, dass der erste Mirror-Lauf den Bestand komplett
+        // zurück in die Mediathek lädt (Duplikate + Re-Upload-Spirale,
+        // docs/SZENARIEN_AUDIT_2026-09.md, N-F7).
+        unawaited(ref.read(rcloneServiceProvider).markMirrorAdoption());
+
         // Download existing cloud files to local task directory
         for (final task in tasks) {
           try {

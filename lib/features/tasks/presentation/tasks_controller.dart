@@ -64,6 +64,80 @@ class BackupTask {
   })  : _targetRemotes = targetRemotes,
         _targetRemote = targetRemote;
 
+  /// Liest eine Aufgabe aus dem `tasks.json`-Format.
+  ///
+  /// Wird vom UI-Lader UND vom Hintergrund-Planer verwendet — beide müssen
+  /// dieselbe Aufgabe sehen, sonst rechnen sie mit unterschiedlichen Werten
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, H3).
+  factory BackupTask.fromJson(Map<String, dynamic> j) {
+    SyncMode mode = SyncMode.incremental;
+    if (j['syncMode'] == 'mirror') {
+      mode = SyncMode.mirror;
+    }
+
+    TargetFolderMode folderMode = TargetFolderMode.custom;
+    if (j['targetFolderMode'] == 'root') {
+      folderMode = TargetFolderMode.root;
+    } else if (j['targetFolderMode'] == 'newFolder') {
+      folderMode = TargetFolderMode.newFolder;
+    }
+
+    List<String> remotes = [];
+    if (j['targetRemotes'] != null) {
+      remotes =
+          (j['targetRemotes'] as List<dynamic>).map((e) => e.toString()).toList();
+    } else if (j['targetRemote'] != null) {
+      final tr = j['targetRemote'].toString().split(':').first;
+      if (tr.isNotEmpty) remotes = [tr];
+    }
+
+    return BackupTask(
+      id: j['id'] as String? ?? '',
+      name: j['name'] as String? ?? '',
+      sourcePath: j['sourcePath'] as String? ?? '',
+      targetRemotes: remotes,
+      schedule: j['schedule'] as String? ?? '',
+      scheduleDay: j['scheduleDay'] as String? ?? 'Daily',
+      scheduleTime: j['scheduleTime'] as String? ?? '02:00',
+      isActive: j['isActive'] as bool? ?? true,
+      runMissedOnStartup: j['runMissedOnStartup'] as bool? ?? true,
+      excludedFiles: (j['excludedFiles'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      syncMode: mode,
+      targetFolderMode: folderMode,
+      targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
+      wifiOnly: j['wifiOnly'] as bool? ?? true,
+      selectedAlbums: (j['selectedAlbums'] as List<dynamic>?)?.cast<String>() ??
+          const [],
+      selectedFolders: (j['selectedFolders'] as List<dynamic>?)?.cast<String>() ??
+          const [],
+    );
+  }
+
+  /// Löst einen Ziel-Eintrag (`Laufwerk-ID` oder `Laufwerk-ID:Unterpfad`)
+  /// zusammen mit den Ordner-Einstellungen der Aufgabe in den effektiven
+  /// Remote-Namen und Cloud-Pfad auf.
+  ///
+  /// **Eine einzige Wahrheit** für Dashboard UND Planer: Vorher rechnete der
+  /// Planer mit dem rohen `targetFolderName` (`'/'` im Root-Modus) und das
+  /// Dashboard mit `''` — zwei verschiedene Cloud-Pfade, Zustände und
+  /// Sperren für denselben Ordner
+  /// (docs/SZENARIEN_AUDIT_2026-09.md, H3).
+  static ({String remoteName, String remotePath}) resolveTarget(
+      BackupTask task, String target) {
+    final parts = target.split(':');
+    final remoteName = parts[0];
+    final targetFolder = task.targetFolderMode == TargetFolderMode.root
+        ? ''
+        : task.targetFolderName.trim().replaceAll(RegExp(r'^/|/$'), '');
+    final remotePath = parts.length > 1 && parts[1].isNotEmpty
+        ? (targetFolder.isNotEmpty ? '${parts[1]}/$targetFolder' : parts[1])
+        : targetFolder;
+    return (remoteName: remoteName, remotePath: remotePath);
+  }
+
   /// Wirksam gewählte Alben — [selectedAlbums], sonst aus [sourcePath].
   ///
   /// `sourcePath` ist die maßgebliche Kodierung (`all:A|B`, `photos:A|B`).
@@ -277,46 +351,10 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       if (file.existsSync()) {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
-        final loaded = jsonList.map((j) {
-          SyncMode mode = SyncMode.incremental;
-          if (j['syncMode'] == 'mirror') {
-            mode = SyncMode.mirror;
-          }
-
-          TargetFolderMode folderMode = TargetFolderMode.custom;
-          if (j['targetFolderMode'] == 'root') {
-            folderMode = TargetFolderMode.root;
-          } else if (j['targetFolderMode'] == 'newFolder') {
-            folderMode = TargetFolderMode.newFolder;
-          }
-
-          List<String> remotes = [];
-          if (j['targetRemotes'] != null) {
-            remotes = (j['targetRemotes'] as List<dynamic>).map((e) => e.toString()).toList();
-          } else if (j['targetRemote'] != null) {
-            final tr = j['targetRemote'].toString().split(':').first;
-            if (tr.isNotEmpty) remotes = [tr];
-          }
-
-          return BackupTask(
-            id: j['id'] as String,
-            name: j['name'] as String,
-            sourcePath: j['sourcePath'] as String,
-            targetRemotes: remotes,
-            schedule: j['schedule'] as String,
-            scheduleDay: j['scheduleDay'] as String? ?? 'Daily',
-            scheduleTime: j['scheduleTime'] as String? ?? '02:00',
-            isActive: j['isActive'] as bool? ?? true,
-            runMissedOnStartup: j['runMissedOnStartup'] as bool? ?? true,
-            excludedFiles: (j['excludedFiles'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
-            syncMode: mode,
-            targetFolderMode: folderMode,
-            targetFolderName: j['targetFolderName'] as String? ?? 'backup/media',
-            wifiOnly: j['wifiOnly'] as bool? ?? true,
-            selectedAlbums: (j['selectedAlbums'] as List<dynamic>?)?.cast<String>() ?? const [],
-            selectedFolders: (j['selectedFolders'] as List<dynamic>?)?.cast<String>() ?? const [],
-          );
-        }).toList();
+        final loaded = jsonList
+            .whereType<Map<String, dynamic>>()
+            .map(BackupTask.fromJson)
+            .toList();
         state = reduceToSingle(loaded);
         if (loaded.length > 1) {
           // Beta: überzählige Sicherungen werden verworfen, nicht archiviert.

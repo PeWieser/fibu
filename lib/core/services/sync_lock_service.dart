@@ -78,7 +78,18 @@ class SyncLock {
       final isMine = holderId == myId;
       final isStale = heartbeat == null || now.difference(heartbeat) > staleAfter;
 
-      if (!isMine && !isStale) {
+      // Neuinstallation/Absturz-Fall: Die Sperre trägt eine FREMDE Kennung
+      // (die alte Installation), aber UNSEREN Gerätenamen und ist noch
+      // frisch. Ohne diese Übernahme blockiert das eigene Gerät nach einer
+      // Neuinstallation bis zu 5 Minuten sich selbst
+      // (docs/SZENARIEN_AUDIT_2026-09.md, N-F6). Frische Sperren eines
+      // ANDEREN Rechners mit zufällig gleichem Namen bleiben respektiert —
+      // dieser Fall wird nur für exakt den eigenen Hostnamen übernommen.
+      final isOwnHostFresh = !isStale &&
+          holderName.isNotEmpty &&
+          holderName == await DeviceIdentity.displayName();
+
+      if (!isMine && !isStale && !isOwnHostFresh) {
         AppLog.info('sync',
             'Sync übersprungen: $holderName hält die Sperre für $remoteName:$remotePath');
         return holderName;
@@ -86,6 +97,9 @@ class SyncLock {
       if (!isMine && isStale) {
         AppLog.info('sync',
             'Verwaiste Sperre von $holderName übernommen (älter als ${staleAfter.inMinutes} Minuten)');
+      } else if (isOwnHostFresh) {
+        AppLog.info('sync',
+            'Frische Sperre mit eigener Gerätekennung, aber fremder Geräte-ID übernommen (z. B. nach Neuinstallation)');
       }
     }
 

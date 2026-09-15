@@ -102,20 +102,23 @@ class FilesystemMirrorSource {
   /// Die Engine liefert Temp-Dateien; sie werden an ihren Zielplatz
   /// verschoben. Existiert dort schon etwas, wird es überschrieben — die
   /// Engine hat vorher entschieden, dass die Cloud-Fassung die neuere ist.
-  Future<void> importDownloaded(List<File> files, List<String> rels) async {
-    var ok = 0;
+  Future<List<String>> importDownloaded(
+      List<File> files, List<String> rels) async {
+    final done = <String>[];
     for (var i = 0; i < files.length && i < rels.length; i++) {
       try {
         final dest = File(_toAbs(rels[i]));
         await dest.parent.create(recursive: true);
         if (await dest.exists()) await dest.delete();
         await files[i].rename(dest.path);
-        ok++;
+        done.add(rels[i]);
       } catch (e) {
         AppLog.warn('mirror', 'Import fehlgeschlagen: ${rels[i]} ($e)');
       }
     }
-    AppLog.info('mirror', '$ok/${files.length} Dateien in den Ordner importiert');
+    AppLog.info('mirror',
+        '${done.length}/${files.length} Dateien in den Ordner importiert');
+    return done;
   }
 
   /// Lokal „löschen" = in den Papierkorb verschieben.

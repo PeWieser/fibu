@@ -146,7 +146,8 @@ void main() {
       librarySizes: librarySizes,
       isCancelled: isCancelled,
       exportForUpload: exportOnce,
-      importDownloaded: (List<File> files, List<String> rels) async {},
+      importDownloaded: (List<File> files, List<String> rels) async =>
+          List<String>.of(rels),
       persistLocalState: (List<Map<String, dynamic>> state) async {},
       onProgress: (String phase, String item, int done, int total,
           {int bytesDone = 0, int bytesTotal = 0}) {

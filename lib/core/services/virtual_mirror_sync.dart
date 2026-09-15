@@ -115,7 +115,13 @@ class VirtualMirrorSyncEngine {
     Future<List<String>> Function(List<VirtualMediaItem> items)?
         deleteLocalAssets,
     required Future<File?> Function(VirtualMediaItem item) exportForUpload,
-    required Future<void> Function(List<File> files, List<String> rels) importDownloaded,
+    /// Importiert erfolgreich heruntergeladene Dateien an ihren Bestimmungsort
+    /// (Mediathek bzw. Zielordner) und liefert die rel-Pfade der Dateien
+    /// zurück, deren Import WIRKLICH geklappt hat. Nur für diese darf die
+    /// Engine eine ersetzte Altversion lokal entfernen (Replace-Flow) — sonst
+    /// könnte die einzige Kopie verschwinden, wenn der Import scheitert.
+    required Future<List<String>> Function(List<File> files, List<String> rels)
+        importDownloaded,
     required Future<void> Function(List<Map<String, dynamic>> state) persistLocalState,
     /// Zustand des VORHERIGEN Laufs (rel → Metadaten). Dient dem Verlauf
     /// dazu, „neu" von „geändert" zu unterscheiden und bei Löschungen Größe
@@ -844,23 +850,6 @@ class VirtualMirrorSyncEngine {
     // Dedup remote rels
     final seenDl = <String>{};
     toDownload.retainWhere((e) => seenDl.add(e.key));
-    // Remote-neuer: lokale Version zuerst entfernen (Replace), sonst Duplikate.
-    if (needDownloadReplace.isNotEmpty && deleteLocalAssets != null) {
-      final toReplace = needDownloadReplace.map((r) => r.local).toList();
-      onProgress?.call('delete-local', '', 0, toReplace.length);
-      try {
-        final gone = await deleteLocalAssets(toReplace);
-        for (final rel in gone) {
-          localItems.remove(rel);
-          deletedLocal++;
-        }
-        AppLog.info('sync',
-            'Replace: ${gone.length}/${toReplace.length} lokale Versionen entfernt vor Download');
-      } catch (e) {
-        AppLog.warn('sync', 'Replace-Löschung fehlgeschlagen: $e');
-      }
-    }
-
     final downloadTotal = toDownload.length;
     final downloadTotalBytes = toDownload.fold<int>(
       0,
@@ -953,9 +942,10 @@ class VirtualMirrorSyncEngine {
         AppLog.warn('sync', 'Download fehlgeschlagen: $rel ← $e');
       }
     }
+    var importedRels = const <String>[];
     if (tmpFiles.isNotEmpty) {
       try {
-        await importDownloaded(tmpFiles, tmpRels);
+        importedRels = await importDownloaded(tmpFiles, tmpRels);
       } catch (e) {
         AppLog.warn('sync', 'Import in die Mediathek fehlgeschlagen: $e');
       }
@@ -974,19 +964,51 @@ class VirtualMirrorSyncEngine {
       }
     }
 
+    // Replace-Altversionen JETZT erst entfernen: nur für Dateien, deren
+    // Ersatz nachweislich angekommen ist (Download OK UND Import OK).
+    // Vorher wurde die lokale Version VOR dem Download gelöscht — schlug der
+    // Download dazwischen fehl (Netz, Abbruch, Volllaufen), war die einzige
+    // Kopie weg und die Cloud-Fassung wurde im nächsten Lauf auch noch als
+    // „lokal gelöscht" interpretiert (docs/SZENARIEN_AUDIT_2026-09.md, M-I2).
+    if (needDownloadReplace.isNotEmpty && deleteLocalAssets != null) {
+      final imported = importedRels.toSet();
+      final safeReplace = needDownloadReplace
+          .where((r) => imported.contains(r.remoteRel))
+          .map((r) => r.local)
+          .toList();
+      if (safeReplace.isNotEmpty) {
+        onProgress?.call('delete-local', '', 0, safeReplace.length);
+        try {
+          final gone = await deleteLocalAssets(safeReplace);
+          for (final rel in gone) {
+            localItems.remove(rel);
+            deletedLocal++;
+          }
+          AppLog.info('sync',
+              'Replace: ${gone.length}/${safeReplace.length} Altversionen entfernt (nach erfolgreichem Import)');
+        } catch (e) {
+          AppLog.warn('sync', 'Replace-Löschung fehlgeschlagen: $e');
+        }
+      }
+    }
+
     // ---------- 5) Tombstones + Zustand persistieren -------------------------
     await _writeTombs(_tombstoneFile(stateRoot), merged.values.toList());
     await _writeRemoteTombs(remoteName, remotePath, merged.values.toList());
-    // Nur NACHWEISLICH gesyncte Pfade persistieren (jetzt hochgeladen oder
-    // remote vorhanden). Fehlgeschlagene Uploads bleiben draußen und werden
-    // beim nächsten Lauf erneut hochgeladen — und ein nie hochgeladener Pfad
-    // kann so niemals fälschlich als „remote gelöscht“ gelten.
+    // Nur NACHWEISLICH gesyncte Pfade persistieren: in diesem Lauf als
+    // „Inhalt liegt in der Cloud" erkannt (uploadedRels — das schließt
+    // inhalts-gleiche Treffer und Replace-Kandidaten ein) ODER exakt unter
+    // diesem Pfad remote vorhanden. Fehlgeschlagene Uploads bleiben
+    // bewusst DRAUSSEN: Sie werden beim nächsten Lauf erneut versucht — und
+    // ein nie hochgeladener Pfad kann so niemals fälschlich als „in der
+    // Cloud gelöscht" gelten und einen lokalen Löschvorschlag auslösen
+    // (docs/SZENARIEN_AUDIT_2026-09.md, M-I1). Ein Namens-Abgleich über den
+    // Mediathek-Index genügt hier NICHT als Nachweis: gleicher Name heißt
+    // nicht gleicher Inhalt, und der Index ist geräteweit (fremde Aufgaben).
     final syncedNow = <String>{
       ...uploadedRels,
       for (final rel in localItems.keys)
-        if (remoteFiles.containsKey(rel) ||
-            localSizesByBase.containsKey(rel.split('/').last.toLowerCase()))
-          rel,
+        if (remoteFiles.containsKey(rel)) rel,
     };
     // Größen aus Transfers in den persistierten State schreiben.
     for (final e in sizeUpdates.entries) {

@@ -1991,18 +1991,20 @@ class IosRcloneService implements RcloneService {
       }
     }
 
-    Future<void> importDownloaded(List<File> files, List<String> rels) async {
+    Future<List<String>> importDownloaded(
+        List<File> files, List<String> rels) async {
       final bridge = PhotoKitBridge();
-      var okCount = 0;
+      final okRels = <String>[];
       for (var i = 0; i < files.length; i++) {
         if (await bridge.importIntoLibrary(files[i],
             mimeHint: PhotoKitBridge.mimeHintFor(rels[i]),
             albumName: _albumNameFromRel(rels[i]))) {
-          okCount++;
+          okRels.add(rels[i]);
         }
       }
       AppLog.info('media',
-          '$okCount/${files.length} heruntergeladene Dateien in die Mediathek importiert');
+          '${okRels.length}/${files.length} heruntergeladene Dateien in die Mediathek importiert');
+      return okRels;
     }
 
     /// Direkte Cloud-Löschungen lokal ausführen: löscht die Assets über

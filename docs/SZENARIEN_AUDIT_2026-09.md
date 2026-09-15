@@ -52,8 +52,12 @@ Risiken liegen fast alle im **Planer/Hintergrund** und in der
 **Neuinstallation** — also genau dort, wo der Nutzer nichts sieht.
 
 **Update gleiche Runde:** Die ❌-Ursachen N1–N5 und die sinnvollen ⚠️-Befunde
-wurden direkt behoben — Zuordnung und Umsetzung in Abschnitt O. Die Bewertung
-der Tabelle oben beschreibt den **Audit-Zustand vor den Fixes**.
+wurden direkt behoben — Zuordnung und Umsetzung in Abschnitt O. Ein
+dedizierter Zweitdurchgang des iOS-Spiegelmodus (Abschnitt P) fand zwei
+weitere Lücken: M-I1 (falscher „gesynct"-Nachweis → falsche Löschvorschläge,
+❌) und M-I2 (Replace löscht lokale Fassung vor dem Download) — beide
+ebenfalls behoben. Die Bewertung der Tabelle oben beschreibt den
+**Audit-Zustand vor den Fixes**.
 
 ---
 
@@ -445,3 +449,47 @@ buchen, und Root-Ziele dürfen nur noch eine `.fibu/lock.json` erzeugen.
 - Ob `flutter analyze`/`flutter test` auf `c702ceb` grün sind — die CI der
   Workflows läuft bei jedem Push; letzter dokumentierter Stand auf `main`:
   grün (`STRESSTEST_DAU.md`, Nachtrag 2026-09-05).
+
+---
+
+## P. iOS-Spiegelmodus: dedizierter Zweitdurchgang
+
+Nachfrage-gemäß wurde der iOS-Spiegelmodus (`_runVirtualMirrorSync` →
+`VirtualMirrorSyncEngine.sync`, `ios_rclone_service.dart:1896 ff.`,
+`virtual_mirror_sync.dart:106 ff.`) Ende-zu-Ende neu durchlaufen — Scan,
+Abgleich, Upload, Tombstones, Lösch-Dialoge, Download/Import, Persistenz —
+und gegen die Szenarien-Tabellen geprüft. Zusätzlich zu den bereits
+dokumentierten Fällen (Abschnitte B, C, D, E, G, H, J) wurden dabei folgende
+Pfade explizit verifiziert:
+
+| Szenario | Ergebnis |
+|---|---|
+| Album wird umbenannt/gelöscht, Fotos bleiben | ✅ | Pfad-Anker über Asset-ID (`previousRelByAsset`, `ios_rclone_service.dart:1796–1812`): rel bleibt stabil, kein Tombstone, kein Re-Upload |
+| Foto nur aus EINEM Album entfernt | ✅ | Asset existiert weiter (`fromId` ≠ null) → „vermisst" wird verworfen (`_confirmDeletions:1466 ff.`) |
+| Foto in „Zuletzt gelöscht", dann wiederhergestellt | ✅ | E2; läuft das Tombstone vorher aus, bleibt die Cloud-Kopie 30 Tage im Remote-Papierkorb, Wiederherstellung kostet einen Re-Upload |
+| Zwei Aufgaben spiegeln dasselbe Album in verschiedene Ordner | ✅ | Getrennte Scopes; Löschungen laufen je Scope über dieselbe Asset-ID-Erkennung, Cloud-Kopien landen je Ordner im Papierkorb |
+| Eingeschränkter Fotozugriff („Auswahl …") | ✅ | Lösch-Erkennung wird übersprungen statt falsch beschlossen (`_confirmDeletions`, `permissionLimited`) |
+| Hintergrund-Lauf darf nicht löschen | ✅ | Löschungen gehen in den `PendingDeletionsStore` und werden im Dashboard angeboten (J-Abschnitt) |
+| Upload schlägt fehl (Quota/Netz) mitten im Lauf | ✅ **nach Fix M-I1** | s. u. |
+| Cloud-Fassung neuer → Replace | ✅ **nach Fix M-I2** | s. u. |
+| Abbruch in jeder Phase | ✅ | `isCancelled` zwischen Dateien; Abbruchsignal wirkt in Upload-, Tombstone- und Download-Phase |
+| Quarantäne/Absturz mitten im Lauf | ✅ | Zustand wird nur am Laufende geschrieben; Teil-Uploads bleiben in der Cloud und werden per Inhaltsvergleich erkannt (kein Re-Transfer) |
+
+### Neue Befunde aus diesem Durchgang
+
+| ID | Befund | Schwere | Status |
+|---|---|---|---|
+| M-I1 | `syncedNow` nahm jeden lokalen Pfad als „gesynct" auf, sobald sein **Dateiname** im Mediathek-Index stand — unabhängig davon, ob die Datei je hochgeladen wurde. Der Zusatz-Ast widersprach dem direkt darüberstehenden Garantie-Kommentar. Folge: Schlug ein Upload fehl (Quota voll, Netzfehler), galt der Pfad trotzdem als „in der Cloud vorhanden"; im nächsten Lauf erzeugte das einen **Löschvorschlag für ein Foto, das nie gesichert war** (unterhalb der Anomalie-Bremsen, also ohne Schutz) | ❌ (potenzieller Datenverlust über den Systemdialog) | **behoben**: Ast entfernt (`virtual_mirror_sync.dart:998 ff.`); gesynct ist nur noch „Inhalt nachweislich in der Cloud" (uploadedRels) oder exakt dort vorhanden |
+| M-I2 | Replace-Flow („Cloud-Fassung neuer"): Die lokale Version wurde **vor** dem Download der neuen Fassung gelöscht. Brach der Download danach ab (Netz, Abbruch, Gerät voll), war die lokale Kopie weg (nur in „Zuletzt gelöscht") und die Cloud-Fassung wurde im nächsten Lauf als „lokal gelöscht" interpretiert → auch sie wäre in den Papierkorb gewandert | ⚠️ (nur über zwei Fehlerkanten erreichbar, aber doppelter Verlust möglich) | **behoben**: `importDownloaded` liefert jetzt die erfolgreich importierten rel-Pfade; Altversionen werden erst NACH erfolgreichem Download **und** Import entfernt (`virtual_mirror_sync.dart:948 ff., 967 ff.`; beide Plattformen: Mediathek-Import iOS, Ordner-Import Windows) |
+| M-I3 | Scheitert der Import in die Mediathek dauerhaft (z. B. Schreibrecht entzogen), wird dieselbe Cloud-Datei in jedem Lauf erneut geladen (der Erfolg wird nicht persistiert, weil das Asset nie im Scan auftaucht) | ⚠️ niedrig | dokumentiert; Lauter Fehlerlog vorhanden (`okCount`). Behebung braucht eine „bekannt, aber nicht importierbar"-Liste — bewusst nicht in dieser Runde |
+| M-I4 | Aufgaben-Bearbeitung mit geänderter Album-Auswahl erzeugt einen neuen Zustands-Scope; darin sind die `blocked`-Mengen des alten Scopes nicht mehr wirksam (Dateien, deren Cloud-Löschung der Nutzer abgelehnt hatte, könnten erneut angeboten werden). Datenverlust ausgeschlossen (Dialog), allenfalls lästig | ⚠️ niedrig | dokumentiert; `_adoptLegacyGuards` übernimmt blocked/adopted nur aus dem ALTEN aufgabenübergreifenden Zustand, nicht zwischen Scopes |
+| M-I5 | Die Adoptions-Flagge (`markMirrorAdoption`) liegt geräteweit im Basisordner und wird vom NÄCHSTEN Mirror-Lauf VERBRAUCHT — unabhängig davon, ob der Lauf zur importierten Aufgabe gehört. Im Eine-Cloud-Modell unkritisch; bei mehreren Aufgaben theoretisch Fehl-Adoption ohne Schaden (Adoption lädt nichts, sie verhindert nur Re-Downloads) | ⚠️ niedrig | dokumentiert |
+| M-I6 | Geteilte Alben und reine Foto-Stream-Inhalte erscheinen nicht im Scan (`getAssetPathList` liefert sie nicht) — sie werden nicht gesichert | ⚠️ niedrig | dokumentiert (iOS-Eigenheit, keine Datenverlust-Kante) |
+| M-I7 | `library_index.json` wächst unbegrenzt (Name+Größe je gesyncter Datei, nie bereinigt); bei sehr großen Mediatheken über Jahre ein langsam wachsendes JSON | ⚠️ niedrig | dokumentiert |
+| M-I8 | Scope-Schlüssel ist ein 32-bit-FNV-Hash; eine Kollision zweier Aufgaben würde deren Zustände vermischen. Theoretisch (Geburtstags-Grenze ~77 Tsd. Aufgaben), praktisch ausgeschlossen | Hinweis | dokumentiert |
+| M-I9 | Live-Photo-/RAW-Paar-Hälften (E12) — unverändert Gerätetest nötig | ⚠️ | wie E12 |
+
+Alle übrigen Spiegel-Pfade (Tombstone-Replay, Konflikt-Kopien,
+Umbenennungs-Erkennung, Anomalie-Bremsen, Systemdialog-Bündelung,
+Remote-Papierkorb, Adoptions-Moduswechsel) wurden gegen den aktuellen Code
+bestätigt und entsprechen den Abschnitten C/D/E.

@@ -427,18 +427,15 @@ class SchedulerService {
       for (final e in buffered) {
         handle(e);
       }
-      if (!completion.isCompleted) {
-        // Sicherheitsnetz: Ein Lauf, der nie ein End-Ereignis meldet, darf
-        // den Planer nicht für immer blockieren. Nach dem Zeitdeckel gilt
-        // der Lauf als fehlgeschlagen und wird später nachgeholt.
-        await completion.future.timeout(const Duration(hours: 6),
-            onTimeout: () {
-          AppLog.warn('scheduler',
-              'Zeitdeckel erreicht — Lauf gilt als fehlgeschlagen');
-          return false;
-        });
-      }
-      return completion.isCompleted ? (completion.future.value ?? false) : false;
+      // Sicherheitsnetz: Ein Lauf, der nie ein End-Ereignis meldet, darf
+      // den Planer nicht für immer blockieren. Nach dem Zeitdeckel gilt
+      // der Lauf als fehlgeschlagen und wird später nachgeholt.
+      return await completion.future.timeout(const Duration(hours: 6),
+          onTimeout: () {
+        AppLog.warn('scheduler',
+            'Zeitdeckel erreicht — Lauf gilt als fehlgeschlagen');
+        return false;
+      });
     } finally {
       await sub.cancel();
     }

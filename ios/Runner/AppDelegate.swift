@@ -67,6 +67,18 @@ import Rclone
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  /// Lokale Mitteilungen auch im Vordergrund als Banner zeigen (Standard der
+  /// Basisklasse unterdrückt sie dort). Überschrieben, weil
+  /// `FlutterAppDelegate` die Methode bereits mitbringt.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .sound])
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RcloneBridge") {
@@ -381,14 +393,4 @@ final class NotificationsChannel: NSObject {
   }
 }
 
-/// Damit Mitteilungen auch im Vordergrund als Banner erscheinen.
-extension AppDelegate: UNUserNotificationCenterDelegate {
-  func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification,
-    withCompletionHandler completionHandler:
-      @escaping (UNNotificationPresentationOptions) -> Void
-  ) {
-    completionHandler([.banner, .sound])
-  }
-}
+

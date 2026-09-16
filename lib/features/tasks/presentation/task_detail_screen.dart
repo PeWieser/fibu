@@ -11,6 +11,7 @@ import '../../../core/localization/app_strings.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
@@ -42,6 +43,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   final Set<String> _editAlbumSelection = {};
   List<_EditAlbumOption> _editAlbumOptions = [];
   bool _editAlbumsLoading = false;
+
+  /// Foto-Berechtigung fehlt: leere Liste mit echtem Grund statt
+  /// „Keine Alben gefunden" (Audit Fehlermeldungen, E-T3).
+  bool _editAlbumsDenied = false;
   SyncMode _editSyncMode = SyncMode.incremental;
   bool _editIsMediaSource = true;
 
@@ -102,7 +107,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   }
 
   Future<void> _loadEditAlbums() async {
-    setState(() => _editAlbumsLoading = true);
+    setState(() {
+      _editAlbumsLoading = true;
+      _editAlbumsDenied = false;
+    });
     try {
       final ps = await PhotoManager.requestPermissionExtend();
       if (ps.isAuth || ps.hasAccess) {
@@ -124,7 +132,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           _editAlbumsLoading = false;
         });
       } else {
-        if (mounted) setState(() => _editAlbumsLoading = false);
+        if (mounted) {
+          setState(() {
+            _editAlbumsLoading = false;
+            _editAlbumsDenied = true;
+          });
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _editAlbumsLoading = false);
@@ -297,10 +310,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         });
       }
     } catch (e) {
+      AppLog.warn('tasks', 'Sync-Start fehlgeschlagen: $e');
       if (mounted) {
+        // Die Engine wirft lokalisierte Meldungen als StateError
+        // („Bad state:"-Vorspann); alles andere wird zur freundlichen
+        // Standardmeldung (Design-Richtlinie Fehlermeldungen).
+        final raw = e.toString().replaceAll('Exception: ', '').trim();
+        final msg = raw.startsWith('Bad state: ')
+            ? raw.substring('Bad state: '.length)
+            : strings.syncErrorGeneric;
         setState(() {
           _isSyncing = false;
-          _syncMessage = '${strings.error}: $e';
+          _syncMessage = msg;
         });
       }
     }
@@ -455,9 +476,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               '${strings.purgeScopeInfo(purgeTargets)}');
         }
       } catch (e) {
+        AppLog.warn('tasks', 'Cloud-Ordner löschen fehlgeschlagen: $e');
         if (mounted) {
-          setState(() => _syncMessage =
-              '${strings.remoteFolderDeleteError} ${e.toString().replaceAll('Exception: ', '').trim()}');
+          setState(() => _syncMessage = strings.remoteFolderDeleteError);
         }
       }
     }
@@ -1258,7 +1279,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       Padding(
                         padding: EdgeInsets.all(theme.md),
                         child: Text(
-                          strings.noAlbumsFound,
+                          _editAlbumsDenied
+                              ? strings.errPhotoPermission
+                              : strings.noAlbumsFound,
                           style: TextStyle(color: theme.textSecondary, fontSize: 13),
                         ),
                       )

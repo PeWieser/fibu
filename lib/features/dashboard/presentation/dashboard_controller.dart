@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/network_status_service.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/widget_status_service.dart';
@@ -205,8 +206,20 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
   }
 
   /// Übersetzt rohe Sync-/Netzwerkfehler in klare, lokalisierte Meldungen.
+  ///
+  /// Design-Richtlinie (docs/FEHLERMELDUNGEN_AUDIT_2026-09.md): Der Nutzer
+  /// sieht IMMER eine lokalisierte, verständliche Meldung. Roher Technik-Text
+  /// (rclone-Stderr, Pfade, englische Fragmente) bleibt im Laufprotokoll und
+  /// in `fibu.log` — er landet nicht in der UI.
   String _friendlySyncError(AppStrings strings, Object error) {
     final raw = error.toString().replaceAll('Exception: ', '').trim();
+    // Die Engines werfen selbst lokalisierte Meldungen (z. B.
+    // `syncAlreadyRunning`, `errSourceFolderMissing`) — verpackt als
+    // StateError mit „Bad state:"-Vorspann. Den Vorspann entfernen, der
+    // Rest ist bereits nutzerfertig.
+    if (raw.startsWith('Bad state: ')) {
+      return raw.substring('Bad state: '.length);
+    }
     final lower = raw.toLowerCase();
     if (lower.contains('offline') ||
         lower.contains('network') ||
@@ -239,7 +252,10 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
         lower.contains('no space')) {
       return strings.syncQuotaError;
     }
-    return raw;
+    // Fallback: keine rohe Fehlermeldung in der UI — Details stehen im
+    // Laufprotokoll (state.logs) und in fibu.log.
+    AppLog.warn('sync', 'Sync-Fehler (Originaltext): $raw');
+    return strings.syncErrorGeneric;
   }
 
   /// Prüft die globalen Netzwerkregeln vor einem Sync.

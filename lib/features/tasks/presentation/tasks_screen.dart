@@ -15,6 +15,7 @@ import '../../../core/navigation/app_nav.dart';
 import '../../../theme/theme.dart';
 import '../../../core/widgets/liquid_glass.dart';
 import '../../../core/utils/ios_haptics.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/services/sync_config_service.dart';
@@ -732,6 +733,11 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
   bool _loadingAlbums = false;
   bool _loadingFolders = false;
 
+  /// Foto-Berechtigung verweigert/eingeschränkt-leer: Die Album-Liste bleibt
+  /// dann leer. „Keine Alben gefunden" wäre irreführend — stattdessen den
+  /// echten Grund zeigen (Audit Fehlermeldungen, E-T3).
+  bool _albumsPermissionDenied = false;
+
   // Zielordner: vorhandene Cloud-Ordner (Remote) durchsuchen.
   List<String> _remoteTargetFolders = [];
   bool _loadingRemoteFolders = false;
@@ -842,15 +848,20 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
 
   Future<void> _loadAlbums() async {
     try {
-      setState(() => _loadingAlbums = true);
+      setState(() {
+        _loadingAlbums = true;
+        _albumsPermissionDenied = false;
+      });
       final ps = await PhotoManager.requestPermissionExtend();
-      final List<AssetPathEntity> paths = ps.isAuth || ps.hasAccess
+      final allowed = ps.isAuth || ps.hasAccess;
+      final List<AssetPathEntity> paths = allowed
           ? await PhotoManager.getAssetPathList(type: RequestType.common, hasAll: true)
           : [];
       if (!mounted) return;
       setState(() {
         _albums = paths.map((p) => _AlbumOption(p)).toList();
         _loadingAlbums = false;
+        _albumsPermissionDenied = !allowed;
       });
       // Anzahl je Album nicht-blockierend nachladen – die Liste selbst
       // (Name + Auswahl) steht schon ab hier zur Verfügung.
@@ -1359,8 +1370,12 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       await ref
           .read(syncConfigServiceProvider)
           .writeConfigToRemote(remote, allTasks, task.targetFolderName, providerTypes);
-    } catch (_) {
-      // Nicht-blockierend: schlägt das Schreiben fehl, stört es die Task-Erstellung nicht.
+    } catch (e) {
+      // Nicht-blockierend: schlägt das Schreiben fehl, stört es die
+      // Task-Erstellung nicht. Ganz unsichtbar darf es aber nicht bleiben —
+      // ohne die Cloud-Konfiguration schlägt der Task-Import nach einer
+      // Neuinstallation fehl (Audit Fehlermeldungen, E-T2).
+      AppLog.warn('tasks', 'Cloud-Konfiguration konnte nicht geschrieben werden: $e');
     }
   }
 
@@ -2255,7 +2270,9 @@ class _TaskWizardDialogState extends ConsumerState<TaskWizardDialog> {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: theme.lg),
         child: Text(
-          strings.noAlbumsFound,
+          _albumsPermissionDenied
+              ? strings.errPhotoPermission
+              : strings.noAlbumsFound,
           textAlign: TextAlign.center,
           style: TextStyle(color: theme.textSecondary, fontSize: 13),
         ),

@@ -469,6 +469,45 @@ class AppStrings {
   String get syncLocalFullWarning => isGerman
       ? 'Nicht genug freier Speicher auf dem Gerät für den Download'
       : 'Not enough free device storage for the download';
+
+  /// Generischer Sync-Fehler: der FALLBACK der Fehler-Übersetzung. Hier darf
+  /// niemals roher Technik-Text (rclone-Stderr, Pfade, englische Fragmente)
+  /// beim Nutzer landen — die Details stehen weiterhin im Laufprotokoll und
+  /// in `fibu.log` (Design-Richtlinie Fehlermeldungen,
+  /// docs/FEHLERMELDUNGEN_AUDIT_2026-09.md).
+  String get syncErrorGeneric => isGerman
+      ? 'Synchronisierung fehlgeschlagen. Bitte erneut versuchen.'
+      : 'Sync failed. Please try again.';
+
+  /// Generischer Fehler beim Verbinden/Prüfen eines Cloud-Laufwerks.
+  String get connectionFailedGeneric => isGerman
+      ? 'Verbindung fehlgeschlagen. Bitte Eingaben und Internetverbindung prüfen.'
+      : 'Connection failed. Please check your credentials and internet connection.';
+
+  /// Cloud-Inhalte (Alben/Dateilisten) konnten nicht gelesen werden.
+  String get cloudBrowseError => isGerman
+      ? 'Cloud-Inhalte konnten nicht geladen werden. Bitte Verbindung prüfen und erneut versuchen.'
+      : 'Could not load cloud contents. Please check the connection and try again.';
+
+  /// Aktualisieren der Laufwerksliste fehlgeschlagen.
+  String get drivesRefreshError => isGerman
+      ? 'Cloud-Laufwerke konnten nicht aktualisiert werden.'
+      : 'Could not refresh the cloud drives.';
+
+  /// Laufwerks-/Speicherübersicht konnte nicht geladen werden.
+  String get drivesLoadError => isGerman
+      ? 'Cloud-Laufwerke konnten nicht geladen werden.'
+      : 'Could not load the cloud drives.';
+
+  /// Trennen eines Cloud-Laufwerks fehlgeschlagen.
+  String get driveDeleteError => isGerman
+      ? 'Das Cloud-Laufwerk konnte nicht getrennt werden. Bitte erneut versuchen.'
+      : 'The cloud drive could not be disconnected. Please try again.';
+
+  /// Übernahme einer gekoppelten Konfiguration fehlgeschlagen (Empfänger).
+  String get pairingReceiveFailed => isGerman
+      ? 'Übernehmen der Konfiguration fehlgeschlagen. Bitte die Kopplung erneut starten.'
+      : 'Applying the configuration failed. Please start pairing again.';
   String syncItemsProgress(int done, int total) =>
       isGerman ? '$done von $total Dateien' : '$done of $total files';
   String get selectAtLeastOneAlbum => isGerman
@@ -850,8 +889,8 @@ class AppStrings {
       isGerman ? 'Überprüfen …' : 'Checking…';
   String get syncStartAnalysis => isGerman ? 'Überprüfen …' : 'Checking…';
   String get errNoJobId => isGerman
-      ? 'rclone lieferte keine Job-ID zurück'
-      : 'rclone did not return a job id';
+      ? 'Sicherung konnte nicht gestartet werden. Bitte erneut versuchen.'
+      : 'Backup could not be started. Please try again.';
   String get errUnknown => isGerman ? 'Unbekannter Fehler' : 'Unknown error';
   String get errPhotoPermission => isGerman
       ? 'Kein Zugriff auf Fotos & Mediathek (Berechtigung verweigert)'

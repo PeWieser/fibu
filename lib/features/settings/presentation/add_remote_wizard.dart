@@ -311,7 +311,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
           ? '${strings.networkUnavailableError}\n$providerError'
           : strings.networkUnavailableError;
     }
-    return providerError ?? raw;
+    // Fallback: kein roher Technik-Text in der UI. Der Originalfehler steht
+    // in fibu.log; kurze Provider-Fehlercodes dürfen als Hinweiszeile
+    // ergänzt werden (sie sind die einzige „Spur" für den Support).
+    AppLog.warn('remote', 'Verbindungsfehler (Originaltext): $raw');
+    return providerError != null
+        ? '${strings.connectionFailedGeneric}\n$providerError'
+        : strings.connectionFailedGeneric;
   }
 
   Future<Map<String, String>> _buildProviderConfig() async {

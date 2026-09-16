@@ -178,6 +178,7 @@ flutter run -d android
 - [`docs/VEREINFACHUNG.md`](docs/VEREINFACHUNG.md) — simplification pass: what was removed, what was deliberately kept, and why (German).
 - [`docs/STRESSTEST_DAU.md`](docs/STRESSTEST_DAU.md) — stress-test scenario catalogue with a verdict per case (German).
 - [`docs/SZENARIEN_AUDIT_2026-09.md`](docs/SZENARIEN_AUDIT_2026-09.md) — full scenario & resilience audit incl. lifecycle/reinstall flows and platform specifics (German, 2026-09).
+- [`docs/FEHLERMELDUNGEN_AUDIT_2026-09.md`](docs/FEHLERMELDUNGEN_AUDIT_2026-09.md) — error-message audit: every error scenario, its message, and design-guideline verdict (German, 2026-09).
 - [`docs/ZEITPUNKT_WIEDERHERSTELLUNG.md`](docs/ZEITPUNKT_WIEDERHERSTELLUNG.md) — point-in-time restore: what can be recovered as of when (German).
 
 ## Continuous Integration

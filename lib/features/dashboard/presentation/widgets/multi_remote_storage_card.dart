@@ -36,8 +36,8 @@ class MultiRemoteStorageCard extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(child: material.CircularProgressIndicator()),
       ),
-      error: (err, _) =>
-          Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+      error: (err, _) => Text(strings.drivesLoadError,
+          style: TextStyle(color: theme.error)),
       data: (remotes) {
         if (remotes.isEmpty) return const SizedBox.shrink();
 

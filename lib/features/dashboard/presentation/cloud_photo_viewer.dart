@@ -117,7 +117,8 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
     } catch (e) {
       AppLog.warn('viewer', '„${photo.name}" nicht geladen: $e');
       if (mounted) {
-        setState(() => _failed[photo.cloudPath] = '$e');
+        setState(() => _failed[photo.cloudPath] =
+            ref.read(stringsProvider).fileLoadFailed);
       }
     } finally {
       if (mounted) setState(() => _loading[photo.cloudPath] = false);
@@ -144,11 +145,20 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
   }
 
   Future<void> _openInDefaultApp(ViewerPhoto photo) async {
-    await ref.read(fileViewerServiceProvider).openInDefaultApp(
+    final opened = await ref.read(fileViewerServiceProvider).openInDefaultApp(
           remoteName: widget.remote,
           remotePath: photo.cloudPath,
           fileName: photo.name,
         );
+    // Ohne Rückmeldung wirkt der Knopf „tot", wenn das Öffnen scheitert
+    // (kein Standardprogramm, Datei zu groß, Download fehlgeschlagen).
+    if (!opened && mounted) {
+      material.ScaffoldMessenger.of(context).showSnackBar(
+        material.SnackBar(
+          content: Text(ref.read(stringsProvider).fileLoadFailed),
+        ),
+      );
+    }
   }
 
   @override

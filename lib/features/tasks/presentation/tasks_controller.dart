@@ -368,8 +368,11 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
           await _saveTasks();
         }
       }
-    } catch (_) {
-      // Catch exceptions silently in unit tests (e.g. MissingPluginException for path_provider)
+    } catch (e) {
+      // In Unit-Tests erwartet (MissingPluginException für path_provider) —
+      // im Echtbetrieb aber ein Befund: korrupte/verlorene tasks.json darf
+      // nicht völlig unsichtbar bleiben (Audit Fehlermeldungen, E-T1).
+      AppLog.error('tasks', 'Aufgaben konnten nicht geladen werden: $e');
     } finally {
       // Der Ladevorgang läuft ohne await im Konstruktor an. Ist der
       // Provider-Container bis dahin entsorgt (Test-Ende, Neuaufbau der App),
@@ -428,8 +431,11 @@ class TasksListNotifier extends StateNotifier<List<BackupTask>> {
       // nächsten App-Start veraltete/leere Daten.
       unawaited(
           _ref.read(widgetStatusProvider.notifier).recomputeAndPush());
-    } catch (_) {
-      // Ignore write errors in test settings
+    } catch (e) {
+      // In Unit-Tests erwartet (MissingPluginException für path_provider).
+      // Im Echtbetrieb: Schreibfehler bedeuten, dass die Aufgabe nach einem
+      // Neustart weg ist — deshalb laut protokollieren (Audit E-T1).
+      AppLog.error('tasks', 'Aufgaben konnten nicht gespeichert werden: $e');
     }
   }
 

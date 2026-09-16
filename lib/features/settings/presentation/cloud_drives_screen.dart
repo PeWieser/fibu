@@ -12,6 +12,7 @@ import '../../dashboard/presentation/cloud_photos_screen.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/navigation/app_nav.dart';
 import '../../../core/localization/locale_provider.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/remote_registry_service.dart';
 import '../../../core/utils/format.dart';
@@ -73,8 +74,9 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
         _showNotification(context.strings.drivesRefreshed, isError: false);
       }
     } catch (e) {
+      AppLog.warn('remote', 'Laufwerke aktualisieren fehlgeschlagen: $e');
       if (mounted) {
-        _showNotification(e.toString(), isError: true);
+        _showNotification(context.strings.drivesRefreshError, isError: true);
       }
     } finally {
       if (mounted) {
@@ -312,7 +314,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
                 error: (err, _) => Padding(
                   padding: EdgeInsets.only(top: theme.xxl),
                   child: Center(
-                    child: Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+                    child: Text(strings.drivesLoadError,
+                        style: TextStyle(color: theme.error)),
                   ),
                 ),
               ),
@@ -975,7 +978,8 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       ref.invalidate(primaryQuotaProvider);
       _showNotification(strings.driveDeletedSuccess(displayName), isError: false);
     } catch (e) {
-      _showNotification(e.toString(), isError: true);
+      AppLog.warn('remote', 'Laufwerk trennen fehlgeschlagen ($displayName): $e');
+      _showNotification(context.strings.driveDeleteError, isError: true);
     } finally {
       if (mounted) {
         setState(() {

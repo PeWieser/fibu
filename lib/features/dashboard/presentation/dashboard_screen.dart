@@ -664,7 +664,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   return const MultiRemoteStorageCard();
                 },
                 loading: () => const cupertino.CupertinoActivityIndicator(),
-                error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+                error: (err, stack) => Text(strings.drivesLoadError,
+                    style: TextStyle(color: theme.error)),
               ),
               SizedBox(height: theme.xl),
               _buildPendingDeletionsIOS(context, theme, strings),
@@ -1052,7 +1053,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 return const MultiRemoteStorageCard();
               },
               loading: () => const material.CircularProgressIndicator(),
-              error: (err, stack) => Text('${strings.error}: $err', style: TextStyle(color: theme.error)),
+              error: (err, stack) => Text(strings.drivesLoadError,
+                  style: TextStyle(color: theme.error)),
             ),
             SizedBox(height: theme.xl),
             if (isSyncing) ...[

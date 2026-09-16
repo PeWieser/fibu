@@ -9,6 +9,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_strings.dart';
+import '../../../core/services/app_log_service.dart';
 import '../../../core/services/device_identity_service.dart';
 import '../../../core/services/device_pairing_service.dart';
 import '../../../core/utils/app_paths.dart';
@@ -237,10 +238,11 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       });
       await DevicePairingService.stopReceiver();
     } catch (e) {
+      AppLog.warn('pairing', 'Konfiguration übernehmen fehlgeschlagen: $e');
       if (!mounted) return;
       setState(() {
         _phase = _PairingPhase.failed;
-        _error = '$e';
+        _error = ref.read(stringsProvider).pairingReceiveFailed;
       });
     }
   }

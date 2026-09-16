@@ -135,7 +135,11 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       await _loadAlbums();
       await _refreshMissingThumbs();
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      AppLog.warn('cloud', 'Cloud-Übersicht konnte nicht geladen werden: $e');
+      if (mounted) {
+        setState(() =>
+            _error = ref.read(stringsProvider).cloudBrowseError);
+      }
     }
   }
 
@@ -182,9 +186,10 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      AppLog.warn('cloud', 'Albenliste konnte nicht geladen werden: $e');
       setState(() {
         _loading = false;
-        _error = '$e';
+        _error = ref.read(stringsProvider).cloudBrowseError;
       });
     }
   }
@@ -310,9 +315,10 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      AppLog.warn('cloud', 'Album konnte nicht geöffnet werden: $e');
       setState(() {
         _loading = false;
-        _error = '$e';
+        _error = ref.read(stringsProvider).cloudBrowseError;
       });
     }
   }
@@ -340,9 +346,10 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      AppLog.warn('cloud', '„Neueste" konnten nicht geladen werden: $e');
       setState(() {
         _loadingRecent = false;
-        _error = '$e';
+        _error = ref.read(stringsProvider).cloudBrowseError;
       });
     }
   }

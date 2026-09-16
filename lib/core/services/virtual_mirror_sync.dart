@@ -1038,6 +1038,8 @@ class VirtualMirrorSyncEngine {
       trashedRemote: trashedRemote,
       downloadedPaths: downloadedPaths,
       warnings: warnings,
+      remoteFull: skipUploads,
+      localFull: skipDownloads,
     );
   }
 

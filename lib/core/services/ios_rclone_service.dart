@@ -19,6 +19,7 @@ import 'device_identity_service.dart';
 import 'pending_deletions_store.dart';
 import 'rclone_provider_registry.dart';
 import 'rclone_service.dart';
+import 'storage_alert_service.dart';
 import 'trash_service.dart';
 
 /// Real rclone-backed service for iOS (and Android) using the gomobile
@@ -2138,6 +2139,13 @@ class IosRcloneService implements RcloneService {
     // Verlauf ins Ziel laden, damit auch andere Geräte ihn sehen. Fail-open:
     // Scheitert das, bleibt der lokale Verlauf gültig.
     await journal.publishTo(this, remoteName, remotePath, deviceId: deviceId);
+
+    // Speicher voll → Push-Benachrichtigung, damit es auch bei Hintergrund-
+    // Läufen auffällt (sonst nur Eintrag im Laufprotokoll). Streng additiv:
+    // Fehler im Benachrichtigungsweg dürfen den Lauf nicht berühren.
+    if (result.remoteFull) await StorageAlertService.cloudFull();
+    if (result.localFull) await StorageAlertService.localFull();
+
     if (!progress.isClosed) {
       final warn = result.warnings.isNotEmpty ? result.warnings.first : '';
       progress.add(RcloneProgressEvent(

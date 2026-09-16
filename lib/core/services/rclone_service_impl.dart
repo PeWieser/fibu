@@ -7,6 +7,7 @@ import 'app_log_service.dart';
 import 'change_journal_service.dart';
 import 'device_identity_service.dart';
 import 'filesystem_mirror_source.dart';
+import 'storage_alert_service.dart';
 import 'trash_service.dart';
 import 'virtual_mirror_sync.dart';
 import 'rclone_service.dart';
@@ -431,6 +432,11 @@ class WindowsRcloneService implements RcloneService {
           'Dateisystem-Spiegel fertig: ↑${result.uploaded} ↓${result.downloaded} '
           '🗑${result.trashedLocal}/${result.trashedRemote} '
           'Δ${result.deletedLocal}/${result.deletedRemote}');
+
+      // Speicher voll → Push-Benachrichtigung (Windows-Balloon), damit es
+      // auch bei Läufen ohne geöffnetes Fenster auffällt. Streng additiv.
+      if (result.remoteFull) await StorageAlertService.cloudFull();
+      if (result.localFull) await StorageAlertService.localFull();
 
       // Abbruch VOR dem Entfernen auswerten — sonst meldet ein abgebrochener
       // Lauf „abgeschlossen" (docs/SZENARIEN_AUDIT_2026-09.md, M-W3).

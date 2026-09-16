@@ -75,6 +75,14 @@ class MirrorSyncResult {
   /// voll“ — Transfers wurden dann vorsorglich übersprungen). Leer = keine.
   final List<String> warnings;
 
+  /// Der Zielspeicher (Cloud-Quota) war voll — Uploads wurden übersprungen.
+  /// Grundlage für die Push-Benachrichtigung an den Nutzer.
+  final bool remoteFull;
+
+  /// Der lokale Gerätespeicher war voll — Downloads wurden übersprungen.
+  /// Grundlage für die Push-Benachrichtigung an den Nutzer.
+  final bool localFull;
+
   const MirrorSyncResult({
     this.uploaded = 0,
     this.downloaded = 0,
@@ -84,6 +92,8 @@ class MirrorSyncResult {
     this.trashedRemote = 0,
     this.downloadedPaths = const [],
     this.warnings = const [],
+    this.remoteFull = false,
+    this.localFull = false,
   });
 
   bool get hasChanges =>

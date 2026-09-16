@@ -369,6 +369,23 @@ class SchedulerService {
     }
 
     if (id.isNotEmpty) await SchedulerRunLog.record(id, success: true);
+
+    // „Letztes Backup"-Zeit stempeln — auch für geplante Läufe. Die Zeit im
+    // Widget ist der Erfolg-Nachweis für den Nutzer: Steht dort eine frische
+    // Uhrzeit, ist der letzte Lauf durchgelaufen; bleibt sie alt, nicht.
+    // Best-effort: Ein Fehler im Widget-Status darf den Lauf nicht umfärben.
+    try {
+      final notifier = WidgetStatusNotifier(rclone: engine);
+      try {
+        await notifier.ready;
+        await notifier.reportTaskRun(id, name, taskJson: task);
+      } finally {
+        notifier.dispose();
+      }
+    } catch (e) {
+      AppLog.warn('scheduler', 'Widget-Status konnte nicht aktualisiert werden: $e');
+    }
+
     AppLog.info('scheduler',
         'Aufgabe „$name" ausgeführt ($reason), ${targets.length} Ziel(e) abgeschlossen');
     return true;

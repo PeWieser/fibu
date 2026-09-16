@@ -470,6 +470,18 @@ class AppStrings {
       ? 'Nicht genug freier Speicher auf dem Gerät für den Download'
       : 'Not enough free device storage for the download';
 
+  // --- Push-Benachrichtigungen: Speicher voll -------------------------------
+  // Erscheinen als System-Benachrichtigung (iOS Mitteilung, Windows-Balloon),
+  // damit volle Speicher auch bei Hintergrund-Läufen nicht unsichtbar bleiben.
+  String get notifStorageFullTitle =>
+      isGerman ? 'Fibu: Speicher voll' : 'Fibu: Storage full';
+  String get notifCloudFullBody => isGerman
+      ? 'Das Backup wurde angehalten: Der Speicherplatz im Cloud-Laufwerk reicht nicht aus. Bitte in der Cloud Platz schaffen.'
+      : 'Backup paused: Not enough storage space on the cloud drive. Please free up space in the cloud.';
+  String get notifLocalFullBody => isGerman
+      ? 'Der Download wurde angehalten: Der Speicherplatz auf diesem Gerät reicht nicht aus. Bitte lokal Platz schaffen.'
+      : 'Download paused: Not enough free storage on this device. Please free up local space.';
+
   /// Generischer Sync-Fehler: der FALLBACK der Fehler-Übersetzung. Hier darf
   /// niemals roher Technik-Text (rclone-Stderr, Pfade, englische Fragmente)
   /// beim Nutzer landen — die Details stehen weiterhin im Laufprotokoll und

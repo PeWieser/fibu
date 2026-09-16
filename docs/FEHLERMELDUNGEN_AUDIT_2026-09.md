@@ -154,3 +154,37 @@ Ohne Flutter-SDK in dieser Umgebung verifiziert die CI (`flutter analyze` +
 `flutter test` auf iOS- und Windows-Runnern) die Änderungen. Die manuelle
 Sichtprüfung der Meldungen (DE/EN je Gerät, Dunkelmodus, iOS-Dialoge) gehört
 in die nächste Testmatrix-Runde.
+
+---
+
+## 5. Erweiterung: Push-Benachrichtigung bei vollem Speicher (Nachfrage 2026-09-16)
+
+Bisher waren „Zielspeicher voll"/„Gerätespeicher voll" nur im Laufprotokoll
+bzw. als Endmeldung eines manuellen Laufs sichtbar — ein geplanter
+Hintergrundlauf mit vollem Speicher blieb für den Nutzer unsichtbar.
+
+**Umsetzung:**
+
+- `MirrorSyncResult` bekommt die Flags `remoteFull` (Cloud-Quota reicht
+  nicht für den Upload) und `localFull` (Gerätespeicher reicht nicht für
+  den Download) — gesetzt aus den bestehenden Vorab-Prüfungen der Engine
+  (`skipUploads`/`skipDownloads`).
+- Neuer `StorageAlertService` (`lib/core/services/storage_alert_service.dart`),
+  bewusst ohne neues Pub-Paket:
+  - **iOS:** MethodChannel `fibu/notifications` →
+    `UNUserNotificationCenter` (lokale Mitteilung, Titel „Fibu: Speicher
+    voll", Handlungsanweisung im Text). Registrierung im Haupt- UND im
+    Hintergrund-Isolate (`AppDelegate.swift`). Banner auch im Vordergrund
+    über `UNUserNotificationCenterDelegate`.
+  - **Windows:** systemeigener NotifyIcon-Balloon via PowerShell
+    (Bordmittel, keine Zusatzpakete).
+- Beide Spiegel-Engines (iOS-Mediathek und Windows-Ordner) feuern die
+  Meldung nach dem Lauf, streng additiv: Ein Fehler im
+  Benachrichtigungsweg kann den Lauf selbst nie stören.
+- Texte DE/EN: `notifStorageFullTitle`, `notifCloudFullBody`,
+  `notifLocalFullBody`.
+
+**Gleichzeitig umgesetzt:** Geplante Läufe stempeln jetzt die
+„Letztes Backup"-Zeit über `WidgetStatusNotifier.reportTaskRun` (nur bei
+Erfolg). Damit gilt die vom Nutzer akzeptierte Sichtbarkeit: Eine frische
+Uhrzeit = letzter Lauf erfolgreich; bleibt sie stehen, lief nichts durch.

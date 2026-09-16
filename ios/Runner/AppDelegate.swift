@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Security
+import UserNotifications
 #if canImport(workmanager)
 import workmanager
 #endif
@@ -48,6 +49,9 @@ import Rclone
       if let registrar = registry.registrar(forPlugin: "KeychainChannel") {
         KeychainChannel.register(with: registrar.messenger())
       }
+      if let registrar = registry.registrar(forPlugin: "NotificationsChannel") {
+        NotificationsChannel.register(with: registrar.messenger())
+      }
       if let registrar = registry.registrar(forPlugin: "LiquidGlassChannel") {
         LiquidGlassChannel.register(with: registrar)
       }
@@ -57,6 +61,9 @@ import Rclone
     // bzw. wurde entfernt; die Registrierung erfolgt automatisch.
     // WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "workmanager.background.task")
     #endif
+    // Lokale Mitteilungen (z. B. „Speicher voll") sollen auch sichtbar sein,
+    // WÄHREND die App offen ist — ohne Delegate zeigt iOS sie dann still.
+    UNUserNotificationCenter.current().delegate = self
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -70,6 +77,9 @@ import Rclone
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KeychainChannel") {
       KeychainChannel.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NotificationsChannel") {
+      NotificationsChannel.register(with: registrar.messenger())
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemInfoChannel") {
       SystemInfoChannel.register(with: registrar.messenger())
@@ -331,5 +341,54 @@ final class RcloneBridge: NSObject {
       message: "Rclone.xcframework ist nicht eingebunden. Bitte ios/scripts/build_librclone.sh ausführen.",
       details: nil))
     #endif
+  }
+}
+
+/// Channel `fibu/notifications`: lokale System-Mitteilungen aus der App
+/// heraus (aktuell: „Zielspeicher/Lokalspeicher voll"). Best-effort — ein
+/// Fehler hier darf den Sync-Lauf nie stören, deshalb antwortet `show`
+/// immer mit Erfolg und Berechtigungsprobleme bleiben folgenlos.
+final class NotificationsChannel: NSObject {
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "fibu/notifications", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "show",
+            let args = call.arguments as? [String: Any],
+            let title = args["title"] as? String,
+            let body = args["body"] as? String else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      show(title: title, body: body)
+      result(nil)
+    }
+  }
+
+  private static func show(title: String, body: String) {
+    let center = UNUserNotificationCenter.current()
+    center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+      guard granted else { return }
+      let content = UNMutableNotificationContent()
+      content.title = title
+      content.body = body
+      content.sound = .default
+      let request = UNNotificationRequest(
+        identifier: "fibu.storage.\(UUID().uuidString)",
+        content: content,
+        trigger: nil)
+      center.add(request, withCompletionHandler: nil)
+    }
+  }
+}
+
+/// Damit Mitteilungen auch im Vordergrund als Banner erscheinen.
+extension AppDelegate: UNUserNotificationCenterDelegate {
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .sound])
   }
 }

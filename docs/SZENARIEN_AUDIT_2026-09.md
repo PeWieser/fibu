@@ -493,3 +493,28 @@ Alle übrigen Spiegel-Pfade (Tombstone-Replay, Konflikt-Kopien,
 Umbenennungs-Erkennung, Anomalie-Bremsen, Systemdialog-Bündelung,
 Remote-Papierkorb, Adoptions-Moduswechsel) wurden gegen den aktuellen Code
 bestätigt und entsprechen den Abschnitten C/D/E.
+
+---
+
+## Q. Netzwerkausfall während eines laufenden Backups
+
+Nach Prüfung aller Transferpfade (Nachfrage 2026-09-16):
+
+| Phase | Verhalten bei Netzwerkverlust | Datenverlust? |
+|---|---|---|
+| Vorab-Check beim Start | Offline → Lauf startet nicht, `syncOfflineNoNetwork` (`_runJob`, `ios_rclone_service.dart`) | nein |
+| Upload (Spiegel + inkrementell) | Einzelne Datei scheitert → `AppLog.warn`, Lauf macht mit der nächsten weiter; die Datei bleibt außerhalb des „gesynct"-Zustands (M-I1) und kommt beim nächsten Lauf erneut hoch | nein |
+| Download | Wie Upload; halb geladene Temp-Dateien werden im `finally` weggeräumt | nein |
+| Cloud-Auflistung (Basis jeder Lösch-Entscheidung) | Fehler bleibt LAUT (`_listRemoteRecursive`), der Lauf scheitert insgesamt → es wird **nichts** gelöscht | nein |
+| Tombstone-Ausführung (Löschphase) | Einzelne Remote-Löschung scheitert → Warnung; das Tombstone bleibt gesetzt und wird nächstes Mal erneut versucht; die Datei wird nicht wieder heruntergeladen | nein |
+| Windows-`rclone copy` (inkrementell) | Prozess endet mit Fehler → Job-Status `failed` → freundliche Netz-Meldung über `_friendlySyncError` | nein |
+| iOS-Hintergrundlauf | iOS beendet den Lauf bei Netzverlust; nichts wird als Erfolg gebucht (H1-Fix), `runMissedSyncs`/nächster Planer-Tick holt nach | nein |
+| Cloud-Sperre | Wird im `finally` freigegeben, auch bei Fehler — kein anderes Gerät bleibt blockiert | — |
+
+**Fazit:** Ein Netzwerkausfall mitten im Lauf ist in allen Modi sicher:
+Es geht nichts verloren, nichts wird fälschlich gelöscht, Übertragenes
+bleibt in der Cloud, Nicht-Übertragenes wird nachgeholt. Einziger
+Komfort-Makel: Ein Spiegel-Lauf, der mitten im Lauf das Netz verliert,
+endet als „abgeschlossen mit weniger Transfers" statt als „fehlgeschlagen" —
+die fehlenden Dateien holt der nächste Lauf. Das Laufprotokoll/`fibu.log`
+zeigt die Einzel-Fehler.

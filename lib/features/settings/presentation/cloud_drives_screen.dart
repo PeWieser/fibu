@@ -979,7 +979,7 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
       _showNotification(strings.driveDeletedSuccess(displayName), isError: false);
     } catch (e) {
       AppLog.warn('remote', 'Laufwerk trennen fehlgeschlagen ($displayName): $e');
-      _showNotification(context.strings.driveDeleteError, isError: true);
+      _showNotification(strings.driveDeleteError, isError: true);
     } finally {
       if (mounted) {
         setState(() {

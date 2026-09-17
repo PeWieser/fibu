@@ -7,6 +7,7 @@ import 'app_log_service.dart';
 import 'change_journal_service.dart';
 import 'device_identity_service.dart';
 import 'filesystem_mirror_source.dart';
+import 'keep_awake_service.dart';
 import 'storage_alert_service.dart';
 import 'trash_service.dart';
 import 'virtual_mirror_sync.dart';
@@ -232,11 +233,13 @@ class WindowsRcloneService implements RcloneService {
       }
       _runningJobIds.add(jobId);
       SyncRunGuard.enter();
+      KeepAwakeService.enter();
       unawaited(_runFilesystemMirror(
               jobId, localPath, remoteName, remotePath, options)
           .whenComplete(() {
         _runningJobIds.remove(jobId);
         SyncRunGuard.exit();
+        KeepAwakeService.exit();
       }));
       return jobId;
     }
@@ -279,6 +282,7 @@ class WindowsRcloneService implements RcloneService {
 
     _runningJobIds.add(jobId);
     SyncRunGuard.enter();
+    KeepAwakeService.enter();
     try {
       final process = await Process.start(_executablePath, args);
       _activeProcesses[jobId] = process;
@@ -302,6 +306,7 @@ class WindowsRcloneService implements RcloneService {
         _activeProcesses.remove(jobId);
         _runningJobIds.remove(jobId);
         SyncRunGuard.exit();
+        KeepAwakeService.exit();
         _progressControllers.remove(jobId);
         if (!progressController.isClosed) progressController.close();
 
@@ -320,6 +325,7 @@ class WindowsRcloneService implements RcloneService {
     } catch (e) {
       _runningJobIds.remove(jobId);
       SyncRunGuard.exit();
+      KeepAwakeService.exit();
       _statusController.add(RcloneJobEvent(
         jobId: jobId,
         status: RcloneJobStatus.failed,

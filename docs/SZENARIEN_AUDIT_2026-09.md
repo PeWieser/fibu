@@ -518,3 +518,32 @@ Komfort-Makel: Ein Spiegel-Lauf, der mitten im Lauf das Netz verliert,
 endet als „abgeschlossen mit weniger Transfers" statt als „fehlgeschlagen" —
 die fehlenden Dateien holt der nächste Lauf. Das Laufprotokoll/`fibu.log`
 zeigt die Einzel-Fehler.
+
+---
+
+## R. Standby/Sperrbildschirm während eines Laufs (Wachhalten)
+
+Nachfrage 2026-09-17: Ein angefangener Lauf soll nicht durch den
+Auto-Sperrbildschirm einfrieren.
+
+**Umsetzung (still, ohne Meldung):**
+
+- Neuer `KeepAwakeService` mit Referenzzähler, aktiviert beim Job-Start,
+  gelöst beim Job-Ende — exakt dieselben Pfade wie der `SyncRunGuard`
+  (iOS `whenComplete`, Windows Mirror `whenComplete` bzw. `exitCode`/catch).
+- **iOS:** `isIdleTimerDisabled` über den bestehenden `fibu/system`-Kanal
+  (Registrierung auch im Hintergrund-Isolate).
+- **Windows:** `SetThreadExecutionState` (kernel32, via `dart:ffi`, ohne
+  Zusatzpaket) mit `ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED`;
+  am Laufende Rücksetzung auf `ES_CONTINUOUS`.
+- Wirkt nur, solange ein Lauf aktiv ist; nach dem Lauf gilt wieder das
+  normale Auto-Sperr-Verhalten. Für reine Hintergrundläufe
+  (BGProcessingTask) ist es wirkungslos, aber harmlos.
+- Nicht mobil-Android: ohne native Fibu-Brücke bewusst No-Op (Protokoll).
+
+**Verhalten im Standby damit:**
+| Situation | Verhalten |
+|---|---|
+| Manueller Lauf, Gerät wird nicht benutzt | Bildschirm bleibt an, Lauf läuft durch |
+| Lauf fertig | Auto-Sperre sofort wieder aktiv |
+| App wird trotzdem vom System beendet | Kein falscher Erfolg; Nachholen über Planer/`runMissedSyncs` |

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'librclone_channel.dart';
+import 'keep_awake_service.dart';
 import 'mirror_sync_engine.dart';
 import 'photo_kit_bridge.dart';
 import 'virtual_mirror_sync.dart';
@@ -633,6 +634,9 @@ class IosRcloneService implements RcloneService {
     _progressControllers[jobId] = progressController;
     _runningJobIds.add(jobId);
     SyncRunGuard.enter();
+    // Bildschirm/System wach halten, bis der Lauf fertig ist — still,
+    // ohne Meldung (Anfrage 2026-09-17).
+    KeepAwakeService.enter();
 
     _statusController.add(RcloneJobEvent(jobId: jobId, status: RcloneJobStatus.syncing));
     unawaited(_runJob(jobId, localPath, remoteName, remotePath, options, progressController)
@@ -640,6 +644,7 @@ class IosRcloneService implements RcloneService {
       _runningJobIds.remove(jobId);
       _cancelledJobs.remove(jobId);
       SyncRunGuard.exit();
+      KeepAwakeService.exit();
     }));
     return jobId;
   }

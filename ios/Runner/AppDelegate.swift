@@ -52,6 +52,9 @@ import Rclone
       if let registrar = registry.registrar(forPlugin: "NotificationsChannel") {
         NotificationsChannel.register(with: registrar.messenger())
       }
+      if let registrar = registry.registrar(forPlugin: "SystemInfoChannel") {
+        SystemInfoChannel.register(with: registrar.messenger())
+      }
       if let registrar = registry.registrar(forPlugin: "LiquidGlassChannel") {
         LiquidGlassChannel.register(with: registrar)
       }
@@ -126,6 +129,21 @@ final class SystemInfoChannel: NSObject {
                               message: "free disk space unavailable",
                               details: nil))
         }
+      case "setIdleTimerDisabled":
+        // Bildschirm während eines Laufs anlassen (Anfrage 2026-09-17):
+        // true = Auto-Sperre blockiert, false = normales Verhalten. Läuft
+        // ohne UI/Meldung und nur, solange ein Sync aktiv ist.
+        guard let args = call.arguments as? [String: Any],
+              let disabled = args["disabled"] as? Bool else {
+          result(FlutterError(code: "bad_args",
+                              message: "disabled missing",
+                              details: nil))
+          return
+        }
+        DispatchQueue.main.async {
+          UIApplication.shared.isIdleTimerDisabled = disabled
+        }
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }

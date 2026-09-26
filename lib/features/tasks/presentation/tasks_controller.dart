@@ -161,6 +161,30 @@ class BackupTask {
     return const [];
   }
 
+  /// Speichert eine gewählte Album-Menge — DIE Kodierung für
+  /// „Fotos & Videos" (`all:A|B`), sortiert und gespiegelt in
+  /// [selectedAlbums].
+  ///
+  /// Alphabetisch sortiert: Die Tipp-Reihenfolge darf nicht eine andere
+  /// Mirror-Kennung (und damit einen anderen Spiegel-Zustand) erzeugen.
+  ///
+  /// **Leer bedeutet bewusst „keine Alben gewählt"** (`sourcePath: ''` —
+  /// eine sichtbare Lücke, kein stilles „alles sichern"). „Alle Alben" ist
+  /// eine ausdrückliche Entscheidung und steht in [copyWithAllAlbums].
+  BackupTask copyWithAlbums(Iterable<String> albums) {
+    final List<String> ordered = albums.toSet().toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return copyWith(
+      sourcePath: ordered.isEmpty ? '' : 'all:${ordered.join('|')}',
+      selectedAlbums: ordered,
+    );
+  }
+
+  /// „Alle Alben" — auch solche, die es künftig gibt, nicht nur die heute
+  /// sichtbaren. Genau eine Kodierung: `all`, ohne Namensliste.
+  BackupTask copyWithAllAlbums() =>
+      copyWith(sourcePath: 'all', selectedAlbums: const []);
+
   /// Kurze, menschenlesbare Beschreibung der Quelle für die Liste/Detail-Ansicht.
   /// Höchstens so viele Album-Namen in der Übersicht, danach „, N+".
   static const int maxAlbumNamesInSummary = 2;

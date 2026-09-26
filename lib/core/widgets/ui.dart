@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 
+import '../localization/app_strings.dart';
 import '../../theme/theme.dart';
 import 'windows_controls.dart';
 
@@ -280,7 +281,11 @@ class Ui {
               ],
               cancelButton: cupertino.CupertinoActionSheetAction(
                 onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(material.MaterialLocalizations.of(ctx).cancelButtonLabel),
+                // CupertinoApp hat KEINE MaterialLocalizations — der Griff
+                // auf `MaterialLocalizations.cancelButtonLabel` warf hier
+                // beim Öffnen des Blatts. Die aktive App-Sprache liefert den
+                // Text (AppStrings.current hält stringsProvider aktuell).
+                child: Text(AppStrings.current.cancel),
               ),
             ),
           );

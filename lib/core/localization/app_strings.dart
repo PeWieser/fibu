@@ -561,6 +561,18 @@ class AppStrings {
       ? 'Nur eine aktive Sicherung läuft zum Zeitplan.'
       : 'Only an active backup runs on schedule.';
 
+  // --- Sicherung auf iOS: Alben statt Ordner, kein Uhrzeit-Wähler ---
+  //
+  // Auf iOS ist die Mediathek die Quelle — es gibt nur Fotoalben zu wählen,
+  // keine Ordner. Und wann gesichert wird, entscheidet iOS (BGProcessingTask);
+  // eine Uhrzeit anzubieten wäre eine Zusage, die die App nicht halten kann.
+  String get backupAlbums => isGerman ? 'Fotoalben' : 'Photo albums';
+  String get backupAllAlbums => isGerman ? 'Alle Alben' : 'All albums';
+  String get backupAlbumsNeeded => isGerman ? 'Alben wählen' : 'Choose albums';
+  String get backupCreateHintAlbums => isGerman
+      ? 'Alben wählen — Ziel ist die verbundene Cloud.'
+      : 'Pick albums — the target is the connected cloud.';
+
   String get systemSection => isGerman ? 'System' : 'System';
 
   // --- Vorschaubilder (Cloud-Explorer) ---

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
@@ -10,6 +12,9 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/services/app_log_service.dart';
 import '../../../core/services/file_viewer_service.dart';
 import '../../../core/services/rclone_provider.dart';
+import '../../../core/services/thumbnail_creator.dart';
+import '../../../core/services/thumbnail_pipeline.dart';
+import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/app_paths.dart';
 import '../../../core/utils/format.dart';
 import '../../../theme/theme.dart';
@@ -70,6 +75,11 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
   final Map<String, bool> _loading = {};
   final Map<String, String> _failed = {};
 
+  /// cloudPath → Vorschaubild aus dem Cache. Zeigt beim Auswählen sofort
+  /// ein Bild, während das Original noch lädt — und null, wenn es keins
+  /// gibt (dann bleibt der Lade-Kreis ehrlich).
+  final Map<String, Uint8List?> _thumbs = {};
+
   @override
   void initState() {
     super.initState();
@@ -101,10 +111,14 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
       return;
     }
     setState(() => _loading[photo.cloudPath] = true);
+    // Vorschaubild aus dem Cache — parallel zum Original, damit die Seite
+    // beim Öffnen sofort etwas zeigt („sobald man ein Bild auswählt“).
+    unawaited(_loadThumb(photo));
     try {
       final file = await _localOriginal(photo.rel);
       if (file != null) {
         if (mounted) setState(() => _loaded[photo.cloudPath] = file);
+        unawaited(_storeThumb(photo, file));
         return;
       }
       final support = await appSupportRoot();
@@ -114,6 +128,7 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
       await ref.read(rcloneServiceProvider).downloadFile(
           widget.remote, photo.cloudPath, target.path);
       if (mounted) setState(() => _loaded[photo.cloudPath] = target);
+      unawaited(_storeThumb(photo, target));
     } catch (e) {
       AppLog.warn('viewer', '„${photo.name}" nicht geladen: $e');
       if (mounted) {
@@ -141,6 +156,47 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
       return await asset?.file;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Vorschaubild aus dem lokalen Cache — schnell und ohne Netz.
+  Future<void> _loadThumb(ViewerPhoto photo) async {
+    if (_thumbs.containsKey(photo.cloudPath)) return;
+    try {
+      final support = await appSupportRoot();
+      final cache = ThumbnailCache(Directory('${support.path}/thumb_cache'));
+      final bytes = await cache.read(photo.rel);
+      if (mounted) setState(() => _thumbs[photo.cloudPath] = bytes);
+    } catch (_) {
+      _thumbs[photo.cloudPath] = null;
+    }
+  }
+
+  /// Vorschaubild aus der geladenen Datei erzeugen und ablegen: lokal für
+  /// die nächste Ansicht, in `.fibu/thumbs/` für die anderen Geräte.
+  ///
+  /// Nur für Bilder — ein Video für sein Miniaturbild zu laden, wäre genau
+  /// das Datenvolumen, das die Automatik sparen soll ([ThumbnailService.canGenerateFrom]).
+  Future<void> _storeThumb(ViewerPhoto photo, File file) async {
+    try {
+      if (!ThumbnailService.canGenerateFrom(photo.rel)) return;
+      // Dienste VOR den ersten Aufrufen holen: Das Widget darf längst weg
+      // sein, wenn das Vorschaubild fertig ist.
+      final rclone = ref.read(rcloneServiceProvider);
+      final bytes = await ThumbnailCreator.fromFile(file);
+      if (bytes == null) return;
+      final support = await appSupportRoot();
+      final cache = ThumbnailCache(Directory('${support.path}/thumb_cache'));
+      await ThumbnailPipeline.run(
+        rclone: rclone,
+        remoteName: widget.remote,
+        rels: [photo.rel],
+        cache: cache,
+        createFor: (_) async => bytes,
+      );
+      if (mounted) setState(() => _thumbs[photo.cloudPath] = bytes);
+    } catch (_) {
+      // Das Vorschaubild ist ein Bonus — nie ein Fehler.
     }
   }
 
@@ -251,7 +307,14 @@ class _CloudPhotoViewerState extends ConsumerState<CloudPhotoViewer> {
                   ],
                 ),
               )
-            : const material.CircularProgressIndicator(color: Color(0xFFEDEDED)),
+            : (_thumbs[photo.cloudPath] != null
+                ? Image.memory(
+                    _thumbs[photo.cloudPath]!,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                  )
+                : const material.CircularProgressIndicator(
+                    color: Color(0xFFEDEDED))),
       );
     }
 

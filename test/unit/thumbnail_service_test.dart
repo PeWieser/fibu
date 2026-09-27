@@ -241,4 +241,29 @@ void main() {
           reason: 'Ein Fehler darf die Warteschlange nicht blockieren');
     });
   });
+
+  group('Erzeugen aus der Datei', () {
+    test('Bilder ja — ihre Datei lohnt das automatische Holen', () {
+      for (final rel in [
+        'Photos/A/IMG_1.jpg',
+        'Photos/A/IMG_2.HEIC',
+        'Photos/A/IMG_3.png',
+        'Photos/A/IMG_4.webp',
+      ]) {
+        expect(ThumbnailService.canGenerateFrom(rel), isTrue, reason: rel);
+      }
+    });
+
+    test('Videos und Fremdes nein — kein Film für ein Miniaturbild', () {
+      for (final rel in [
+        'Photos/A/Clip.mp4',
+        'Photos/A/Clip.MOV',
+        'Photos/A/Dokument.pdf',
+        'Photos/A/ohne_endung',
+        'Photos/A/ende.',
+      ]) {
+        expect(ThumbnailService.canGenerateFrom(rel), isFalse, reason: rel);
+      }
+    });
+  });
 }

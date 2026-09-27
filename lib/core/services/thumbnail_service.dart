@@ -82,6 +82,23 @@ class ThumbnailService {
     return r;
   }
 
+  /// Lässt sich ein Vorschaubild aus der Datei selbst erzeugen?
+  ///
+  /// Ja für Bilder (der Decoder kann sie). Nein für Videos und alles andere:
+  /// Ein Film müsste für sein Miniaturbild komplett geladen werden — das
+  /// wäre genau das Datenvolumen, das die Automatik sparen soll. Lokal
+  /// vorhandene Videos bekommen ihr Vorschaubild trotzdem (photo_manager
+  /// erzeugt es nativ, ohne Download).
+  static bool canGenerateFrom(String rel) {
+    final dot = rel.lastIndexOf('.');
+    if (dot < 0 || dot == rel.length - 1) return false;
+    final ext = rel.substring(dot + 1).toLowerCase();
+    const imageExts = {
+      'jpg', 'jpeg', 'png', 'gif', 'heic', 'heif', 'webp', 'bmp', 'tif', 'tiff',
+    };
+    return imageExts.contains(ext);
+  }
+
   /// Woher das Vorschaubild für eine Aufnahme kommt.
   static ThumbSource resolveSource({
     required bool existsLocally,

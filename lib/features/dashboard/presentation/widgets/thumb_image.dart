@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_log_service.dart';
 import '../../../../core/services/rclone_provider.dart';
+import '../../../../core/services/sync_config_service.dart';
+import '../../../../core/services/thumbnail_creator.dart';
 import '../../../../core/services/thumbnail_pipeline.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/app_paths.dart';
@@ -16,7 +18,10 @@ import '../../../../core/utils/app_paths.dart';
 ///  1. liegt die Aufnahme auf dem Gerät → Vorschaubild daraus, kein Netz
 ///  2. Cache
 ///  3. `.fibu/thumbs/` in der Cloud
-///  4. [fallback] — die Dateikachel
+///  4. erzeugen — automatisch für die sichtbare Kachel (Bilder; lokal vor
+///     Download) und in `.fibu/thumbs/` ablegen, damit es die anderen
+///     Geräte nicht noch einmal suchen müssen
+///  5. [fallback] — die Dateikachel
 ///
 /// Lädt höchstens [ThumbnailQueue.maxConcurrent] gleichzeitig und bricht ab,
 /// wenn die Kachel nicht mehr im Baum ist.
@@ -83,23 +88,64 @@ class _ThumbImageState extends ConsumerState<ThumbImage> {
         final cached = await cache.read(widget.rel);
         if (cached != null) return cached;
 
-        // 3) Cloud
-        final tmp = File('${support.path}/thumb_download_${widget.rel.hashCode}.jpg');
+        // 3) Cloud — ein Vorschaubild, das schon einmal erzeugt wurde.
         try {
-          await ref.read(rcloneServiceProvider).downloadFile(
-              widget.remote, await ThumbnailService.cloudPath(widget.rel), tmp.path);
-          final downloaded = await cache.read(widget.rel);
-          if (downloaded != null) return downloaded;
-          final bytes = await tmp.readAsBytes();
+          final tmp = File(
+              '${support.path}/thumb_download_${widget.rel.hashCode}.jpg');
           try {
-            await cache.write(widget.rel, bytes);
-          } catch (_) {}
-          return bytes;
-        } finally {
-          try {
-            if (await tmp.exists()) await tmp.delete();
-          } catch (_) {}
+            await ref.read(rcloneServiceProvider).downloadFile(
+                widget.remote, await ThumbnailService.cloudPath(widget.rel), tmp.path);
+            final downloaded = await cache.read(widget.rel);
+            if (downloaded != null) return downloaded;
+            final bytes = await tmp.readAsBytes();
+            try {
+              await cache.write(widget.rel, bytes);
+            } catch (_) {}
+            return bytes;
+          } finally {
+            try {
+              if (await tmp.exists()) await tmp.delete();
+            } catch (_) {}
+          }
+        } catch (_) {
+          // Kein Vorschaubild vorhanden — die Kachel erzeugt es jetzt
+          // selbst, statt auf einen manuellen Knopf zu warten.
         }
+
+        // 4) Erzeugen: sichtbare Kacheln bekommen ihre Vorschau automatisch.
+        //    Lokale Quelle zuerst; nur was allein in der Cloud liegt, kostet
+        //    einen Download des Originals — und Bilder werden auch wieder
+        //    in `.fibu/thumbs/` abgelegt, damit die anderen Geräte sparen.
+        if (!ThumbnailService.canGenerateFrom(widget.rel)) return null;
+        await ThumbnailPipeline.run(
+          rclone: ref.read(rcloneServiceProvider),
+          remoteName: widget.remote,
+          rels: [widget.rel],
+          cache: cache,
+          createFor: (String rel) async {
+            final String? id = widget.assetIds[rel];
+            if (id != null && id.isNotEmpty) {
+              final local = await LocalMediaResolver.create(assetId: id);
+              if (local != null) return local;
+            }
+            final orig =
+                File('${support.path}/thumb_orig_${widget.rel.hashCode}.tmp');
+            try {
+              await ref.read(rcloneServiceProvider).downloadFile(
+                  widget.remote,
+                  '${SyncConfigService.defaultRemoteFolder}/$rel',
+                  orig.path);
+              return await ThumbnailCreator.fromFile(orig);
+            } catch (_) {
+              return null;
+            } finally {
+              try {
+                if (await orig.exists()) await orig.delete();
+              } catch (_) {}
+            }
+          },
+        );
+        return await cache.read(widget.rel);
       });
 
       if (!mounted || bytes == null) return;

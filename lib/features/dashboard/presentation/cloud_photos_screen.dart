@@ -13,10 +13,7 @@ import '../../../core/services/app_log_service.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/rclone_service.dart';
 import '../../../core/services/remote_registry_service.dart';
-import '../../../core/services/thumbnail_creator.dart';
 import '../../../core/services/thumbnail_pipeline.dart';
-import '../../../core/services/thumbnail_service.dart';
-import '../../../core/utils/app_paths.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/theme.dart';
@@ -66,12 +63,13 @@ class _Photo {
 /// (`fibu-backup/Photos/<Album>/…`) ist dabei nur die Datenquelle, nicht die
 /// Darstellung.
 ///
-/// **Bewusste Grenze: keine Vorschaubilder.** Ein Miniaturbild müsste pro
-/// Datei aus der Cloud geladen werden — bei einer Mediathek mit mehreren
-/// tausend Aufnahmen wäre das ein Datenvolumen, das niemand erwarten würde,
-/// und generische Backends (WebDAV, S3, SFTP) liefern keine serverseitigen
-/// Thumbnails. Die Kachel zeigt deshalb Name und Größe; Antippen lädt die
-/// Datei und öffnet sie mit dem Systembetrachter (Quick Look auf iOS).
+/// **Vorschaubilder sind automatisch.** Was im Raster liegt, lädt seine
+/// Vorschau von selbst ([ThumbImage], lokal vor Cache vor Cloud — und was es
+/// nirgends gibt, wird für die sichtbare Kachel erzeugt). Beim Öffnen zeigt
+/// die Vollbild-Ansicht sofort das Vorschaubild, während das Original lädt.
+/// Bewusst bleibt es beim Sichtbaren: Keine Massenarbeit für die ganze
+/// Mediathek, keine Downloads für Videos — nur was der Nutzer wirklich
+/// sehen will.
 class CloudPhotosScreen extends ConsumerStatefulWidget {
   final String? initialRemote;
 
@@ -106,13 +104,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
   /// damit die Kacheln nicht jede für sich die Spiegel-Zustände lesen.
   Map<String, String> _assetIds = const {};
 
-  /// Aufnahmen ohne Vorschaubild in der Cloud — für den Hinweis.
-  List<String> _missingThumbs = const [];
-  bool _thumbsDismissed = false;
-  bool _creatingThumbs = false;
-  int _thumbsDone = 0;
-  int _thumbsTotal = 0;
-
   @override
   void initState() {
     super.initState();
@@ -133,7 +124,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
       setState(() => _remote ??= remotes.first);
       _assetIds = await LocalMediaResolver.loadAssetIds();
       await _loadAlbums();
-      await _refreshMissingThumbs();
     } catch (e) {
       AppLog.warn('cloud', 'Cloud-Übersicht konnte nicht geladen werden: $e');
       if (mounted) {
@@ -202,97 +192,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
     return cloudPath.startsWith(prefix)
         ? cloudPath.substring(prefix.length)
         : cloudPath;
-  }
-
-  /// Zählt, für welche Aufnahmen das Vorschaubild in der Cloud fehlt.
-  ///
-  /// Lokal vorhandene Aufnahmen zählen mit — ihr Vorschaubild entsteht aus
-  /// der lokalen Datei und muss für die anderen Geräte trotzdem hoch.
-  Future<void> _refreshMissingThumbs() async {
-    final remote = _remote;
-    if (remote == null) return;
-    try {
-      final service = ref.read(rcloneServiceProvider);
-      final cloudThumbs =
-          await ThumbnailPipeline.listCloudThumbs(service, remote);
-      final rels = <String>[];
-      await _collectRels(remote, kFibuPhotosRoot, rels);
-      final missing = await ThumbnailService.backfillList(
-        rels: rels,
-        cloudFileNames: cloudThumbs,
-        // Bewusst immer false: Auch lokal vorhandene Aufnahmen brauchen ihr
-        // Vorschaubild in der Cloud — für die anderen Geräte.
-        existsLocally: (rel) => false,
-      );
-      if (!mounted) return;
-      setState(() => _missingThumbs = missing.map((e) => e.rel).toList());
-    } catch (e) {
-      AppLog.warn('thumbs', 'Vorschaubild-Bestand nicht lesbar: $e');
-    }
-  }
-
-  Future<void> _collectRels(
-      String remote, String path, List<String> out) async {
-    final entries = await ref.read(rcloneServiceProvider).listFiles(remote, path);
-    for (final entry in entries) {
-      if (entry.isDir) {
-        await _collectRels(remote, '$path/${entry.name}', out);
-      } else {
-        out.add(_relOf('$path/${entry.name}'));
-      }
-    }
-  }
-
-  /// Vorschaubilder erzeugen und hochladen. Mit Fortschritt und Abbruch.
-  Future<void> _createThumbnails() async {
-    final remote = _remote;
-    if (remote == null || _creatingThumbs || _missingThumbs.isEmpty) return;
-    setState(() {
-      _creatingThumbs = true;
-      _thumbsDone = 0;
-      _thumbsTotal = _missingThumbs.length;
-    });
-    try {
-      final support = await appSupportRoot();
-      final cache = ThumbnailCache(Directory('${support.path}/thumb_cache'));
-      final service = ref.read(rcloneServiceProvider);
-      final rels = List<String>.from(_missingThumbs);
-      await ThumbnailPipeline.run(
-        rclone: service,
-        remoteName: remote,
-        rels: rels,
-        cache: cache,
-        createFor: (rel) async {
-          // 1) lokale Aufnahme — der billige Weg
-          final assetId = _assetIds[rel];
-          if (assetId != null && assetId.isNotEmpty) {
-            final local = await LocalMediaResolver.create(assetId: assetId);
-            if (local != null) return local;
-          }
-          // 2) nur in der Cloud: Original holen, Vorschaubild bauen
-          final tmp = File('${support.path}/backfill_${rel.hashCode}.tmp');
-          try {
-            await service.downloadFile(
-                remote, '$kFibuBackupRoot/$rel', tmp.path);
-            return await ThumbnailCreator.fromFile(tmp);
-          } catch (_) {
-            return null;
-          } finally {
-            try {
-              if (await tmp.exists()) await tmp.delete();
-            } catch (_) {}
-          }
-        },
-        onProgress: (done, total) {
-          if (mounted) setState(() => _thumbsDone = done);
-        },
-      );
-      await _refreshMissingThumbs();
-    } catch (e) {
-      AppLog.warn('thumbs', 'Vorschaubilder nicht erzeugt: $e');
-    } finally {
-      if (mounted) setState(() => _creatingThumbs = false);
-    }
   }
 
   Future<void> _openAlbum(_Album album) async {
@@ -448,10 +347,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
           _segmented(theme, strings, platform)
         else
           _backRow(theme, strings, platform),
-        if (_missingThumbs.isNotEmpty && !_thumbsDismissed) ...[
-          SizedBox(height: theme.md),
-          _thumbsBanner(theme, strings),
-        ],
         SizedBox(height: theme.md),
       ],
     );
@@ -841,54 +736,6 @@ class _CloudPhotosScreenState extends ConsumerState<CloudPhotosScreen> {
           },
         );
       },
-    );
-  }
-
-  /// Hinweis, dass Vorschaubilder fehlen — mit Knopf, nicht automatisch.
-  ///
-  /// Der Nutzer entscheidet, wann Datenvolumen fließt. Der Hinweis steht
-  /// dort, wo der Mangel sichtbar wird.
-  Widget _thumbsBanner(AppThemeData theme, AppStrings strings) {
-    return Container(
-      padding: EdgeInsets.all(theme.md),
-      decoration: BoxDecoration(
-        color: theme.accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(theme.radiusSm),
-        border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _creatingThumbs
-                ? '${strings.thumbsCreating} $_thumbsDone/$_thumbsTotal'
-                : strings.thumbsMissing(_missingThumbs.length),
-            style: TextStyle(
-                color: theme.textPrimary, fontSize: 13, height: 1.35),
-          ),
-          SizedBox(height: theme.sm),
-          Row(
-            children: [
-              if (_creatingThumbs)
-                const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: material.CircularProgressIndicator(strokeWidth: 2))
-              else ...[
-                material.TextButton(
-                  onPressed: _createThumbnails,
-                  child: Text(strings.thumbsCreate),
-                ),
-                SizedBox(width: theme.sm),
-                material.TextButton(
-                  onPressed: () => setState(() => _thumbsDismissed = true),
-                  child: Text(strings.thumbsLater),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
     );
   }
 

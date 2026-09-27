@@ -77,6 +77,30 @@ void main() {
       ]);
       addTearDown(container.dispose);
 
+      // tasks.json hängt an echter Datei-IO — in FakeAsync bleiben solche
+      // Futures stecken, kein Pump befreit sie. Der erste Lesevorgang
+      // startet deshalb bewusst in tester.runAsync (real asynchron);
+      // erst danach setzen wir den Wunschezustand, sonst überschreibt der
+      // Ladevorgang ihn (dasselbe Motiv wie in single_backup_test).
+      await tester.runAsync(() async {
+        container.read(tasksListProvider);
+        for (var i = 0; i < 200 && !container.read(tasksLoadedProvider); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+      expect(container.read(tasksLoadedProvider), isTrue,
+          reason: 'tasks.json muss vor dem Setzen geladen sein');
+
+      // Altbestand raus, Wunschezustand hinein — synchron, ohne I/O.
+      final TasksListNotifier notifier =
+          container.read(tasksListProvider.notifier);
+      for (final BackupTask existing in container.read(tasksListProvider)) {
+        notifier.removeTask(existing.id);
+      }
+      if (task != null) {
+        notifier.addTask(task);
+      }
+
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -87,29 +111,8 @@ void main() {
           ),
         ),
       );
-
-      // Der Notifier startet das Laden von tasks.json im Konstruktor —
-      // ausdrücklich anstoßen, dann warten: sonst überschreibt der
-      // Ladevorgang die gleich gesetzte Sicherung (dasselbe Muster wie in
-      // single_backup_test). Begrenzt pumpen: endlose Indikatoren dürfen
-      // pumpAndSettle nicht einfrieren.
-      container.read(tasksListProvider);
-      for (var i = 0; i < 20 && !container.read(tasksLoadedProvider); i++) {
-        await tester.pump(const Duration(milliseconds: 20));
-      }
-      expect(container.read(tasksLoadedProvider), isTrue,
-          reason: 'tasks.json muss vor dem Setzen geladen sein');
-
-      // Altbestand aus der geteilten Temp-Datei raus — jeder Test sieht
-      // genau seinen Zustand.
-      final TasksListNotifier notifier =
-          container.read(tasksListProvider.notifier);
-      for (final BackupTask existing in container.read(tasksListProvider)) {
-        notifier.removeTask(existing.id);
-      }
-      if (task != null) {
-        notifier.addTask(task);
-      }
+      // Begrenzt pumpen: endlose Indikatoren dürfen pumpAndSettle nicht
+      // einfrieren.
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }

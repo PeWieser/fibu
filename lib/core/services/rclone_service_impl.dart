@@ -96,6 +96,11 @@ class WindowsRcloneService implements RcloneService {
   @override
   Future<void> markMirrorAdoption() async {}
 
+  /// Windows kennt keine Mediathek — eine leere Liste ist die ehrliche
+  /// Antwort (siehe [RcloneService.listAlbumNames]).
+  @override
+  Future<List<String>?> listAlbumNames() async => const [];
+
   /// Echter Verbindungstest (Windows): Temp-Config anlegen, Root listen,
   /// wieder löschen. Wirft den echten rclone-Fehlertext bei Problemen.
   @override

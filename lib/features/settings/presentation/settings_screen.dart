@@ -442,8 +442,7 @@ class SettingsScreen extends ConsumerWidget {
                   Ui.tile(
                     theme: theme,
                     title: strings.aboutSectionTitle,
-                    leading: Icon(cupertino.CupertinoIcons.info_circle,
-                        color: theme.accent, size: 22),
+                    leading: cupertino.CupertinoIcons.info_circle,
                     onTap: () {
                       IosHaptics.selection();
                       AppNav.push(context, const IosAboutScreen());

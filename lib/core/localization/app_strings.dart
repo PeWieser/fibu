@@ -422,6 +422,11 @@ class AppStrings {
   String get importConfigAndSync => isGerman ? 'Importieren & Spiegeln' : 'Import & Mirror';
   String get skipConfigImport => isGerman ? 'Überspringen' : 'Skip';
   String get configImportSuccess => isGerman ? 'Konfiguration übernommen.' : 'Configuration imported.';
+  String get configFoundWizardMessage => isGerman
+      ? 'Diese Cloud enthält bereits eine Fibu-Sicherung. Übernimm sie — oder richte hier eine neue ein.'
+      : 'This cloud already contains a Fibu backup. Take it over — or set up a new one here.';
+  String get configTakeOver => isGerman ? 'Übernehmen' : 'Take Over';
+  String get configStartFresh => isGerman ? 'Neu einrichten' : 'Set Up New';
 
   // --- iOS Background Sync Notice & WiFi-Only Sync ---
   String get iosBackgroundScheduleNotice => isGerman

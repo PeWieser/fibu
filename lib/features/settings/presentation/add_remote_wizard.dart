@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
@@ -15,6 +17,7 @@ import '../../../core/services/provider_auth.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/rclone_provider_registry.dart';
 import '../../../core/services/remote_registry_service.dart';
+import '../../../core/services/sync_config_service.dart';
 import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/theme.dart';
 import '../../tasks/presentation/tasks_controller.dart';
@@ -489,7 +492,26 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       if (firstSetup) {
         _addedRemoteId = entry.id;
         _addedRemoteName = name;
-        await _startBackupSetup();
+        // Liegt auf der Cloud schon eine Fibu-Konfiguration? Dann ist die
+        // Sicherung dort bereits eingerichtet: Der Lauf übernimmt sie und
+        // ist fertig — der Backup-Schritt entfällt („übernommen“ heißt
+        // „fertig“, nicht „zusätzlich“). Sonst geht es in Schritt 3.
+        final bool hasConfig = await ref
+            .read(syncConfigServiceProvider)
+            .checkRemoteForConfig(entry.id);
+        if (!mounted) return;
+        if (hasConfig) {
+          final bool takeOver = await _askConfigChoice();
+          if (!mounted) return;
+          if (takeOver) {
+            await _importExistingConfig();
+            if (mounted) Navigator.pop(context, entry.id);
+          } else {
+            await _startBackupSetup();
+          }
+        } else {
+          await _startBackupSetup();
+        }
       } else {
         Navigator.pop(context, entry.id);
       }
@@ -502,6 +524,71 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         });
       }
     }
+  }
+
+  /// Die eine Frage bei einer gefundenen Konfiguration: übernehmen oder neu.
+  ///
+  /// Kein „Später“: Die Cloud hat genau eine Wahrheit über ihre Sicherung —
+  /// entweder gilt sie weiter, oder sie wird ersetzt. (true = übernehmen)
+  Future<bool> _askConfigChoice() async {
+    final strings = context.strings;
+    final result = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
+        title: Text(strings.existingConfigDetectedTitle),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Text(strings.configFoundWizardMessage),
+        ),
+        actions: [
+          cupertino.CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text(strings.configStartFresh),
+          ),
+          cupertino.CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(strings.configTakeOver),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Übernimmt die auf der Cloud gefundene Konfiguration.
+  ///
+  /// Dieselbe Übernahme wie anderswo: Aufgaben anlegen, Spiegel-Adoption
+  /// statt Neu-Download (docs/SZENARIEN_AUDIT_2026-09.md, N-F7), Dateien
+  /// im Hintergrund nachziehen.
+  Future<void> _importExistingConfig() async {
+    final sync = ref.read(syncConfigServiceProvider);
+    final config = await sync.readRemoteConfig(_addedRemoteId);
+    if (config == null) return;
+    // Die Config stammt von einem anderen Gerät — ihre Remote-Namen werden
+    // dynamisch aufgelöst, damit das Backup-Ziel nie „nicht gefunden“ ist.
+    final localRemotes =
+        await ref.read(remoteRegistryServiceProvider).entries();
+    final tasks = sync.convertConfigToTasks(
+      config,
+      _addedRemoteId,
+      null,
+      localRemotes,
+    );
+    ref.read(tasksListProvider.notifier).importTasks(tasks);
+    ref.invalidate(remoteTaskCandidatesProvider);
+    unawaited(ref.read(rcloneServiceProvider).markMirrorAdoption());
+    // Das Nachziehen der Dateien kann dauern — hier entkoppelt vom Widget:
+    // der Lauf ist ab hier für den Nutzer fertig. Es werden nur noch Dienste
+    // und reine Werte benutzt, kein `ref` mehr.
+    unawaited(() async {
+      for (final task in tasks) {
+        try {
+          await sync.downloadRemoteFiles(
+              _addedRemoteId, task.targetFolderName, task.sourcePath);
+        } catch (_) {}
+      }
+    }());
   }
 
   /// Schritt 3 (iOS-Neueinrichtung): die Sicherung einrichten.

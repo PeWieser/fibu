@@ -1035,6 +1035,12 @@ class _CloudDrivesScreenState extends ConsumerState<CloudDrivesScreen> {
   // --- Remote Config Detection Confirmation Dialog ---
   Future<void> _checkAndPromptRemoteConfig(
       String remoteName, TargetPlatform platform) async {
+    // Auf iOS hat der Wizard im Einrichtungs-Durchlauf entschieden: eine
+    // gefundene Konfiguration wird entweder übernommen (dann ist fertig) oder
+    // bewusst ersetzt. Dieselbe Frage noch einmal zu stellen, wäre Unsinn —
+    // und wer eine fremde Konfiguration gezielt braucht, holt sie über
+    // „Aufgaben importieren“.
+    if (platform == TargetPlatform.iOS) return;
     final hasConfig = await ref.read(syncConfigServiceProvider).checkRemoteForConfig(remoteName);
     if (!hasConfig || !mounted) return;
 

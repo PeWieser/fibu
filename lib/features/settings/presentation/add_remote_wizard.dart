@@ -532,7 +532,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   /// entweder gilt sie weiter, oder sie wird ersetzt. (true = übernehmen)
   Future<bool> _askConfigChoice() async {
     final strings = context.strings;
-    final result = await showCupertinoDialog<bool>(
+    final result = await cupertino.showCupertinoDialog<bool>(
       context: context,
       builder: (dialogCtx) => cupertino.CupertinoAlertDialog(
         title: Text(strings.existingConfigDetectedTitle),

@@ -54,7 +54,11 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
+      // Begrenzt pumpen, bis die 150-ms-Mock-Timer (listRemotes, getQuota)
+      // gefeuert sind — sonst endet der Test mit „timer still pending“.
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       // Die vier Kopfzeilen der Hauptliste (Ui.sectionHeader zeigt sie in
       // Versalien).

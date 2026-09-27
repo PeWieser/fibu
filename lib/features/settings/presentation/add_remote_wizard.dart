@@ -15,10 +15,17 @@ import '../../../core/services/provider_auth.dart';
 import '../../../core/services/rclone_provider.dart';
 import '../../../core/services/rclone_provider_registry.dart';
 import '../../../core/services/remote_registry_service.dart';
+import '../../../core/utils/ios_haptics.dart';
 import '../../../theme/theme.dart';
+import '../../tasks/presentation/tasks_controller.dart';
 import 'provider_login_fields.dart';
 
-/// 2-Schritt-Wizard: Anbieter wählen → passende Anmeldemaske.
+/// Wizard: Anbieter wählen → passende Anmeldemaske.
+///
+/// Bei der Neueinrichtung auf iOS endet er nicht bei der Cloud: derselbe
+/// Lauf führt weiter zur Sicherung (Alben wählen) — Cloud UND Backup in
+/// einem Durchlauf. Wer später eine weitere Cloud verbindet, hat bereits
+/// eine Sicherung; dort bleibt es bei den zwei Schritten.
 ///
 /// Keine eigenen „gespeicherte Zugänge“-Buttons. Der Apple-Schlüsselbund
 /// füllt Benutzer/Passwort über Autofill + Associated Domains.
@@ -70,7 +77,21 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
   String? _oauthError;
   bool _step2Verified = false;
 
+  // Schritt 3 (iOS-Neueinrichtung): die Sicherung. Läuft nur, wenn noch
+  // keine Sicherung existiert — sonst endet der Wizard bei der Cloud.
+  String _addedRemoteId = '';
+  String _addedRemoteName = '';
+  List<String> _setupAlbums = const [];
+  bool _setupAlbumsLoading = false;
+  bool _setupAlbumsDenied = false;
+  bool _setupAll = true;
+  final Set<String> _setupSelected = <String>{};
+
   bool get _canAdd => _step2Verified;
+
+  /// „Bestimmte Alben“ ohne jede Wahl darf nicht fertig werden — sonst
+  /// entstünde eine Sicherung, die nichts sichert.
+  bool get _canFinishSetup => _setupAll || _setupSelected.isNotEmpty;
 
   RcloneProviderDescriptor? get _selectedDescriptor =>
       _selectedProviderId.isEmpty
@@ -458,7 +479,20 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
       ref.invalidate(remoteEntriesProvider);
       ref.invalidate(remotesProvider);
       ref.invalidate(primaryQuotaProvider);
-      if (mounted) Navigator.pop(context, entry.id);
+      if (!mounted) return;
+      // Neueinrichtung auf iOS: Nach der Cloud führt derselbe Lauf weiter
+      // zur Sicherung. Wer später eine weitere Cloud verbindet, hat bereits
+      // eine Sicherung — dort endet der Assistent wie gewohnt.
+      final bool firstSetup = widget.platform == TargetPlatform.iOS &&
+          ref.read(tasksLoadedProvider) &&
+          ref.read(tasksListProvider).isEmpty;
+      if (firstSetup) {
+        _addedRemoteId = entry.id;
+        _addedRemoteName = name;
+        await _startBackupSetup();
+      } else {
+        Navigator.pop(context, entry.id);
+      }
     } catch (e) {
       AppLog.warn('remote', 'Remote-Anlage fehlgeschlagen: $e');
       if (mounted) {
@@ -468,6 +502,164 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         });
       }
     }
+  }
+
+  /// Schritt 3 (iOS-Neueinrichtung): die Sicherung einrichten.
+  ///
+  /// Die Alben-Liste kommt über dieselbe Stelle wie in den Einstellungen
+  /// ([RcloneService.listAlbumNames]); fehlt der Foto-Zugriff, sagt es die
+  /// Zeile darunter — erfunden wird nichts.
+  Future<void> _startBackupSetup() async {
+    setState(() {
+      _currentStep = 2;
+      _isAdding = false;
+      _setupAlbumsLoading = true;
+      _setupAlbumsDenied = false;
+      _setupAll = true;
+      _setupSelected.clear();
+    });
+    final List<String>? names =
+        await ref.read(rcloneServiceProvider).listAlbumNames();
+    if (!mounted) return;
+    setState(() {
+      _setupAlbums = names ?? const [];
+      _setupAlbumsLoading = false;
+      _setupAlbumsDenied = names == null;
+    });
+  }
+
+  /// Schreibt die eine Sicherung und schließt den Lauf ab.
+  ///
+  /// Dieselben Vorgaben wie „Sicherung einrichten“ in den Einstellungen:
+  /// Alben als Quelle, Zeitplan das System, Ziel `fibu-backup`. Nur die
+  /// Alben-Menge ist hier eine Frage — alles andere ist schon richtig.
+  void _finishBackupSetup() {
+    final strings = context.strings;
+    final BackupTask base = BackupTask(
+      id: 'backup_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Sicherung auf $_addedRemoteName',
+      sourcePath: 'all',
+      targetRemotes: _addedRemoteId.isEmpty ? const [] : [_addedRemoteId],
+      schedule: strings.scheduleDescriptionFor('iOS System', '02:00'),
+      scheduleDay: 'iOS System',
+      scheduleTime: '02:00',
+      isActive: true,
+      syncMode: SyncMode.incremental,
+      targetFolderName: 'fibu-backup',
+    );
+    final BackupTask task = _setupAll
+        ? base.copyWithAllAlbums()
+        : base.copyWithAlbums(_setupSelected);
+    ref.read(tasksListProvider.notifier).addTask(task);
+    IosHaptics.medium();
+    Navigator.pop(context, _addedRemoteId);
+  }
+
+  Widget _setupRow(
+    AppThemeData theme, {
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return cupertino.CupertinoListTile(
+      title: Text(title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+          )),
+      trailing: Icon(
+        selected
+            ? cupertino.CupertinoIcons.checkmark_circle_fill
+            : cupertino.CupertinoIcons.circle,
+        color: selected ? theme.accent : theme.textSecondary,
+        size: 22,
+      ),
+      onTap: onTap,
+    );
+  }
+
+  /// Schritt 3: die eine Frage — welche Fotos? Alles andere hat der Lauf
+  /// schon entschieden.
+  Widget _backupStepBody(AppThemeData theme, AppStrings strings) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          strings.wizardBackupQuestion,
+          style: TextStyle(
+              fontSize: 17, fontWeight: FontWeight.w700, color: theme.textPrimary),
+        ),
+        SizedBox(height: theme.lg),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(theme.radiusLg),
+          ),
+          child: Column(
+            children: [
+              _setupRow(
+                theme,
+                title: strings.allPhotos,
+                selected: _setupAll,
+                onTap: () => setState(() => _setupAll = true),
+              ),
+              _setupRow(
+                theme,
+                title: strings.specificAlbums,
+                selected: !_setupAll,
+                onTap: () => setState(() => _setupAll = false),
+              ),
+              if (!_setupAll) ...[
+                if (_setupAlbumsLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                        child: cupertino.CupertinoActivityIndicator()),
+                  )
+                else if (_setupAlbumsDenied)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Text(
+                      strings.errPhotoPermission,
+                      style: TextStyle(
+                          fontSize: 12, color: theme.textSecondary),
+                    ),
+                  )
+                else if (_setupAlbums.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Text(
+                      strings.noAlbumsFound,
+                      style: TextStyle(
+                          fontSize: 12, color: theme.textSecondary),
+                    ),
+                  )
+                else
+                  for (final String album in _setupAlbums)
+                    _setupRow(
+                      theme,
+                      title: album,
+                      selected: _setupSelected.contains(album),
+                      onTap: () => setState(() {
+                        if (!_setupSelected.remove(album)) {
+                          _setupSelected.add(album);
+                        }
+                      }),
+                    ),
+              ],
+            ],
+          ),
+        ),
+        SizedBox(height: theme.md),
+        // Eine Zeile, die die getroffenen Vorgaben sagt — und dass sie
+        // änderbar bleiben.
+        Text(
+          strings.wizardBackupNote,
+          style: TextStyle(
+              fontSize: 13, color: theme.textSecondary, height: 1.4),
+        ),
+      ],
+    );
   }
 
   @override
@@ -851,7 +1043,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
         backgroundColor: theme.surface,
         middle: Text(_currentStep == 0
             ? strings.wizardStep1Title
-            : strings.wizardStep2Title),
+            : _currentStep == 1
+                ? strings.wizardStep2Title
+                : strings.wizardStep3Title),
         trailing: _isAdding
             ? const cupertino.CupertinoActivityIndicator()
             : cupertino.CupertinoButton(
@@ -868,7 +1062,9 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
                 padding: EdgeInsets.all(theme.lg),
                 child: _currentStep == 0
                     ? _step1Body(theme, strings)
-                    : _step2Body(theme, strings),
+                    : _currentStep == 1
+                        ? _step2Body(theme, strings)
+                        : _backupStepBody(theme, strings),
               ),
             ),
             _footer(theme, strings),
@@ -980,6 +1176,7 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
 
   Widget _footer(AppThemeData theme, AppStrings strings) {
     final isStep1 = _currentStep == 0;
+    final isSetup = _currentStep == 2;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: theme.xl, vertical: theme.md),
       child: Row(
@@ -989,6 +1186,13 @@ class _AddRemoteWizardDialogState extends ConsumerState<AddRemoteWizardDialog> {
             _secondary(strings.cancel, () => Navigator.pop(context)),
             SizedBox(width: theme.md),
             _primary(strings.next, _goToStep2),
+          ] else if (isSetup) ...[
+            // Ein Ziel: fertig. Zurück zur Cloud gibt es nicht mehr — sie
+            // ist bereits angelegt.
+            _primary(
+              strings.wizardFinish,
+              _canFinishSetup ? _finishBackupSetup : null,
+            ),
           ] else ...[
             _secondary(
                 strings.back,

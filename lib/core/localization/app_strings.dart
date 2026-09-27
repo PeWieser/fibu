@@ -66,6 +66,13 @@ class AppStrings {
       : 'Your photos and files will be safe — even if you lose your device.';
   String get wizardStep1Title => isGerman ? 'Schritt 1: Anbieter auswählen' : 'Step 1: Choose Provider';
   String get wizardStep2Title => isGerman ? 'Schritt 2: Zugangsdaten' : 'Step 2: Credentials & Config';
+  String get wizardStep3Title => isGerman ? 'Schritt 3: Sicherung' : 'Step 3: Backup';
+  String get wizardBackupQuestion =>
+      isGerman ? 'Was möchtest du sichern?' : 'What would you like to back up?';
+  String get wizardBackupNote => isGerman
+      ? 'Automatisch gesichert in „fibu-backup“. Alles lässt sich später ändern.'
+      : 'Backed up automatically to “fibu-backup”. You can change everything later.';
+  String get wizardFinish => isGerman ? 'Fertigstellen' : 'Finish';
   String get connectionNameLabel => isGerman ? 'Verbindungsname' : 'Connection Name';
   String get connectionNameHint => isGerman ? 'z.B. Mein_Cloud_Backup' : 'e.g. My_Cloud_Backup';
   String get searchProviderHint => isGerman ? 'Anbieter suchen (z.B. google, onedrive, s3, webdav, mega)...' : 'Search provider (e.g. google, onedrive, s3, webdav, mega)...';
@@ -222,6 +229,7 @@ class AppStrings {
   String get allVideos => isGerman ? 'Alle Videos' : 'All Videos';
   String get specificFolders => isGerman ? 'Nur bestimmte Ordner' : 'Specific Folders Only';
   String get specificFoldersHint => isGerman ? 'z.B. WhatsApp Images' : 'e.g. WhatsApp Images';
+  String get specificAlbums => isGerman ? 'Bestimmte Alben' : 'Specific Albums';
 
   // --- Multi-Remote Distribution Strategy ---
 
@@ -574,6 +582,7 @@ class AppStrings {
       : 'Pick albums — the target is the connected cloud.';
 
   String get systemSection => isGerman ? 'System' : 'System';
+  String get generalSectionTitle => isGerman ? 'Allgemein' : 'General';
 
   // --- Vorschaubilder (Cloud-Explorer) ---
   String get cannotDisplayFormat => isGerman

@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,6 +20,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/autostart_service.dart';
 import 'device_pairing_screen.dart';
 import 'debug_log_screen.dart';
+import 'about_screen.dart';
 import 'legal_documents_screen.dart';
 import 'licenses_screen.dart';
 
@@ -365,32 +365,6 @@ class SettingsScreen extends ConsumerWidget {
               Ui.sectionHeader(strings.backupSection, theme),
               const BackupSection(),
 
-              // 3. System — Kopplung und Diagnose
-              Ui.sectionHeader(strings.systemSection, theme),
-              Ui.group(
-                theme: theme,
-                children: [
-                  Ui.tile(
-                    theme: theme,
-                    title: strings.pairingTitle,
-                    subtitle: strings.pairingSubtitle,
-                    leading: Ui.sync,
-                    onTap: () => _navigateToPairing(context),
-                    semanticLabel: strings.pairingTitle,
-                    first: true,
-                  ),
-                  Ui.tile(
-                    theme: theme,
-                    title: strings.debugLogTitle,
-                    subtitle: strings.debugLogSubtitle,
-                    leading: Ui.document,
-                    onTap: () => _navigateToDebugLog(context),
-                    semanticLabel: strings.debugLogTitle,
-                    last: true,
-                  ),
-                ],
-              ),
-
               // 3. Erscheinungsbild: eine Palette, Hell/Dunkel folgt dem
               // System. Kein Modus-Schalter, keine zweite Reihe — die
               // gewählte Palette bringt beide Farbsets mit.
@@ -435,104 +409,48 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
 
-              // 5. About / Über Fibu Section
-              cupertino.CupertinoListSection.insetGrouped(
-                backgroundColor: theme.surface,
-                header: IosTheme.sectionHeader(strings.aboutSectionTitle, theme),
+              // 4. Allgemein — zwei Ziele, keine Untertitel. Was eine Zeile
+              //    nicht von selbst sagt, steht auf dem Ziel-Screen.
+              Ui.sectionHeader(strings.generalSectionTitle, theme),
+              Ui.group(
+                theme: theme,
                 children: [
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.appVersionLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(strings.appVersionValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
-                    onTap: () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: strings.appVersionValue),
-                      );
-                      IosHaptics.success();
-                    },
+                  Ui.tile(
+                    theme: theme,
+                    title: strings.pairingTitle,
+                    leading: Ui.sync,
+                    onTap: () => _navigateToPairing(context),
+                    semanticLabel: strings.pairingTitle,
+                    first: true,
                   ),
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.developerLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(strings.developerValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
-                  ),
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.cloudEngineLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(strings.cloudEngineValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
-                  ),
-                  cupertino.CupertinoListTile(
-                    title: Text(strings.licenseLabel, style: const TextStyle(fontSize: 16)),
-                    trailing: Text(strings.licenseValue, style: TextStyle(color: theme.textSecondary, fontSize: 15)),
-                  ),
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.doc_text, color: theme.accent, size: 22),
-                    title: Text(strings.debugLogTitle, style: const TextStyle(fontSize: 16)),
-                    subtitle: Text(strings.debugLogSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () {
-                      IosHaptics.selection();
-                      _navigateToDebugLog(context);
-                    },
+                  Ui.tile(
+                    theme: theme,
+                    title: strings.debugLogTitle,
+                    leading: Ui.document,
+                    onTap: () => _navigateToDebugLog(context),
+                    semanticLabel: strings.debugLogTitle,
+                    last: true,
                   ),
                 ],
               ),
 
-              // 6. Rechtliches — ganz unten, wie es sich gehört.
-              cupertino.CupertinoListSection.insetGrouped(
-                backgroundColor: theme.surface,
-                header: IosTheme.sectionHeader(strings.legalSectionTitle, theme),
+              // 5. Über — Fakten und Rechtliches eine Ebene tiefer: acht
+              //    Zeilen werden zu einer, die Einstellungen bleiben lesbar.
+              Ui.group(
+                theme: theme,
                 children: [
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.doc_plaintext, color: theme.accent, size: 22),
-                    title: Text(strings.openSourceLicenses, style: const TextStyle(fontSize: 16)),
-                    subtitle: Text(strings.openSourceLicensesSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
+                  Ui.tile(
+                    theme: theme,
+                    title: strings.aboutSectionTitle,
+                    leading: Icon(cupertino.CupertinoIcons.info_circle,
+                        color: theme.accent, size: 22),
                     onTap: () {
                       IosHaptics.selection();
-                      _openLicenses(context);
+                      AppNav.push(context, const IosAboutScreen());
                     },
-                  ),
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.eye, color: theme.accent, size: 22),
-                    title: Text(strings.privacyNoticeTitle, style: const TextStyle(fontSize: 16)),
-                    subtitle: Text(strings.privacyNoticeSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () {
-                      IosHaptics.selection();
-                      _openLegalDocument(
-                        context,
-                        strings.privacyNoticeTitle,
-                        LegalDocuments.privacy(strings.isGerman),
-                      );
-                    },
-                  ),
-                  cupertino.CupertinoListTile(
-                    leading: Icon(cupertino.CupertinoIcons.info_circle, color: theme.accent, size: 22),
-                    title: Text(strings.imprintTitle, style: const TextStyle(fontSize: 16)),
-                    subtitle: Text(strings.imprintSubtitle, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    trailing: const Icon(
-                      cupertino.CupertinoIcons.chevron_forward,
-                      size: 18,
-                      color: cupertino.CupertinoColors.inactiveGray,
-                    ),
-                    onTap: () {
-                      IosHaptics.selection();
-                      _openLegalDocument(
-                        context,
-                        strings.imprintTitle,
-                        LegalDocuments.imprint(strings.isGerman),
-                      );
-                    },
+                    semanticLabel: strings.aboutSectionTitle,
+                    first: true,
+                    last: true,
                   ),
                 ],
               ),

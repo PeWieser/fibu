@@ -1372,6 +1372,12 @@ class IosRcloneService implements RcloneService {
     }
   }
 
+  /// Alben-Namen der Mediathek — siehe [RcloneService.listAlbumNames].
+  /// Die PhotoKit-Abfrage läuft über die gemeinsame Brücke, damit nur eine
+  /// Stelle im Code die Mediathek fragt.
+  @override
+  Future<List<String>?> listAlbumNames() => PhotoKitBridge().listAlbumNames();
+
   /// Geräteweite Liste lokaler Medien: Dateiname → bekannte Bytegrößen.
   ///
   /// Ersatz für einen Vollscan der Mediathek: Der Index wird aus Daten

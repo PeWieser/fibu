@@ -38,6 +38,9 @@ class MockRcloneService implements RcloneService {
   Future<void> markMirrorAdoption() async {}
 
   @override
+  Future<List<String>?> listAlbumNames() async => const [];
+
+  @override
   Future<void> testConnection({
     required String type,
     required Map<String, String> config,

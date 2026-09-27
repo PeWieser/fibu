@@ -200,6 +200,15 @@ abstract class RcloneService {
   /// iOS-Implementierung (virtueller Mirror) überschreibt dies sinnvoll.
   Future<void> markMirrorAdoption() async {}
 
+  /// Namen aller Fotoalben der Mediathek, sortiert.
+  ///
+  /// `null` heißt: kein Foto-Zugriff (verweigert oder nicht möglich) — ein
+  /// leeres Ergebnis heißt: Zugriff da, aber keine Alben. Plattformen ohne
+  /// Mediathek liefern eine leere Liste. Die Alben-Auswahl (Einstellungsblatt
+  /// und Setup-Wizard) arbeitet nur über diesen Aufruf — eine zweite
+  /// PhotoKit-Anbindung würde dieselbe Frage doppelt beantworten.
+  Future<List<String>?> listAlbumNames() async => const [];
+
   /// Fuehrt ausstehende lokale Löschungen aus und liefert die tatsächlich
   /// gelöschten Eintraege zurück (iOS lehnt einzelne ab).
   Future<List<PendingLocalDeletion>> deletePendingLocalDeletions(

@@ -45,6 +45,21 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
+    /// Plattform-Vorgabe für die Dauer des Testkörpers.
+    ///
+    /// Die Vorgabe muss am ENDE des Körpers zurückgesetzt sein: die
+    /// Invarianten-Prüfung von testWidgets läuft direkt nach dem Körper und
+    /// vor den tearDown-Callbacks (dasselbe Muster wie in dashboard_screen_test).
+    Future<void> onIOS(
+        WidgetTester tester, Future<void> Function() body) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        await body();
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    }
+
     BackupTask iosTask({
       String sourcePath = 'all:Urlaub',
       List<String> albums = const ['Urlaub'],
@@ -67,8 +82,6 @@ void main() {
       required bool hasCloud,
       BackupTask? task,
     }) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-
       final container = ProviderContainer(overrides: [
         localeProvider.overrideWith((ref) => AppLocale.de),
         rcloneServiceProvider.overrideWithValue(mockRcloneService),
@@ -121,118 +134,130 @@ void main() {
 
     testWidgets('zeigt Fotoalben statt Ordner — und keinen Zeit-Wähler',
         (WidgetTester tester) async {
-      await pumpBackupSection(tester, hasCloud: true, task: iosTask());
+      await onIOS(tester, () async {
+        await pumpBackupSection(tester, hasCloud: true, task: iosTask());
 
-      // Quelle: die Alben, nicht Ordner.
-      expect(find.text(strings.backupAlbums), findsOneWidget);
-      expect(find.text('Urlaub'), findsOneWidget);
-      expect(find.text(strings.backupAddFolder), findsNothing);
-      expect(find.text(strings.backupNoFolder), findsNothing);
+        // Quelle: die Alben, nicht Ordner.
+        expect(find.text(strings.backupAlbums), findsOneWidget);
+        expect(find.text('Urlaub'), findsOneWidget);
+        expect(find.text(strings.backupAddFolder), findsNothing);
+        expect(find.text(strings.backupNoFolder), findsNothing);
 
-      // Zeitplan: eine Zeile, die die Wahrheit sagt — ohne Wiederholung und
-      // ohne Uhrzeit. Die Zeile darunter erklärt, warum.
-      expect(find.text(strings.scheduleLabel), findsOneWidget);
-      expect(
-        find.text(strings.scheduleDescriptionFor('iOS System', '02:00')),
-        findsOneWidget,
-      );
-      expect(find.text(strings.scheduleDayLabel), findsNothing);
-      expect(find.text(strings.scheduleTimeLabel), findsNothing);
-      expect(find.text(strings.schedulePlatformNote), findsOneWidget);
+        // Zeitplan: eine Zeile, die die Wahrheit sagt — ohne Wiederholung und
+        // ohne Uhrzeit. Die Zeile darunter erklärt, warum.
+        expect(find.text(strings.scheduleLabel), findsOneWidget);
+        expect(
+          find.text(strings.scheduleDescriptionFor('iOS System', '02:00')),
+          findsOneWidget,
+        );
+        expect(find.text(strings.scheduleDayLabel), findsNothing);
+        expect(find.text(strings.scheduleTimeLabel), findsNothing);
+        expect(find.text(strings.schedulePlatformNote), findsOneWidget);
 
-      // Die übrigen Zeilen bleiben.
-      expect(find.text(strings.backupSyncMode), findsOneWidget);
-      expect(find.text(strings.backupCloudFolder), findsOneWidget);
-      expect(find.text(strings.wifiOnlySyncLabel), findsOneWidget);
-      expect(find.text(strings.backupActiveLabel), findsOneWidget);
+        // Die übrigen Zeilen bleiben.
+        expect(find.text(strings.backupSyncMode), findsOneWidget);
+        expect(find.text(strings.backupCloudFolder), findsOneWidget);
+        expect(find.text(strings.wifiOnlySyncLabel), findsOneWidget);
+        expect(find.text(strings.backupActiveLabel), findsOneWidget);
+      });
     });
 
     testWidgets('zeigt „Alle Alben“ für die leere Mediathek-Auswahl',
         (WidgetTester tester) async {
-      await pumpBackupSection(
-        tester,
-        hasCloud: true,
-        task: iosTask(sourcePath: 'all', albums: const []),
-      );
+      await onIOS(tester, () async {
+        await pumpBackupSection(
+          tester,
+          hasCloud: true,
+          task: iosTask(sourcePath: 'all', albums: const []),
+        );
 
-      expect(find.text(strings.backupAllAlbums), findsOneWidget);
-      expect(find.text('Urlaub'), findsNothing);
+        expect(find.text(strings.backupAllAlbums), findsOneWidget);
+        expect(find.text('Urlaub'), findsNothing);
+      });
     });
 
     testWidgets('zeigt die sichtbare Lücke bei fremder Quelle',
         (WidgetTester tester) async {
-      // Von Windows übertragene Ordner-Aufgabe: keine Mediathek-Auswahl —
-      // die Zeile sagt, dass Alben gewählt werden können, statt „Alle Alben"
-      // zu behaupten.
-      await pumpBackupSection(
-        tester,
-        hasCloud: true,
-        task: iosTask(sourcePath: 'files:/daten', albums: const []),
-      );
+      await onIOS(tester, () async {
+        // Von Windows übertragene Ordner-Aufgabe: keine Mediathek-Auswahl —
+        // die Zeile sagt, dass Alben gewählt werden können, statt „Alle Alben"
+        // zu behaupten.
+        await pumpBackupSection(
+          tester,
+          hasCloud: true,
+          task: iosTask(sourcePath: 'files:/daten', albums: const []),
+        );
 
-      expect(find.text(strings.backupAlbumsNeeded), findsOneWidget);
-      expect(find.text(strings.backupAllAlbums), findsNothing);
+        expect(find.text(strings.backupAlbumsNeeded), findsOneWidget);
+        expect(find.text(strings.backupAllAlbums), findsNothing);
+      });
     });
 
     testWidgets('ohne Cloud steht der Grund da', (WidgetTester tester) async {
-      await pumpBackupSection(tester, hasCloud: false);
+      await onIOS(tester, () async {
+        await pumpBackupSection(tester, hasCloud: false);
 
-      expect(find.text(strings.backupNeedsCloud), findsOneWidget);
-      expect(find.text(strings.backupCreate), findsNothing);
+        expect(find.text(strings.backupNeedsCloud), findsOneWidget);
+        expect(find.text(strings.backupCreate), findsNothing);
+      });
     });
 
     testWidgets('Sicherung einrichten: alle Alben, Zeitplan vom System',
         (WidgetTester tester) async {
-      final container =
-          await pumpBackupSection(tester, hasCloud: true, task: null);
+      await onIOS(tester, () async {
+        final container =
+            await pumpBackupSection(tester, hasCloud: true, task: null);
 
-      // Der Einstieg nennt die Alben — nicht Ordner.
-      expect(find.text(strings.backupCreate), findsOneWidget);
-      expect(find.text(strings.backupCreateHintAlbums), findsOneWidget);
-      expect(find.text(strings.backupCreateHint), findsNothing);
+        // Der Einstieg nennt die Alben — nicht Ordner.
+        expect(find.text(strings.backupCreate), findsOneWidget);
+        expect(find.text(strings.backupCreateHintAlbums), findsOneWidget);
+        expect(find.text(strings.backupCreateHint), findsNothing);
 
-      await tester.tap(find.text(strings.backupCreate));
-      for (var i = 0; i < 4; i++) {
-        await tester.pump(const Duration(milliseconds: 50));
-      }
+        await tester.tap(find.text(strings.backupCreate));
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
 
-      final List<BackupTask> tasks = container.read(tasksListProvider);
-      expect(tasks, hasLength(1));
-      // „Alle Alben" als sichtbare Vorgabe, kein Ordner.
-      expect(tasks.single.sourcePath, 'all');
-      expect(tasks.single.effectiveAlbums, isEmpty);
-      // Kein Wecker: iOS plant den Hintergrundtask selbst.
-      expect(tasks.single.scheduleDay, 'iOS System');
-      expect(
-        tasks.single.schedule,
-        strings.scheduleDescriptionFor('iOS System', '02:00'),
-      );
+        final List<BackupTask> tasks = container.read(tasksListProvider);
+        expect(tasks, hasLength(1));
+        // „Alle Alben" als sichtbare Vorgabe, kein Ordner.
+        expect(tasks.single.sourcePath, 'all');
+        expect(tasks.single.effectiveAlbums, isEmpty);
+        // Kein Wecker: iOS plant den Hintergrundtask selbst.
+        expect(tasks.single.scheduleDay, 'iOS System');
+        expect(
+          tasks.single.schedule,
+          strings.scheduleDescriptionFor('iOS System', '02:00'),
+        );
+      });
     });
 
     testWidgets('das Alben-Blatt öffnet sich und benennt den Zustand ehrlich',
         (WidgetTester tester) async {
-      await pumpBackupSection(tester, hasCloud: true, task: iosTask());
+      await onIOS(tester, () async {
+        await pumpBackupSection(tester, hasCloud: true, task: iosTask());
 
-      await tester.tap(find.text(strings.backupAlbums));
-      // Modal-Animation plus die gescheiterte PhotoKit-Anfrage (im Test gibt
-      // es keinen Foto-Zugriff) — begrenzt pumpen, der Lade-Kreis ist endlos.
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
+        await tester.tap(find.text(strings.backupAlbums));
+        // Modal-Animation plus der Alben-Ladevorgang über den Mock-Dienst —
+        // begrenzt pumpen, der Lade-Kreis ist endlos.
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
 
-      // Das Blatt ist da: Titel plus „Fertig".
-      expect(find.text(strings.doneEditing), findsOneWidget);
-      // Ohne PhotoKit bleibt die Liste leer — und der Grund steht da
-      // (verweigerte Freigabe ODER keine Alben). Nichts wird erfunden.
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Text &&
-              (widget.data == strings.noAlbumsFound ||
-                  widget.data == strings.errPhotoPermission),
-        ),
-        findsOneWidget,
-      );
+        // Das Blatt ist da: Titel plus „Fertig".
+        expect(find.text(strings.doneEditing), findsOneWidget);
+        // Der gemockte Dienst meldet eine zugängliche, leere Mediathek —
+        // und der Grund steht da. Nichts wird erfunden.
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                (widget.data == strings.noAlbumsFound ||
+                    widget.data == strings.errPhotoPermission),
+          ),
+          findsOneWidget,
+        );
+      });
     });
   });
 }

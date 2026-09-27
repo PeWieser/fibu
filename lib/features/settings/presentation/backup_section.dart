@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/services/active_cloud.dart';
@@ -383,23 +382,6 @@ class _SharedBackupSectionState extends ConsumerState<_SharedBackupSection> {
 // iOS: Fotoalben als Quelle, das System als Zeitplan
 // ===========================================================================
 
-/// Ein Album der iOS-Medienquellauswahl: Name plus asynchron nachgeladene
-/// Anzahl der enthaltenen Medien.
-///
-/// Die Auswahl selbst arbeitet nur mit [name] — [count] ist reine Anzeige
-/// und je nach Ladestand auch null.
-class _AlbumOption {
-  _AlbumOption(this.entity);
-
-  /// Zugrunde liegende PhotoKit-Entity (für `assetCountAsync`).
-  final AssetPathEntity entity;
-
-  /// Anzahl der Medien im Album (null, solange noch geladen wird).
-  int? count;
-
-  String get name => entity.name;
-}
-
 /// „Sicherung" auf iOS: eine Zeile für die Fotoalben, eine für den
 /// Zielordner in der Cloud — und ein Zeitplan, den man nicht einstellt, weil
 /// iOS ihn selbst setzt.
@@ -658,7 +640,9 @@ class _AlbumPickerSheet extends ConsumerStatefulWidget {
 }
 
 class _AlbumPickerSheetState extends ConsumerState<_AlbumPickerSheet> {
-  List<_AlbumOption> _albums = <_AlbumOption>[];
+  /// Alben-Namen — die Auswahl hängt ausschließlich am Namen (siehe
+  /// [RcloneService.listAlbumNames], die gemeinsame Lese-Stelle).
+  List<String> _albums = const [];
   bool _loading = true;
 
   /// Foto-Berechtigung verweigert: der echte Grund statt „Keine Alben
@@ -675,49 +659,15 @@ class _AlbumPickerSheetState extends ConsumerState<_AlbumPickerSheet> {
     // Ohne setState hier: die Felder stehen schon auf „lädt" (`_loading` =
     // true), und dieser Aufruf kommt aus initState — ein setState mitten im
     // ersten Build wäre ein vermeidbares Risiko.
-    try {
-      final PermissionState ps = await PhotoManager.requestPermissionExtend();
-      final bool allowed = ps.isAuth || ps.hasAccess;
-      final List<AssetPathEntity> paths = allowed
-          ? await PhotoManager.getAssetPathList(
-              type: RequestType.common, hasAll: true)
-          : <AssetPathEntity>[];
-      if (!mounted) return;
-      setState(() {
-        _albums = paths.map((AssetPathEntity p) => _AlbumOption(p)).toList();
-        _loading = false;
-        _permissionDenied = !allowed;
-      });
-      // Anzahl je Album nicht-blockierend nachladen — Name und Auswahl
-      // stehen schon ab hier zur Verfügung.
-      await _loadAlbumCounts();
-    } catch (_) {
-      // Ohne PhotoKit (Tests, defekte Installation) bleibt die Liste leer —
-      // die Zeile darunter sagt dann ehrlich, was los ist.
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _loadAlbumCounts() async {
-    // Iteration über eine KOPIE: leere Alben fallen aus der Liste.
-    for (final _AlbumOption album in List<_AlbumOption>.of(_albums)) {
-      try {
-        final int count = await album.entity.assetCountAsync;
-        if (!mounted) return;
-        if (!_albums.contains(album)) continue;
-        setState(() {
-          album.count = count;
-          if (count == 0) {
-            _albums.remove(album);
-            // Gewählte Alben bleiben gewählt, auch wenn sie gerade leer
-            // sind — kein stiller Datenverlust. Sie erscheinen in der
-            // Zeilen-Zusammenfassung, bis man sie abwählt.
-          }
-        });
-      } catch (_) {
-        // Der Zähler ist Anzeige — die Auswahl hängt am Namen.
-      }
-    }
+    // null = kein Foto-Zugriff, [] = zugängliche, leere Mediathek.
+    final List<String>? names =
+        await ref.read(rcloneServiceProvider).listAlbumNames();
+    if (!mounted) return;
+    setState(() {
+      _albums = names ?? const [];
+      _loading = false;
+      _permissionDenied = names == null;
+    });
   }
 
   @override
@@ -778,10 +728,6 @@ class _AlbumPickerSheetState extends ConsumerState<_AlbumPickerSheet> {
     final bool isAll = selection.isEmpty &&
         TasksListNotifier.isMediaLibrarySource(task.sourcePath);
 
-    final int totalCount =
-        _albums.fold<int>(0, (int sum, _AlbumOption a) => sum + (a.count ?? 0));
-    final bool anyCountKnown = _albums.any((_AlbumOption a) => a.count != null);
-
     return ListView(
       children: [
         cupertino.CupertinoListSection.insetGrouped(
@@ -798,13 +744,6 @@ class _AlbumPickerSheetState extends ConsumerState<_AlbumPickerSheet> {
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 15),
                 ),
-                subtitle: anyCountKnown
-                    ? Text(
-                        strings.albumsTotalMediaCount(totalCount),
-                        style: TextStyle(
-                            color: theme.textSecondary, fontSize: 12),
-                      )
-                    : null,
                 trailing: _checkIcon(theme, isAll),
                 onTap: () {
                   IosHaptics.selection();
@@ -812,25 +751,17 @@ class _AlbumPickerSheetState extends ConsumerState<_AlbumPickerSheet> {
                 },
               ),
             ),
-            for (final _AlbumOption album in _albums)
+            for (final String album in _albums)
               Semantics(
-                checked: selection.contains(album.name),
+                checked: selection.contains(album),
                 toggled: true,
                 button: true,
-                label: album.name,
+                label: album,
                 child: cupertino.CupertinoListTile(
                   title:
-                      Text(album.name, style: const TextStyle(fontSize: 14)),
-                  subtitle: Text(
-                    // Anzahl wird asynchron nachgeladen — bis dahin „…".
-                    album.count == null
-                        ? '…'
-                        : strings.albumMediaCount(album.count!),
-                    style:
-                        TextStyle(color: theme.textSecondary, fontSize: 12),
-                  ),
-                  trailing: _checkIcon(theme, selection.contains(album.name)),
-                  onTap: () => _toggleAlbum(task, album.name),
+                      Text(album, style: const TextStyle(fontSize: 14)),
+                  trailing: _checkIcon(theme, selection.contains(album)),
+                  onTap: () => _toggleAlbum(task, album),
                 ),
               ),
           ],

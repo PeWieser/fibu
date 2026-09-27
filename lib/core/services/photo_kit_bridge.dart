@@ -22,6 +22,33 @@ import 'app_log_service.dart';
 class PhotoKitBridge {
   static const String snapshotSubPath = '.fibu/photokit_snapshot.json';
 
+  /// Namen aller Alben der Mediathek (inkl. des System-Ordners), sortiert
+  /// ohne Groß/Kleinschreibung zu gewichten.
+  ///
+  /// `null` heißt: kein Foto-Zugriff — die Berechtigung wird hier abgefragt,
+  /// weil die Alben-Namen ohne sie nicht lesbar sind. Ein leerer Wert ist
+  /// eine zugängliche, aber leere Mediathek.
+  Future<List<String>?> listAlbumNames() async {
+    try {
+      final PermissionState ps = await PhotoManager.requestPermissionExtend();
+      final bool allowed = ps.isAuth || ps.hasAccess;
+      if (!allowed) return null;
+      final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        hasAll: true,
+      );
+      final List<String> names =
+          paths.map((AssetPathEntity p) => p.name).toSet().toList();
+      names.sort((String a, String b) =>
+          a.toLowerCase().compareTo(b.toLowerCase()));
+      return names;
+    } catch (e) {
+      // Ohne PhotoKit (defekte Installation) ehrlich als „kein Zugriff“.
+      AppLog.warn('photokit', 'Alben-Liste nicht lesbar: $e');
+      return null;
+    }
+  }
+
   /// Liest den lokalen Fibu-Spiegel per Dateisystem ein und liefert
   /// Pfad (relativ zu [localRoot]) → Pfad. Blitzschnell – KEINE
   /// PhotoKit-Asset-Exporte mehr (\`asset.file\` pro Foto war zuvor das

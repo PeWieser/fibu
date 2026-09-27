@@ -56,11 +56,14 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Die vier Kopfzeilen der Hauptliste.
-      expect(find.text(strings.cloudSection), findsOneWidget);
-      expect(find.text(strings.backupSection), findsOneWidget);
-      expect(find.text(strings.appearanceSection), findsOneWidget);
-      expect(find.text(strings.generalSectionTitle), findsOneWidget);
+      // Die vier Kopfzeilen der Hauptliste (Ui.sectionHeader zeigt sie in
+      // Versalien).
+      expect(find.text(strings.cloudSection.toUpperCase()), findsOneWidget);
+      expect(find.text(strings.backupSection.toUpperCase()), findsOneWidget);
+      expect(
+          find.text(strings.appearanceSection), findsOneWidget);
+      expect(
+          find.text(strings.generalSectionTitle.toUpperCase()), findsOneWidget);
 
       // Allgemein: zwei Ziele, keine Untertitel — und kein „System“ mehr.
       expect(find.text(strings.systemSection), findsNothing);
